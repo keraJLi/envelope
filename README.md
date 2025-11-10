@@ -11,9 +11,9 @@ My main goal is to simplify the environment API, by improving on wrapping, typin
 
 ## Usage example
 ```python
-from rejax.compat import create
+import jenv
 
-env = create("gymnax/CartPole-v1")
+env = jenv.create("gymnax/CartPole-v1")
 env_state, info = env.reset(rng)
 action = env.action_space.sample(rng)
 env_state, info = env.step(env_state, action)
