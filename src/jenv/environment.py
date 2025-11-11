@@ -1,25 +1,22 @@
 from abc import ABC, abstractmethod
 from functools import cached_property
+from typing import Protocol, TypeAlias, runtime_checkable
 
 from jenv import spaces
 from jenv.struct import PyTreeNode
 from jenv.typing import Key, PyTree
 
-__all__ = ["Environment"]
+__all__ = ["Environment", "State"]
 
 
-State = PyTree
+State: TypeAlias = PyTree
 
 
-class Info(PyTreeNode):
+@runtime_checkable
+class StepInfo(Protocol):
     obs: PyTree
     reward: float
-    terminated: bool
-    truncated: bool
-
-    @cached_property
-    def done(self) -> bool:
-        return self.terminated | self.truncated
+    done: bool
 
 
 class Environment(ABC, PyTreeNode):
@@ -28,10 +25,10 @@ class Environment(ABC, PyTreeNode):
     """
 
     @abstractmethod
-    def reset(self, key: Key) -> tuple[State, Info]: ...
+    def reset(self, key: Key) -> tuple[State, StepInfo]: ...
 
     @abstractmethod
-    def step(self, key: Key, state: State, action: PyTree) -> tuple[State, Info]: ...
+    def step(self, state: State, action: PyTree) -> tuple[State, StepInfo]: ...
 
     @abstractmethod
     @cached_property

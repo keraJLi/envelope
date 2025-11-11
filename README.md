@@ -14,8 +14,11 @@ My main goal is to simplify the environment API, by improving on wrapping, typin
 import jenv
 
 env = jenv.create("gymnax/CartPole-v1")
-env_state, info = env.reset(rng)
-action = env.action_space.sample(rng)
-env_state, info = env.step(env_state, action)
-print(info.obs, info.reward)
+state, step_info = env.reset(key)
+action = env.action_space.sample(key)
+state, step_info = env.step(state, action)
+print(step_info.obs, step_info.reward)
+
+states, step_infos = jax.lax.scan(env.step, state, actions)
+plt.plot(step_infos.reward.cumsum())  # plot cumulative reward
 ```
