@@ -14,6 +14,7 @@ class Info(Protocol):
     obs: PyTree
     reward: float
     terminated: bool
+    truncated: bool
 
     def update(self, **changes: PyTree) -> "Info": ...
     def __getattr__(self, name: str) -> PyTree: ...
@@ -31,6 +32,7 @@ class InfoContainer(Container):
     obs: PyTree
     reward: float
     terminated: bool
+    truncated: bool
 
     @property
     def obs(self) -> PyTree:
@@ -43,6 +45,10 @@ class InfoContainer(Container):
     @property
     def terminated(self) -> bool:
         return self._fields["terminated"]
+
+    @property
+    def truncated(self) -> bool:
+        return self._fields.get("truncated", False)
 
 
 class StateContainer(Container):

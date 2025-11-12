@@ -72,15 +72,15 @@ class Continuous(Space):
     def __post_init__(self):
         if jnp.asarray(self.low).shape != jnp.asarray(self.high).shape:
             raise ValueError("low and high must have the same shape")
-        shape = jnp.asarray(self.low).shape
+        low_and_high_shape = jnp.asarray(self.low).shape
 
         if jnp.any(self.low > self.high):
             raise ValueError("low must be less than high")
 
         # If shape is None, infer it from low/high
         if self.shape is None:
-            object.__setattr__(self, "shape", shape)
-        elif shape != ():
+            object.__setattr__(self, "shape", low_and_high_shape)
+        elif low_and_high_shape != ():
             raise ValueError("shape can only be specified when low and high are scalar")
 
     def sample(self, key: Key) -> jax.Array:
