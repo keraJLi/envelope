@@ -995,7 +995,6 @@ name = "jenv"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "gymnax" },
     { name = "jax" },
 ]
 
@@ -1028,7 +1027,6 @@ requires-dist = [
     { name = "brax", marker = "extra == 'compat'", specifier = ">=0.11.0" },
     { name = "craftax", marker = "extra == 'compat'", specifier = ">=1.4.3" },
     { name = "gymnasium", marker = "extra == 'compat'", specifier = ">=1.0.0" },
-    { name = "gymnax", git = "https://github.com/RobertTLange/gymnax" },
     { name = "jax", specifier = ">=0.5.0" },
     { name = "jumanji", marker = "extra == 'compat'", specifier = ">=1.0.1" },
     { name = "kinetix-env", marker = "extra == 'compat'", specifier = ">=2.0.0" },
