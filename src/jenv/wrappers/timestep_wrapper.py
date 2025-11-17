@@ -1,11 +1,15 @@
-from jenv.wrappers.wrapper import Wrapper
+from jenv.environment import Info
+from jenv.typing import Key, PyTree
+from jenv.wrappers.wrapper import WrappedState, Wrapper
 
 
 class TimeStepWrapper(Wrapper):
-    def reset(self, key):
+    def reset(self, key: Key) -> tuple[WrappedState, Info]:
         state, info = self.env.reset(key)
-        return state.update(steps=0), info.update
+        episodic = state.episodic.update(steps=0)
+        return state.update(episodic=episodic), info
 
-    def step(self, state, action):
+    def step(self, state: WrappedState, action: PyTree) -> tuple[WrappedState, Info]:
         next_state, info = self.env.step(state, action)
-        return next_state.update(steps=state.steps + 1), info
+        episodic = next_state.episodic.update(steps=state.episodic.steps + 1)
+        return next_state.update(episodic=episodic), info

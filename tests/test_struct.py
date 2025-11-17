@@ -629,8 +629,8 @@ class TestPyTreeNodeSerialization:
         assert "Outer" in repr_str
         assert "Inner" in repr_str
 
-    def test_pytree_node_pickle(self):
-        """Test that PyTreeNode can be pickled and unpickled."""
+    def test_pickle_round_trip_basic(self):
+        """Basic pickle/unpickle should preserve fields."""
         import pickle
 
         node = SimpleNode(
@@ -646,8 +646,8 @@ class TestPyTreeNodeSerialization:
         assert jnp.allclose(unpickled.y, node.y)
         assert unpickled.static_val == node.static_val
 
-    def test_pytree_node_pickle_comprehensive(self):
-        """Test pickling PyTreeNode with various field types.
+    def test_pickle_round_trip_comprehensive(self):
+        """Pickling with varied field types; also verify treedef equality.
 
         Note: We use SimpleNode (module-level class) because local classes
         cannot be pickled in Python.
@@ -675,6 +675,12 @@ class TestPyTreeNodeSerialization:
         assert new_node.static_val == 1000
         assert jnp.allclose(new_node.x, node.x)
 
+        # Also verify treedef/structure equality post-pickle
+        leaves1, treedef1 = jax.tree_util.tree_flatten(node)
+        leaves2, treedef2 = jax.tree_util.tree_flatten(unpickled)
+        assert treedef1 == treedef2
+        assert all(jnp.allclose(l1, l2) for l1, l2 in zip(leaves1, leaves2))
+
     def test_pytree_node_not_hashable(self):
         """Test that PyTreeNode instances are not hashable (because they're not).
 
@@ -692,31 +698,3 @@ class TestPyTreeNodeSerialization:
         # Also test that we can't use it as a dict key
         with pytest.raises(TypeError):
             {node: "value"}
-
-    def test_pytree_node_equality_through_pickle(self):
-        """Test that equality works correctly after pickling.
-
-        While we don't have __eq__ that compares values, we can verify
-        that pickled objects have the same structure and values.
-        """
-        import pickle
-
-        node1 = SimpleNode(
-            x=jnp.array([1.0, 2.0]), y=jnp.array([3.0, 4.0]), static_val=42
-        )
-
-        # Pickle and unpickle
-        pickled = pickle.dumps(node1)
-        node2 = pickle.loads(pickled)
-
-        # Compare fields manually (since dataclass eq compares by value)
-        # But arrays need special comparison
-        assert jnp.allclose(node1.x, node2.x)
-        assert jnp.allclose(node1.y, node2.y)
-        assert node1.static_val == node2.static_val
-
-        # Tree structure should be identical
-        leaves1, treedef1 = jax.tree_util.tree_flatten(node1)
-        leaves2, treedef2 = jax.tree_util.tree_flatten(node2)
-        assert treedef1 == treedef2
-        assert all(jnp.allclose(l1, l2) for l1, l2 in zip(leaves1, leaves2))

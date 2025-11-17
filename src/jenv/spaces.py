@@ -146,3 +146,58 @@ class PyTreeSpace(Space):
             self.tree,
             is_leaf=lambda node: isinstance(node, Space),
         )
+
+
+def batch_space(space: Space, batch_size: int) -> Space:
+    if isinstance(space, PyTreeSpace):
+        batched_tree = jax.tree.map(
+            lambda sp: batch_space(sp, batch_size),
+            space.tree,
+            is_leaf=lambda node: isinstance(node, Space),
+        )
+        return PyTreeSpace(batched_tree)
+    return BatchedSpace(space=space, batch_size=batch_size)
+
+
+class BatchedSpace(Space):
+    """
+    A view that adds a leading batch dimension to a base Space without
+    materializing or broadcasting its parameters.
+    """
+
+    space: Space
+    batch_size: int = static_field()
+
+    def sample(self, key: Key) -> PyTree:
+        # Accept single PRNGKey or a batch of keys shaped (batch_size, 2)
+        if getattr(key, "shape", ()) == (2,):
+            keys = jax.random.split(key, self.batch_size)
+        else:
+            if key.shape[0] != self.batch_size:
+                raise ValueError(
+                    f"sample key's leading dimension ({key.shape[0]}) must match "
+                    f"batch_size ({self.batch_size})."
+                )
+            keys = key
+        return jax.vmap(self.space.sample)(keys)
+
+    def contains(self, x: PyTree) -> bool:
+        # x is expected to be batched on the leading dimension
+        result = jax.vmap(self.space.contains)(x)
+        return jnp.all(jnp.asarray(result))
+
+    @cached_property
+    def shape(self) -> PyTree:
+        inner_shape = self.space.shape
+        # For tuple shapes (leaf spaces), prepend batch dimension.
+        # PyTree shapes are handled by wrapping leaves with BatchedSpace via batch_space.
+        if isinstance(inner_shape, tuple):
+            return (self.batch_size,) + inner_shape
+        return inner_shape
+
+    @property
+    def dtype(self):
+        return getattr(self.space, "dtype", None)
+
+    def __repr__(self) -> str:
+        return f"BatchedSpace(space={self.space!r}, batch_size={self.batch_size})"

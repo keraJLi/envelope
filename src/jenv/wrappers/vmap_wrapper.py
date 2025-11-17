@@ -2,28 +2,19 @@ from functools import cached_property
 from typing import override
 
 import jax
-import jax.numpy as jnp
 
 from jenv import spaces
-from jenv.environment import Info, State
+from jenv.environment import Info
+from jenv.struct import field
 from jenv.typing import Key, PyTree
-from jenv.wrappers.wrapper import Wrapper
+from jenv.wrappers.wrapper import WrappedState, Wrapper
 
 
 class VmapWrapper(Wrapper):
-    """
-    Vectorizes a single (non-batched) environment over a fixed batch size using JAX vmap.
-
-    - reset(key): accepts a single key (split into batch_size) or a batched key
-      of shape (batch_size, 2); returns batched state and info.
-    - step(state, action): expects batched state and action; returns batched outputs.
-    - observation_space / action_space: prepend the batch dimension to the underlying spaces.
-    """
-
-    batch_size: int
+    batch_size: int = field(kw_only=True)
 
     @override
-    def reset(self, key: Key) -> tuple[State, Info]:
+    def reset(self, key: Key) -> tuple[WrappedState, Info]:
         # Accept single key or batched keys
         if key.shape == (2,):
             keys = jax.random.split(key, self.batch_size)
@@ -35,53 +26,29 @@ class VmapWrapper(Wrapper):
                 )
             keys = key
 
-        # vmap over inputs only, using the same env for all items
         state, info = jax.vmap(self.env.reset)(keys)
         return state, info
 
     @override
-    def step(self, state: State, action: PyTree) -> tuple[State, Info]:
-        next_state, info = jax.vmap(self.env.step)(state, action)
-        return next_state, info
+    def step(self, state: WrappedState, action: PyTree) -> tuple[WrappedState, Info]:
+        vmap_axes = _vmap_axes_from_state(state)
+        state, info = jax.vmap(self.env.step, in_axes=(vmap_axes, 0))(state, action)
+        return state, info
 
     @override
     @cached_property
     def observation_space(self) -> spaces.Space:
-        return _batch_space(self.env.observation_space, self.batch_size)
+        return spaces.batch_space(self.env.observation_space, self.batch_size)
 
     @override
     @cached_property
     def action_space(self) -> spaces.Space:
-        return _batch_space(self.env.action_space, self.batch_size)
+        return spaces.batch_space(self.env.action_space, self.batch_size)
 
 
-def _batch_space(space: spaces.Space, batch_size: int) -> spaces.Space:
-    if isinstance(space, spaces.Discrete):
-        n = space.n
-        shape = (batch_size, *space.shape)
-
-        if jnp.asarray(n).shape != ():
-            n = jnp.broadcast_to(n, shape)
-
-        return spaces.Discrete(n=n, shape=shape, dtype=space.dtype)
-
-    if isinstance(space, spaces.Continuous):
-        low = space.low
-        high = space.high
-        shape = (batch_size, *space.shape)
-
-        if jnp.asarray(low).shape != ():
-            low = jnp.broadcast_to(jnp.asarray(low), shape)
-            high = jnp.broadcast_to(jnp.asarray(high), shape)
-
-        return spaces.Continuous(low=low, high=high, shape=shape, dtype=space.dtype)
-
-    if isinstance(space, spaces.PyTreeSpace):
-        batched_tree = jax.tree.map(
-            lambda sp: _batch_space(sp, batch_size),
-            space.tree,
-            is_leaf=lambda node: isinstance(node, spaces.Space),
-        )
-        return spaces.PyTreeSpace(batched_tree)
-
-    raise TypeError(f"Unsupported Space type for batching: {type(space).__name__}")
+def _vmap_axes_from_state(state: WrappedState) -> PyTree:
+    axes = jax.tree.map(lambda _: None, state)
+    axes_core = jax.tree.map(lambda _: 0, state.core)
+    axes_ep = jax.tree.map(lambda _: 0, state.episodic)
+    axes_pers = jax.tree.map(lambda _: None, state.persistent)
+    return axes.update(core=axes_core, episodic=axes_ep, persistent=axes_pers)

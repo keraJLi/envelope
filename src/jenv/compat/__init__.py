@@ -2,11 +2,11 @@
 
 # Lazy imports to avoid requiring all dependencies at once
 _env_module_map = {
-    "brax": ("jenv.compat.brax_jenv", "Brax2Jenv"),
-    "navix": ("jenv.compat.navix_jenv", "Navix2Jenv"),
-    "jumanji": ("jenv.compat.jumanji_jenv", "Jumanji2Jenv"),
-    "kinetix": ("jenv.compat.kinetix_jenv", "Kinetix2Jenv"),
-    "craftax": ("jenv.compat.craftax_jenv", "Craftax2Jenv"),
+    "brax": ("jenv.compat.brax_jenv", "BraxJenv"),
+    "navix": ("jenv.compat.navix_jenv", "NavixJenv"),
+    "jumanji": ("jenv.compat.jumanji_jenv", "JumanjiJenv"),
+    "kinetix": ("jenv.compat.kinetix_jenv", "KinetixJenv"),
+    "craftax": ("jenv.compat.craftax_jenv", "CraftaxJenv"),
 }
 
 

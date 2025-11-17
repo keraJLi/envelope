@@ -84,8 +84,19 @@ class Container:
     def __init__(self, **fields):
         self._fields = fields
 
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        jax.tree_util.register_pytree_node_class(cls)
+
     def __getattr__(self, name: str) -> PyTree:
-        return self._fields[name]
+        # Avoid recursion during pickling/unpickling or early init before _fields exists
+        fields = self.__dict__.get("_fields", None)
+        if fields is not None:
+            try:
+                return fields[name]
+            except KeyError:
+                pass
+        raise AttributeError(name)
 
     def update(self, **changes: PyTree) -> "Container":
         new_fields = {**self._fields, **changes}

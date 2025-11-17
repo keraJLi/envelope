@@ -6,7 +6,7 @@ from jenv import spaces
 from jenv.struct import Container, FrozenPyTreeNode
 from jenv.typing import Key, PyTree
 
-__all__ = ["Environment", "State"]
+__all__ = ["Environment", "State", "Info", "InfoContainer"]
 
 
 @runtime_checkable
@@ -17,14 +17,6 @@ class Info(Protocol):
     truncated: bool
 
     def update(self, **changes: PyTree) -> "Info": ...
-    def __getattr__(self, name: str) -> PyTree: ...
-
-
-@runtime_checkable
-class State(Protocol):
-    env_state: PyTree
-
-    def update(self, **changes: PyTree) -> "State": ...
     def __getattr__(self, name: str) -> PyTree: ...
 
 
@@ -51,12 +43,8 @@ class InfoContainer(Container):
         return self._fields.get("truncated", False)
 
 
-class StateContainer(Container):
-    env_state: PyTree
-
-    @property
-    def env_state(self) -> PyTree:
-        return self._fields["env_state"]
+# State remains a general PyTree alias; environments are not forced to WrappedState
+State = PyTree
 
 
 class Environment(ABC, FrozenPyTreeNode):

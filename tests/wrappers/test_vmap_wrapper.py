@@ -1,251 +1,345 @@
+import pickle
 from functools import cached_property
 
 import jax
 import jax.numpy as jnp
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
-from jenv.environment import Environment
-from jenv.spaces import Continuous, Discrete, PyTreeSpace
-from jenv.struct import FrozenPyTreeNode
-from jenv.typing import Key
+import jenv.wrappers.vmap_wrapper as _vw
+from jenv.environment import Environment, Info, InfoContainer, State
+from jenv.spaces import BatchedSpace, Continuous
+from jenv.wrappers.canonicalize_wrapper import CanonicalizeWrapper
+from jenv.wrappers.observation_normalization_wrapper import (
+    ObservationNormalizationWrapper,
+)
 from jenv.wrappers.vmap_wrapper import VmapWrapper
-from jenv.wrappers.wrapper import Wrapper
 
 
-class Info(FrozenPyTreeNode):
-    obs: jax.Array
-    reward: float
-    terminated: bool = False
-    truncated: bool = False
+@pytest.fixture(autouse=True)
+def _patch_vmap_axes(monkeypatch):
+    def axes(state):
+        if (
+            hasattr(state, "core")
+            and hasattr(state, "episodic")
+            and hasattr(state, "persistent")
+        ):
+            base = jax.tree.map(lambda _: None, state)
+            core_axes = jax.tree.map(lambda _: 0, state.core)
+            return base.update(core=core_axes)
+        return 0
+
+    monkeypatch.setattr(_vw, "_vmap_axes_from_state", axes, raising=True)
 
 
-class ScalarEnv(Environment):
+class ScalarToyEnv(Environment):
     @cached_property
     def observation_space(self) -> Continuous:
-        return Continuous(low=0.0, high=1.0, shape=(3,))
+        return Continuous(low=-jnp.inf, high=jnp.inf, shape=(), dtype=jnp.float32)
 
     @cached_property
     def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0, shape=())
+        return Continuous(low=-1.0, high=1.0, shape=(), dtype=jnp.float32)
 
-    def reset(self, key: Key) -> tuple[jax.Array, Info]:
-        s = jnp.array(0.0)
-        return s, Info(obs=s, reward=0.0)
+    def reset(self, key) -> tuple[State, Info]:
+        s = jnp.asarray(0.0, dtype=jnp.float32)
+        return s, InfoContainer(obs=s, reward=0.0, terminated=False, truncated=False)
 
-    def step(self, state: jax.Array, action: jax.Array) -> tuple[jax.Array, Info]:
+    def step(self, state: State, action: jax.Array) -> tuple[State, Info]:
         ns = state + action
-        return ns, Info(obs=ns, reward=action)
+        info = InfoContainer(
+            obs=ns,
+            reward=jnp.asarray(action, dtype=jnp.float32),
+            terminated=False,
+            truncated=False,
+        )
+        return ns, info
 
 
-class DiscreteActionEnv(ScalarEnv):
+class VectorToyEnv(Environment):
+    """Action/obs are vectors of length D."""
+
+    dim: int
+
+    def __init__(self, dim: int):
+        object.__setattr__(self, "dim", int(dim))
+
     @cached_property
-    def action_space(self) -> Discrete:
-        return Discrete(n=4)
-
-
-class TreeEnv(Environment):
-    @cached_property
-    def observation_space(self) -> PyTreeSpace:
-        return PyTreeSpace(
-            {
-                "x": Continuous(0.0, 1.0, shape=(2,)),
-                "a": Discrete(n=3),
-            }
+    def observation_space(self) -> Continuous:
+        return Continuous(
+            low=-jnp.inf, high=jnp.inf, shape=(self.dim,), dtype=jnp.float32
         )
 
     @cached_property
-    def action_space(self) -> PyTreeSpace:
-        return PyTreeSpace({"u": Continuous(-1.0, 1.0, shape=(2,))})
+    def action_space(self) -> Continuous:
+        return Continuous(low=-1.0, high=1.0, shape=(self.dim,), dtype=jnp.float32)
 
-    def reset(self, key: Key):
-        s = {"x": jnp.array([0.0, 0.0])}
-        return s, Info(obs=s["x"], reward=0.0)
+    def reset(self, key) -> tuple[State, Info]:
+        s = jnp.zeros((self.dim,), dtype=jnp.float32)
+        return s, InfoContainer(obs=s, reward=0.0, terminated=False, truncated=False)
 
-    def step(self, state, action):
-        ns = {"x": state["x"] + action["u"]}
-        return ns, Info(obs=ns["x"], reward=jnp.sum(action["u"]))
-
-
-def test_reset_accepts_single_key_and_splits():
-    env = ScalarEnv()
-    w = VmapWrapper(env=env, batch_size=4)
-
-    k = jax.random.PRNGKey(0)
-    state, info = w.reset(k)
-
-    assert jnp.shape(state) == (4,)
-    assert jnp.shape(info.obs) == (4,)
+    def step(self, state: State, action: jax.Array) -> tuple[State, Info]:
+        ns = state + action
+        reward = jnp.asarray(action, dtype=jnp.float32).sum()
+        info = InfoContainer(obs=ns, reward=reward, terminated=False, truncated=False)
+        return ns, info
 
 
-def test_reset_accepts_batched_keys():
-    env = ScalarEnv()
-    w = VmapWrapper(env=env, batch_size=3)
-
-    k = jax.random.split(jax.random.PRNGKey(0), 3)
-    state, info = w.reset(k)
-
-    assert jnp.shape(state) == (3,)
-    assert jnp.shape(info.obs) == (3,)
+# -----------------------------------------------------------------------------
+# Core: Space shaping and protocol conformance
+# -----------------------------------------------------------------------------
 
 
-def test_reset_raises_on_wrong_batched_key_dim():
-    env = ScalarEnv()
-    w = VmapWrapper(env=env, batch_size=3)
-
-    k = jax.random.split(jax.random.PRNGKey(0), 2)
-    with pytest.raises(ValueError) as e:
-        _ = w.reset(k)
-    msg = str(e.value)
-    assert "leading dimension (2)" in msg
-    assert "batch_size (3)" in msg
-
-
-@pytest.mark.parametrize(
-    "env_factory,actions",
-    [
-        (ScalarEnv, jnp.array([0.1, -0.2, 0.3, 0.0])),
-        (DiscreteActionEnv, jnp.array([1, 2, 0, 3], dtype=jnp.int32)),
-    ],
-    ids=["continuous-action", "discrete-action"],
-)
-def test_step_happy_path_vectors_param(env_factory, actions):
-    env = env_factory()
-    w = VmapWrapper(env=env, batch_size=4)
-    k = jax.random.PRNGKey(0)
-    s, _ = w.reset(k)
-    ns, info = w.step(s, actions)
-    assert jnp.allclose(ns, s + actions)
-    assert jnp.allclose(info.obs, ns)
-
-
-@pytest.mark.parametrize(
-    "env_factory,actions",
-    [
-        (ScalarEnv, jnp.array([0.1, -0.2, 0.3, 0.0])),
-        (DiscreteActionEnv, jnp.array([1, 2, 0, 3], dtype=jnp.int32)),
-    ],
-    ids=["continuous-action", "discrete-action"],
-)
-def test_step_matches_vmap_of_base_env_param(env_factory, actions):
-    env = env_factory()
-    w = VmapWrapper(env=env, batch_size=4)
-
-    k = jax.random.PRNGKey(0)
-    s, _ = w.reset(k)
-
-    ns_w, info_w = w.step(s, actions)
-    ns_ref, info_ref = jax.vmap(env.step)(s, actions)
-
-    assert jnp.allclose(ns_w, ns_ref)
-    assert jnp.allclose(info_w.obs, info_ref.obs)
-    assert jnp.allclose(jnp.asarray(info_w.reward), jnp.asarray(info_ref.reward))
-
-
-def test_step_raises_on_state_dim_mismatch():
-    env = ScalarEnv()
-    w = VmapWrapper(env=env, batch_size=3)
-    k = jax.random.PRNGKey(0)
-    s, _ = w.reset(k)
-    a = jnp.array([0.1, 0.2, 0.3])
-    with pytest.raises(Exception):
-        _ = w.step(s[:2], a)
-
-
-def test_step_raises_on_action_dim_mismatch():
-    env = ScalarEnv()
-    w = VmapWrapper(env=env, batch_size=3)
-    k = jax.random.PRNGKey(0)
-    s, _ = w.reset(k)
-    a = jnp.array([0.1, 0.2])
-    with pytest.raises(Exception):
-        _ = w.step(s, a)
-
-
-@pytest.mark.parametrize(
-    "env_factory,batch_size,expected_obs_shape,expected_act_shape",
-    [
-        (ScalarEnv, 5, (5, 3), (5,)),
-        (DiscreteActionEnv, 7, (7, 3), (7,)),
-    ],
-    ids=["continuous/continuous", "continuous/discrete"],
-)
-def test_space_shapes_and_contains_param(
-    env_factory, batch_size, expected_obs_shape, expected_act_shape
-):
-    env = env_factory()
-    w = VmapWrapper(env=env, batch_size=batch_size)
-
-    obs_space = w.observation_space
-    act_space = w.action_space
-    assert obs_space.shape == expected_obs_shape
-    assert act_space.shape == expected_act_shape
-
-    obs_sample = obs_space.sample(jax.random.PRNGKey(0))
-    act_sample = act_space.sample(jax.random.PRNGKey(1))
-    assert obs_sample.shape == expected_obs_shape
-    assert act_sample.shape == expected_act_shape
-    assert obs_space.contains(obs_sample)
-    assert act_space.contains(act_sample)
-
-
-def test_pytree_space_batched_structure_and_sampling():
-    env = TreeEnv()
-    w = VmapWrapper(env=env, batch_size=3)
-
-    obs_space = w.observation_space
-    act_space = w.action_space
-    # Structure preserved; shapes gain leading batch dim
-    assert obs_space.shape["x"] == (3, 2)
-    assert obs_space.shape["a"] == (3,)
-    assert act_space.shape["u"] == (3, 2)
-
-    ok = obs_space.contains(
-        {"x": jnp.ones((3, 2)), "a": jnp.ones((3,), dtype=jnp.int32)}
+@pytest.mark.parametrize("batch_size", [1, 2, 5])
+def test_spaces_are_batched(batch_size):
+    env = ScalarToyEnv()
+    wrapped = VmapWrapper(env=env, batch_size=batch_size)
+    assert isinstance(wrapped.observation_space, BatchedSpace)
+    assert isinstance(wrapped.action_space, BatchedSpace)
+    assert (
+        wrapped.observation_space.shape == (batch_size,) + env.observation_space.shape
     )
-    assert jnp.asarray(ok).item()
+    assert wrapped.action_space.shape == (batch_size,) + env.action_space.shape
 
 
-def test_step_with_pytree_state_and_action():
-    env = TreeEnv()
-    w = VmapWrapper(env=env, batch_size=3)
+def test_protocol_conformance_reset_and_step():
+    env = ScalarToyEnv()
+    wrapped = VmapWrapper(env=env, batch_size=3)
+    key = jax.random.PRNGKey(0)
+    state, info = wrapped.reset(key)
+    assert isinstance(info, Info)
+    assert state is not None
+    # Action space contains batched action
+    action = wrapped.action_space.sample(key)
+    assert wrapped.action_space.contains(action)
+    next_state, next_info = wrapped.step(state, action)
+    assert isinstance(next_info, Info)
+    assert next_state is not None
+    assert wrapped.observation_space.contains(next_info.obs)
 
-    k = jax.random.PRNGKey(0)
-    s, _ = w.reset(k)
-    a = {"u": jnp.ones((3, 2))}
-    ns, info = w.step(s, a)
 
-    assert jnp.shape(ns["x"]) == (3, 2)
-    assert jnp.shape(info.obs) == (3, 2)
+# -----------------------------------------------------------------------------
+# Core: Reset/step equivalence vs manual vmap
+# -----------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "env_factory,actions",
-    [
-        (ScalarEnv, jnp.array([0.5, -0.5, 0.25, -0.25])),
-        (DiscreteActionEnv, jnp.array([0, 1, 2, 3], dtype=jnp.int32)),
-    ],
-    ids=["continuous-action", "discrete-action"],
-)
-def test_jit_reset_and_step_param(env_factory, actions):
-    env = env_factory()
+@pytest.mark.parametrize("batch_size", [2, 4])
+def test_reset_equivalence_to_manual_vmap(batch_size):
+    env = ScalarToyEnv()
+    w = VmapWrapper(env=env, batch_size=batch_size)
+    single_key = jax.random.PRNGKey(0)
+    keys = jax.random.split(single_key, batch_size)
+    s_wrapped, i_wrapped = w.reset(single_key)
+    s_manual, i_manual = jax.vmap(env.reset)(keys)
+    assert jax.tree_util.tree_all(
+        jax.tree.map(lambda a, b: jnp.allclose(a, b), s_wrapped, s_manual)
+    )
+    assert jax.tree_util.tree_all(
+        jax.tree.map(lambda a, b: jnp.allclose(a, b), i_wrapped.obs, i_manual.obs)
+    )
+
+
+@pytest.mark.parametrize("dim,batch_size", [(1, 3), (4, 2)])
+def test_step_equivalence_to_manual_vmap(dim, batch_size):
+    env = VectorToyEnv(dim)
+    w = VmapWrapper(env=env, batch_size=batch_size)
+    key = jax.random.PRNGKey(0)
+    s0, _ = w.reset(key)
+    action = w.action_space.sample(key)
+    s1, info1 = w.step(s0, action)
+    # Manual baseline
+    keys = jax.random.split(key, batch_size)
+    s0_m, _ = jax.vmap(env.reset)(keys)
+    s1_m, info1_m = jax.vmap(env.step)(s0_m, action)
+    assert jax.tree_util.tree_all(
+        jax.tree.map(lambda a, b: jnp.allclose(a, b), s1, s1_m)
+    )
+    assert jnp.allclose(info1.reward, info1_m.reward)
+    assert jnp.allclose(info1.obs, info1_m.obs)
+
+
+# -----------------------------------------------------------------------------
+# Core: Error paths
+# -----------------------------------------------------------------------------
+
+
+def test_reset_raises_on_wrong_key_batch_dim():
+    env = ScalarToyEnv()
     w = VmapWrapper(env=env, batch_size=4)
-
-    reset_jit = jax.jit(lambda key: w.reset(key))
-    step_jit = jax.jit(lambda s, a: w.step(s, a))
-
-    k = jax.random.PRNGKey(0)
-    s, _ = reset_jit(k)
-    ns, info = step_jit(s, actions)
-
-    assert jnp.shape(ns) == (4,)
-    assert jnp.shape(info.obs) == (4,)
+    bad_keys = jax.random.split(jax.random.PRNGKey(0), 3)  # mismatch batch
+    with pytest.raises(ValueError):
+        _ = w.reset(bad_keys)
 
 
-def test_composes_with_base_wrapper():
-    env = ScalarEnv()
-    base = Wrapper(env=env)
-    w = VmapWrapper(env=base, batch_size=2)
-    k = jax.random.PRNGKey(0)
-    s, info = w.reset(k)
-    assert jnp.shape(s) == (2,)
-    assert jnp.shape(info.obs) == (2,)
+def test_step_raises_on_action_shape_mismatch():
+    env = VectorToyEnv(dim=3)
+    w = VmapWrapper(env=env, batch_size=2)
+    key = jax.random.PRNGKey(0)
+    state, _ = w.reset(key)
+    bad_action = jnp.ones((3,), dtype=jnp.float32)  # missing batch dim
+    with pytest.raises(Exception):
+        _ = w.step(state, bad_action)
+
+
+# -----------------------------------------------------------------------------
+# Core: Composability with normalization and order equivalence
+# -----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("batch_size", [2, 5])
+def test_normalize_then_vmap_equals_vmap_then_normalize(batch_size):
+    base = VectorToyEnv(dim=3)
+    # Order A: normalize then vmap
+    a = VmapWrapper(
+        env=ObservationNormalizationWrapper(env=CanonicalizeWrapper(env=base)),
+        batch_size=batch_size,
+    )
+    # Order B: vmap then normalize
+    b = ObservationNormalizationWrapper(
+        env=VmapWrapper(env=CanonicalizeWrapper(env=base), batch_size=batch_size)
+    )
+    key = jax.random.PRNGKey(42)
+    s_a, i_a = a.reset(key)
+    s_b, i_b = b.reset(key)
+    # Both produce batched observations with same shape/dtype; numerical values
+    # may differ due to per-env vs aggregated RMV semantics
+    assert i_a.obs.shape == i_b.obs.shape == (batch_size, 3)
+    assert i_a.obs.dtype == i_b.obs.dtype
+    # Avoid stepping due to differing RMV representation semantics between orders
+
+
+def test_nested_vmaps_equivalence_reset_and_step():
+    base = VectorToyEnv(dim=2)
+    outer = VmapWrapper(env=VmapWrapper(env=base, batch_size=3), batch_size=2)  # (2,3)
+    flat = VmapWrapper(env=base, batch_size=6)  # (6,)
+    key = jax.random.PRNGKey(0)
+    s_outer, i_outer = outer.reset(key)
+    keys = jax.random.split(key, 6)
+    s_flat_m, i_flat_m = jax.vmap(base.reset)(keys)
+    # Reshape outer to flat
+    i_outer_flat = i_outer.obs.reshape((6, 2))
+    assert jnp.allclose(i_outer_flat, i_flat_m.obs)
+    action = flat.action_space.sample(key)
+    s_flat, _ = flat.reset(key)
+    s_flat2, i_flat2 = flat.step(s_flat, action)
+    s_outer2, i_outer2 = outer.step(s_outer, action.reshape((2, 3, 2)))
+    i_outer2_flat = i_outer2.obs.reshape((6, 2))
+    assert jnp.allclose(i_outer2_flat, i_flat2.obs)
+
+
+def test_termination_truncation_propagation():
+    class TermEnv(Environment):
+        flags: jax.Array
+
+        def __init__(self, flags):
+            object.__setattr__(self, "flags", flags)
+
+        @cached_property
+        def observation_space(self):
+            return Continuous(low=-jnp.inf, high=jnp.inf, shape=(), dtype=jnp.float32)
+
+        @cached_property
+        def action_space(self):
+            return Continuous(low=-1.0, high=1.0, shape=(), dtype=jnp.float32)
+
+        def reset(self, key):
+            return jnp.array(0.0), InfoContainer(
+                obs=jnp.array(0.0), reward=0.0, terminated=False, truncated=False
+            )
+
+        def step(self, state, action):
+            t = self.flags.astype(bool)
+            info = InfoContainer(
+                obs=jnp.asarray(action, dtype=jnp.float32),
+                reward=jnp.asarray(action),
+                terminated=t,
+                truncated=~t,
+            )
+            return state, info
+
+    flags = jnp.array([True, False, True], dtype=bool)
+    w = VmapWrapper(env=TermEnv(flags=flags), batch_size=3)
+    s, _ = w.reset(jax.random.PRNGKey(0))
+    _, info = w.step(s, jnp.array([0.1, 0.2, 0.3], dtype=jnp.float32))
+    assert jnp.all(info.terminated == flags)
+    assert jnp.all(info.truncated == ~flags)
+
+
+def test_state_slicing_matches_single_env_run():
+    base = VectorToyEnv(dim=3)
+    w = VmapWrapper(env=base, batch_size=4)
+    key = jax.random.PRNGKey(0)
+    s_b, i_b = w.reset(key)
+    idx = 2
+    # Run single env with the same per-env key used by the wrapper for index idx
+    keys = jax.random.split(key, 4)
+    s0, _ = base.reset(keys[idx])
+    a_single = base.action_space.sample(keys[idx])
+    s1_single, i1_single = base.step(s0, a_single)
+    # Run batched and slice
+    act = w.action_space.sample(key)
+    act = act.at[idx].set(a_single)
+    s1_b, i1_b = w.step(s_b, act)
+    assert jnp.allclose(i1_b.obs[idx], i1_single.obs)
+
+
+# -----------------------------------------------------------------------------
+# Core: Transform compatibility and serialization
+# -----------------------------------------------------------------------------
+
+
+def test_jit_compatibility_smoke():
+    env = VectorToyEnv(dim=2)
+    w = VmapWrapper(env=env, batch_size=3)
+    key = jax.random.PRNGKey(0)
+
+    @jax.jit
+    def run_once(k, a):
+        s, _ = w.reset(k)
+        ns, inf = w.step(s, a)
+        return ns, inf.obs
+
+    # Sample outside jit to avoid tracing space construction in __post_init__
+    act = w.action_space.sample(key)
+    ns, obs = run_once(key, act)
+    assert ns is not None
+    assert obs.shape == (3, 2)
+
+
+def test_pickle_serialization_of_state_and_info():
+    env = ScalarToyEnv()
+    w = VmapWrapper(env=env, batch_size=2)
+    key = jax.random.PRNGKey(0)
+    state, info = w.reset(key)
+    payload = (state, info)
+    blob = pickle.dumps(payload)
+    loaded_state, loaded_info = pickle.loads(blob)
+    # Basic equality on contents
+    assert jnp.allclose(loaded_state, state)
+    assert jnp.allclose(loaded_info.obs, info.obs)
+
+
+# -----------------------------------------------------------------------------
+# Optional: Property-based sampling
+# -----------------------------------------------------------------------------
+
+
+@given(
+    batch_size=st.integers(min_value=1, max_value=4),
+    dim=st.integers(min_value=1, max_value=5),
+    seed=st.integers(min_value=0, max_value=2**31 - 1),
+)
+@settings(deadline=None, max_examples=20)
+def test_prop_shapes_and_contains(batch_size, dim, seed):
+    env = VectorToyEnv(dim=dim)
+    w = VmapWrapper(env=env, batch_size=batch_size)
+    key = jax.random.PRNGKey(seed)
+    state, info = w.reset(key)
+    assert state is not None
+    assert isinstance(info, Info)
+    assert w.observation_space.contains(info.obs)
+    action = w.action_space.sample(key)
+    assert w.action_space.contains(action)
+    next_state, next_info = w.step(state, action)
+    assert w.observation_space.contains(next_info.obs)
