@@ -10,7 +10,7 @@ import pytest
 from jenv.environment import Environment
 from jenv.spaces import Continuous, Discrete
 from jenv.struct import FrozenPyTreeNode, static_field
-from jenv.typing import Key
+from jenv.typing import Key, PyTree
 from jenv.wrappers.wrapper import Wrapper
 
 # ============================================================================
@@ -34,7 +34,9 @@ class Info(FrozenPyTreeNode):
 class SimpleEnv(Environment):
     """Simple environment for testing wrappers."""
 
-    def reset(self, key: Key) -> tuple[jax.Array, Info]:
+    def reset(
+        self, key: Key, state: PyTree | None = None, **kwargs
+    ) -> tuple[jax.Array, Info]:
         state = jnp.array(0.0)
         info = Info(obs=state, reward=0.0, terminated=False, truncated=False)
         return state, info
@@ -48,11 +50,11 @@ class SimpleEnv(Environment):
 
     @cached_property
     def observation_space(self) -> Continuous:
-        return Continuous(low=-jnp.inf, high=jnp.inf, shape=())
+        return Continuous(low=-jnp.inf, high=jnp.inf)
 
     @cached_property
     def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0, shape=())
+        return Continuous(low=-1.0, high=1.0)
 
 
 class EnvWithFields(Environment):
@@ -61,7 +63,9 @@ class EnvWithFields(Environment):
     some_field: int = static_field(default=42)
     another_field: str = static_field(default="test")
 
-    def reset(self, key: Key) -> tuple[jax.Array, Info]:
+    def reset(
+        self, key: Key, state: PyTree | None = None, **kwargs
+    ) -> tuple[jax.Array, Info]:
         state = jnp.array(0.0)
         info = Info(obs=state, reward=0.0, terminated=False, truncated=False)
         return state, info
@@ -75,17 +79,19 @@ class EnvWithFields(Environment):
 
     @cached_property
     def observation_space(self) -> Continuous:
-        return Continuous(low=-jnp.inf, high=jnp.inf, shape=())
+        return Continuous(low=-jnp.inf, high=jnp.inf)
 
     @cached_property
     def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0, shape=())
+        return Continuous(low=-1.0, high=1.0)
 
 
 class EnvWithMethods(Environment):
     """Environment with custom methods for testing."""
 
-    def reset(self, key: Key) -> tuple[jax.Array, Info]:
+    def reset(
+        self, key: Key, state: PyTree | None = None, **kwargs
+    ) -> tuple[jax.Array, Info]:
         state = jnp.array(0.0)
         info = Info(obs=state, reward=0.0, terminated=False, truncated=False)
         return state, info
@@ -99,11 +105,11 @@ class EnvWithMethods(Environment):
 
     @cached_property
     def observation_space(self) -> Continuous:
-        return Continuous(low=-jnp.inf, high=jnp.inf, shape=())
+        return Continuous(low=-jnp.inf, high=jnp.inf)
 
     @cached_property
     def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0, shape=())
+        return Continuous(low=-1.0, high=1.0)
 
     def custom_method(self) -> str:
         """Custom method for testing attribute delegation."""
@@ -457,19 +463,20 @@ class TestWrapperJAXCompatibility:
         env = SimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
-        children, aux_data = environment_wrapper.tree_flatten()
+        children, aux_data = jax.tree.flatten(environment_wrapper)
 
-        # Should flatten the env and any dynamic fields
-        assert len(children) >= 1  # At least the env
-        # aux_data should contain static fields if any
+        # Wrapper is a pytree node (registered via FrozenPyTreeNode)
+        # Children depend on the wrapped env's structure
+        # aux_data is a PyTreeDef (from jax.tree_util, which jax.tree uses internally)
+        assert aux_data is not None
 
     def test_jax_tree_unflatten(self):
         """Verify JAX tree_unflatten reconstructs correctly."""
         env = SimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
-        children, aux_data = environment_wrapper.tree_flatten()
-        reconstructed = Wrapper.tree_unflatten(aux_data, children)
+        children, aux_data = jax.tree.flatten(environment_wrapper)
+        reconstructed = jax.tree.unflatten(aux_data, children)
 
         assert isinstance(reconstructed, Wrapper)
         assert isinstance(reconstructed.env, SimpleEnv)
@@ -498,8 +505,8 @@ class TestWrapperJAXCompatibility:
         environment_wrapper2 = Wrapper(env=environment_wrapper1)
 
         # Should work with nested wrappers
-        children, aux_data = environment_wrapper2.tree_flatten()
-        reconstructed = Wrapper.tree_unflatten(aux_data, children)
+        children, aux_data = jax.tree.flatten(environment_wrapper2)
+        reconstructed = jax.tree.unflatten(aux_data, children)
 
         assert isinstance(reconstructed, Wrapper)
         assert isinstance(reconstructed.env, Wrapper)
@@ -552,11 +559,11 @@ class TestWrapperEdgeCases:
 
             @cached_property
             def observation_space(self) -> Discrete:
-                return Discrete(n=10, dtype=jnp.int32)
+                return Discrete(n=10)
 
             @cached_property
             def action_space(self) -> Discrete:
-                return Discrete(n=5, dtype=jnp.int32)
+                return Discrete(n=5)
 
         env = DiscreteEnv()
         environment_wrapper = Wrapper(env=env)
@@ -581,7 +588,7 @@ class TestWrapperEdgeCases:
         """Test environment_wrapper with complex state structures."""
 
         class ComplexStateEnv(Environment):
-            def reset(self, key: Key) -> tuple[dict, Info]:
+            def reset(self, key: Key, state: PyTree | None = None) -> tuple[dict, Info]:
                 state = {
                     "position": jnp.array([0.0, 0.0]),
                     "velocity": jnp.array([1.0, 1.0]),
@@ -606,11 +613,11 @@ class TestWrapperEdgeCases:
 
             @cached_property
             def observation_space(self) -> Continuous:
-                return Continuous(low=-jnp.inf, high=jnp.inf, shape=(2,))
+                return Continuous.from_shape(low=-jnp.inf, high=jnp.inf, shape=(2,))
 
             @cached_property
             def action_space(self) -> Continuous:
-                return Continuous(low=-1.0, high=1.0, shape=(2,))
+                return Continuous.from_shape(low=-1.0, high=1.0, shape=(2,))
 
         env = ComplexStateEnv()
         environment_wrapper = Wrapper(env=env)

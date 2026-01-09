@@ -10,6 +10,7 @@ from hypothesis import strategies as st
 import jenv.wrappers.vmap_wrapper as _vw
 from jenv.environment import Environment, Info, InfoContainer, State
 from jenv.spaces import BatchedSpace, Continuous
+from jenv.typing import Key, PyTree
 from jenv.wrappers.canonicalize_wrapper import CanonicalizeWrapper
 from jenv.wrappers.observation_normalization_wrapper import (
     ObservationNormalizationWrapper,
@@ -17,32 +18,18 @@ from jenv.wrappers.observation_normalization_wrapper import (
 from jenv.wrappers.vmap_wrapper import VmapWrapper
 
 
-@pytest.fixture(autouse=True)
-def _patch_vmap_axes(monkeypatch):
-    def axes(state):
-        if (
-            hasattr(state, "core")
-            and hasattr(state, "episodic")
-            and hasattr(state, "persistent")
-        ):
-            base = jax.tree.map(lambda _: None, state)
-            core_axes = jax.tree.map(lambda _: 0, state.core)
-            return base.update(core=core_axes)
-        return 0
-
-    monkeypatch.setattr(_vw, "_vmap_axes_from_state", axes, raising=True)
-
-
 class ScalarToyEnv(Environment):
     @cached_property
     def observation_space(self) -> Continuous:
-        return Continuous(low=-jnp.inf, high=jnp.inf, shape=(), dtype=jnp.float32)
+        return Continuous(low=-jnp.inf, high=jnp.inf)
 
     @cached_property
     def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0, shape=(), dtype=jnp.float32)
+        return Continuous(low=-1.0, high=1.0)
 
-    def reset(self, key) -> tuple[State, Info]:
+    def reset(
+        self, key: Key, state: PyTree | None = None, **kwargs
+    ) -> tuple[State, Info]:
         s = jnp.asarray(0.0, dtype=jnp.float32)
         return s, InfoContainer(obs=s, reward=0.0, terminated=False, truncated=False)
 
@@ -67,15 +54,15 @@ class VectorToyEnv(Environment):
 
     @cached_property
     def observation_space(self) -> Continuous:
-        return Continuous(
-            low=-jnp.inf, high=jnp.inf, shape=(self.dim,), dtype=jnp.float32
-        )
+        return Continuous.from_shape(low=-jnp.inf, high=jnp.inf, shape=(self.dim,))
 
     @cached_property
     def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0, shape=(self.dim,), dtype=jnp.float32)
+        return Continuous.from_shape(low=-1.0, high=1.0, shape=(self.dim,))
 
-    def reset(self, key) -> tuple[State, Info]:
+    def reset(
+        self, key: Key, state: PyTree | None = None, **kwargs
+    ) -> tuple[State, Info]:
         s = jnp.zeros((self.dim,), dtype=jnp.float32)
         return s, InfoContainer(obs=s, reward=0.0, terminated=False, truncated=False)
 
@@ -206,7 +193,17 @@ def test_normalize_then_vmap_equals_vmap_then_normalize(batch_size):
     # may differ due to per-env vs aggregated RMV semantics
     assert i_a.obs.shape == i_b.obs.shape == (batch_size, 3)
     assert i_a.obs.dtype == i_b.obs.dtype
-    # Avoid stepping due to differing RMV representation semantics between orders
+
+    # Check normalization statistics shapes:
+    # Order A (normalize then vmap): rmv_state is vmapped, so each env has its own stats
+    rmv_a = s_a.rmv_state
+    assert rmv_a.mean.shape == (batch_size, 3)
+    assert rmv_a.var.shape == (batch_size, 3)
+
+    # Order B (vmap then normalize): rmv_state is shared (unbatched)
+    rmv_b = s_b.rmv_state
+    assert rmv_b.mean.shape == (3,)
+    assert rmv_b.var.shape == (3,)
 
 
 def test_nested_vmaps_equivalence_reset_and_step():
@@ -237,13 +234,13 @@ def test_termination_truncation_propagation():
 
         @cached_property
         def observation_space(self):
-            return Continuous(low=-jnp.inf, high=jnp.inf, shape=(), dtype=jnp.float32)
+            return Continuous(low=-jnp.inf, high=jnp.inf)
 
         @cached_property
         def action_space(self):
-            return Continuous(low=-1.0, high=1.0, shape=(), dtype=jnp.float32)
+            return Continuous(low=-1.0, high=1.0)
 
-        def reset(self, key):
+        def reset(self, key: Key, state: PyTree | None = None, **kwargs):
             return jnp.array(0.0), InfoContainer(
                 obs=jnp.array(0.0), reward=0.0, terminated=False, truncated=False
             )

@@ -5,13 +5,16 @@ from jax import numpy as jnp
 
 from jenv.environment import Info, State
 from jenv.spaces import BatchedSpace, PyTreeSpace, Space
-from jenv.struct import static_field
+from jenv.struct import field, static_field
 from jenv.typing import Key, PyTree
 from jenv.wrappers.normalization import RunningMeanVar, update_rmv
-from jenv.wrappers.wrapper import Wrapper
+from jenv.wrappers.wrapper import WrappedState, Wrapper
 
 
 class ObservationNormalizationWrapper(Wrapper):
+    class ObservationNormalizationState(WrappedState):
+        rmv_state: RunningMeanVar = field()
+
     stats_spec: PyTree | None = static_field(default=None)
     """Per-leaf normalization statistics spec as a pytree of jax.ShapeDtypeStruct.
     Shapes must be broadcastable to the observation leaves. If None, inferred from
@@ -44,36 +47,47 @@ class ObservationNormalizationWrapper(Wrapper):
 
         return jax.tree.map(norm_leaf, obs, rmv.mean, rmv.std, self.stats_spec)
 
-    def _normalize_and_update(self, state: State, info: Info) -> tuple[State, Info]:
+    def _normalize_and_update(
+        self, state: WrappedState, info: Info
+    ) -> tuple[WrappedState, Info]:
         # Ensure each observation leaf is shaped as (-1, *spec.shape)
         reshaped_obs = jax.tree.map(
             lambda x, spec: x.reshape((-1,) + tuple(spec.shape)),
             info.obs,
             self.stats_spec,
         )
-        rmv_state = update_rmv(state.persistent.obs_rmv_state, reshaped_obs)
+        rmv_state = update_rmv(state.rmv_state, reshaped_obs)
         norm_obs = self._normalize_obs(info.obs, rmv_state)
 
-        persistent = state.persistent.update(obs_rmv_state=rmv_state)
-        state = state.update(persistent=persistent)
+        state = self.ObservationNormalizationState(
+            inner_state=state.inner_state, rmv_state=rmv_state
+        )
         info = info.update(obs=norm_obs, unnormalized_obs=info.obs)
         return state, info
 
     @override
-    def reset(self, key: Key) -> tuple[State, Info]:
-        state, info = self.env.reset(key)
-        rmv_state = getattr(state.persistent, "obs_rmv_state", self._init_rmv_state())
-        persistent = state.persistent.update(obs_rmv_state=rmv_state)
-        next_state = state.update(persistent=persistent)
+    def reset(
+        self, key: Key, state: PyTree | None = None, **kwargs
+    ) -> tuple[WrappedState, Info]:
+        inner_state = None
+        rmv_state = self._init_rmv_state()
+        if state:
+            inner_state = state.inner_state
+            rmv_state = state.rmv_state
+
+        inner_state, info = self.env.reset(key, inner_state, **kwargs)
+        next_state = self.ObservationNormalizationState(
+            inner_state=inner_state, rmv_state=rmv_state
+        )
         return self._normalize_and_update(next_state, info)
 
     @override
-    def step(self, state: State, action: PyTree) -> tuple[State, Info]:
-        next_state, info = self.env.step(state, action)
-        rmv_state = state.persistent.obs_rmv_state
-        persistent = next_state.persistent.update(obs_rmv_state=rmv_state)
-        next_state = next_state.update(persistent=persistent)
-        return self._normalize_and_update(next_state, info)
+    def step(
+        self, state: WrappedState, action: PyTree, **kwargs
+    ) -> tuple[WrappedState, Info]:
+        inner_state, info = self.env.step(state.inner_state, action, **kwargs)
+        state = state.replace(inner_state=inner_state)
+        return self._normalize_and_update(state, info)
 
 
 def _infer_stats_spec(space: Space) -> PyTree:

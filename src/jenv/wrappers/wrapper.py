@@ -1,36 +1,22 @@
+from dataclasses import KW_ONLY
 from functools import cached_property
-from typing import Protocol, override, runtime_checkable
+from typing import override
 
 from jenv import spaces
 from jenv.environment import Environment, Info, State
-from jenv.struct import Container, FrozenPyTreeNode, field
+from jenv.struct import FrozenPyTreeNode, field
 from jenv.typing import Key, PyTree
 
 
-@runtime_checkable
-class WrappedState(Protocol):
-    """
-    Canonical environment state with explicit semantics:
-      - core: base environment's state; replaced on reset
-      - episodic: wrapper-owned state that resets on episode boundaries
-      - persistent: wrapper-owned state that persists across episodes
-    """
+class WrappedState(FrozenPyTreeNode):
+    inner_state: State = field()
+    _: KW_ONLY
 
-    core: PyTree
-    episodic: Container
-    persistent: Container
-
-    def update(self, **changes: PyTree) -> "WrappedState": ...
-    def __getattr__(self, name: str) -> PyTree: ...
-
-
-class FrozenWrappedState(FrozenPyTreeNode):
-    core: PyTree = field()
-    episodic: PyTree = field(default_factory=Container)
-    persistent: PyTree = field(default_factory=Container)
-
-    def update(self, **changes: PyTree) -> "FrozenWrappedState":
-        return self.replace(**changes)
+    @property
+    def unwrapped(self) -> State:
+        if hasattr(self.inner_state, "unwrapped"):
+            return self.inner_state.unwrapped
+        return self.inner_state
 
 
 class Wrapper(Environment):
@@ -39,12 +25,16 @@ class Wrapper(Environment):
     env: Environment = field(kw_only=True)
 
     @override
-    def reset(self, key: Key) -> tuple[State, Info]:
-        return self.env.reset(key)
+    def reset(
+        self, key: Key, state: State | None = None, **kwargs
+    ) -> tuple[State, Info]:
+        return self.env.reset(key, state=state, **kwargs)
 
     @override
-    def step(self, state: WrappedState, action: PyTree) -> tuple[WrappedState, Info]:
-        return self.env.step(state, action)
+    def step(
+        self, state: WrappedState, action: PyTree, **kwargs
+    ) -> tuple[WrappedState, Info]:
+        return self.env.step(state, action, **kwargs)
 
     @override
     @cached_property

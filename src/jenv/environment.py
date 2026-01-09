@@ -35,13 +35,21 @@ State = PyTree
 class Environment(ABC, FrozenPyTreeNode):
     """
     Base class for all environments.
+
+    State is an opaque PyTree owned by each environment; wrappers that stack
+    environments should expose their wrapped env state as `inner_state` while
+    adding any wrapper-specific fields. `reset` may optionally receive a prior
+    state (for cross-episode persistence) and arbitrary **kwargs that wrappers
+    or environments can use.
     """
 
     @abstractmethod
-    def reset(self, key: Key) -> tuple[State, Info]: ...
+    def reset(
+        self, key: Key, state: State | None = None, **kwargs
+    ) -> tuple[State, Info]: ...
 
     @abstractmethod
-    def step(self, state: State, action: PyTree) -> tuple[State, Info]: ...
+    def step(self, state: State, action: PyTree, **kwargs) -> tuple[State, Info]: ...
 
     @abstractmethod
     @cached_property

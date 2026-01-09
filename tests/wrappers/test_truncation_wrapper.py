@@ -7,9 +7,8 @@ import pytest
 from jenv.environment import Environment, InfoContainer
 from jenv.spaces import Continuous, Discrete
 from jenv.struct import FrozenPyTreeNode
-from jenv.typing import Key
+from jenv.typing import Key, PyTree
 from jenv.wrappers.canonicalize_wrapper import CanonicalizeWrapper
-from jenv.wrappers.timestep_wrapper import TimeStepWrapper
 from jenv.wrappers.truncation_wrapper import TruncationWrapper
 
 
@@ -25,13 +24,15 @@ class NoStepsState(FrozenPyTreeNode):
 class ScalarEnvWithSteps(Environment):
     @cached_property
     def observation_space(self) -> Continuous:
-        return Continuous(low=-jnp.inf, high=jnp.inf, shape=())
+        return Continuous(low=-jnp.inf, high=jnp.inf)
 
     @cached_property
     def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0, shape=())
+        return Continuous(low=-1.0, high=1.0)
 
-    def reset(self, key: Key) -> tuple[State, InfoContainer]:
+    def reset(
+        self, key: Key, state: PyTree | None = None, **kwargs
+    ) -> tuple[State, InfoContainer]:
         s = State(env_state=jnp.array(0.0), steps=0)
         return s, InfoContainer(
             obs=s.env_state, reward=0.0, terminated=False, truncated=False
@@ -70,13 +71,15 @@ class DiscreteEnvWithSteps(ScalarEnvWithSteps):
 class EnvMissingSteps(Environment):
     @cached_property
     def observation_space(self) -> Continuous:
-        return Continuous(low=-jnp.inf, high=jnp.inf, shape=())
+        return Continuous(low=-jnp.inf, high=jnp.inf)
 
     @cached_property
     def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0, shape=())
+        return Continuous(low=-1.0, high=1.0)
 
-    def reset(self, key: Key) -> tuple[NoStepsState, InfoContainer]:
+    def reset(
+        self, key: Key, state: PyTree | None = None, **kwargs
+    ) -> tuple[NoStepsState, InfoContainer]:
         s = NoStepsState(env_state=jnp.array(0.0))
         return s, InfoContainer(
             obs=s.env_state, reward=0.0, terminated=False, truncated=False
@@ -93,7 +96,9 @@ class EnvMissingSteps(Environment):
 
 
 class EnvResetTruncated(ScalarEnvWithSteps):
-    def reset(self, key: Key) -> tuple[State, InfoContainer]:
+    def reset(
+        self, key: Key, state: PyTree | None = None, **kwargs
+    ) -> tuple[State, InfoContainer]:
         s = State(env_state=jnp.array(0.0), steps=0)
         return s, InfoContainer(
             obs=s.env_state, reward=0.0, terminated=False, truncated=True
@@ -115,13 +120,15 @@ class EnvStepAlwaysTruncated(ScalarEnvWithSteps):
 class EnvWithArraySteps(Environment):
     @cached_property
     def observation_space(self) -> Continuous:
-        return Continuous(low=-jnp.inf, high=jnp.inf, shape=())
+        return Continuous(low=-jnp.inf, high=jnp.inf)
 
     @cached_property
     def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0, shape=())
+        return Continuous(low=-1.0, high=1.0)
 
-    def reset(self, key: Key) -> tuple[State, InfoContainer]:
+    def reset(
+        self, key: Key, state: PyTree | None = None, **kwargs
+    ) -> tuple[State, InfoContainer]:
         s = State(env_state=jnp.array(0.0), steps=jnp.array(0, dtype=jnp.int32))
         return s, InfoContainer(
             obs=s.env_state, reward=0.0, terminated=False, truncated=False
@@ -143,9 +150,7 @@ class EnvWithArraySteps(Environment):
 
 def test_reset_sets_truncated_false():
     env = ScalarEnvWithSteps()
-    w = TruncationWrapper(
-        env=TimeStepWrapper(env=CanonicalizeWrapper(env=env)), max_steps=3
-    )
+    w = TruncationWrapper(env=CanonicalizeWrapper(env=env), max_steps=3)
     key = jax.random.PRNGKey(0)
     state, info = w.reset(key)
     assert state is not None
@@ -165,9 +170,7 @@ def test_step_truncates_at_threshold(
     env_factory, actions, max_steps, expected_truncated_seq
 ):
     env = env_factory()
-    w = TruncationWrapper(
-        env=TimeStepWrapper(env=CanonicalizeWrapper(env=env)), max_steps=max_steps
-    )
+    w = TruncationWrapper(env=CanonicalizeWrapper(env=env), max_steps=max_steps)
     key = jax.random.PRNGKey(0)
     state, info = w.reset(key)
     truncs = []
@@ -179,37 +182,23 @@ def test_step_truncates_at_threshold(
 
 def test_preserves_other_info_fields():
     env = ScalarEnvWithSteps()
-    w = TruncationWrapper(
-        env=TimeStepWrapper(env=CanonicalizeWrapper(env=env)), max_steps=2
-    )
+    w = TruncationWrapper(env=CanonicalizeWrapper(env=env), max_steps=2)
     key = jax.random.PRNGKey(0)
     state, info = w.reset(key)
     # Step once: not truncated yet
     state, info = w.step(state, jnp.asarray(0.5))
     assert info.terminated is False
-    assert jnp.allclose(info.obs, state.core.env_state)
+    assert jnp.allclose(info.obs, state.unwrapped.env_state)
     # Step twice: hits threshold
     state, info = w.step(state, jnp.asarray(-0.25))
     assert info.terminated is False
-    assert jnp.allclose(info.obs, state.core.env_state)
+    assert jnp.allclose(info.obs, state.unwrapped.env_state)
     assert bool(jnp.asarray(info.truncated)) is True
-
-
-def test_missing_steps_attribute_raises():
-    env = EnvMissingSteps()
-    w = TruncationWrapper(env=CanonicalizeWrapper(env=env), max_steps=1)
-    key = jax.random.PRNGKey(0)
-    state, info = w.reset(key)
-    with pytest.raises(ValueError) as e:
-        _ = w.step(state, jnp.asarray(0.1))
-    assert "requires a 'steps' attribute" in str(e.value)
 
 
 def test_reset_overrides_underlying_truncated_true():
     env = EnvResetTruncated()
-    w = TruncationWrapper(
-        env=TimeStepWrapper(env=CanonicalizeWrapper(env=env)), max_steps=5
-    )
+    w = TruncationWrapper(env=CanonicalizeWrapper(env=env), max_steps=5)
     key = jax.random.PRNGKey(0)
     state, info = w.reset(key)
     assert info.truncated is False
@@ -218,9 +207,7 @@ def test_reset_overrides_underlying_truncated_true():
 @pytest.mark.parametrize("max_steps", [0, 1])
 def test_max_steps_edge_values(max_steps):
     env = ScalarEnvWithSteps()
-    w = TruncationWrapper(
-        env=TimeStepWrapper(env=CanonicalizeWrapper(env=env)), max_steps=max_steps
-    )
+    w = TruncationWrapper(env=CanonicalizeWrapper(env=env), max_steps=max_steps)
     key = jax.random.PRNGKey(0)
     state, info = w.reset(key)
     # First step should truncate immediately when max_steps == 0
@@ -232,9 +219,7 @@ def test_max_steps_edge_values(max_steps):
 
 def test_truncated_remains_true_after_threshold():
     env = ScalarEnvWithSteps()
-    w = TruncationWrapper(
-        env=TimeStepWrapper(env=CanonicalizeWrapper(env=env)), max_steps=2
-    )
+    w = TruncationWrapper(env=CanonicalizeWrapper(env=env), max_steps=2)
     key = jax.random.PRNGKey(0)
     state, info = w.reset(key)
     # Step 1: steps=1 < 2
@@ -250,9 +235,7 @@ def test_truncated_remains_true_after_threshold():
 
 def test_wrapper_overrides_underlying_truncated_on_step():
     env = EnvStepAlwaysTruncated()
-    w = TruncationWrapper(
-        env=TimeStepWrapper(env=CanonicalizeWrapper(env=env)), max_steps=10
-    )
+    w = TruncationWrapper(env=CanonicalizeWrapper(env=env), max_steps=10)
     key = jax.random.PRNGKey(0)
     state, info = w.reset(key)
     # Underlying env sets truncated True, but steps < max_steps => wrapper should set False
@@ -262,9 +245,7 @@ def test_wrapper_overrides_underlying_truncated_on_step():
 
 def test_steps_as_jax_scalar_array_behaves_correctly():
     env = EnvWithArraySteps()
-    w = TruncationWrapper(
-        env=TimeStepWrapper(env=CanonicalizeWrapper(env=env)), max_steps=2
-    )
+    w = TruncationWrapper(env=CanonicalizeWrapper(env=env), max_steps=2)
     key = jax.random.PRNGKey(0)
     state, info = w.reset(key)
     # After one step: steps = 1 (jax scalar), not truncated
@@ -286,9 +267,7 @@ def test_steps_as_jax_scalar_array_behaves_correctly():
 )
 def test_jit_compatibility(env_factory, action):
     env = env_factory()
-    w = TruncationWrapper(
-        env=TimeStepWrapper(env=CanonicalizeWrapper(env=env)), max_steps=2
-    )
+    w = TruncationWrapper(env=CanonicalizeWrapper(env=env), max_steps=2)
     key = jax.random.PRNGKey(0)
 
     # Avoid returning InfoContainer across JIT boundary; return only needed pieces

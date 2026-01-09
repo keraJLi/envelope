@@ -53,13 +53,13 @@ class BraxJenv(Environment):
     @cached_property
     def action_space(self) -> spaces.Space:
         # All brax environments have action limit of -1 to 1
-        return spaces.Continuous(low=-1.0, high=1.0, shape=(self.brax_env.action_size,))
+        return spaces.Continuous.from_shape(low=-1.0, high=1.0, shape=(self.brax_env.action_size,))
 
     @override
     @cached_property
     def observation_space(self) -> spaces.Space:
         # All brax environments have observation limit of -inf to inf
-        return spaces.Continuous(
+        return spaces.Continuous.from_shape(
             low=-jnp.inf, high=jnp.inf, shape=(self.brax_env.observation_size,)
         )
 

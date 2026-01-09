@@ -5,31 +5,15 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-import jenv.wrappers.vmap_wrapper as _vw
 from jenv.environment import Environment, InfoContainer, State
 from jenv.spaces import Continuous, Discrete, PyTreeSpace
+from jenv.typing import Key, PyTree
 from jenv.wrappers.canonicalize_wrapper import CanonicalizeWrapper
 from jenv.wrappers.normalization import RunningMeanVar, update_rmv
 from jenv.wrappers.observation_normalization_wrapper import (
     ObservationNormalizationWrapper,
 )
 from jenv.wrappers.vmap_wrapper import VmapWrapper
-
-
-@pytest.fixture(autouse=True)
-def _patch_vmap_axes(monkeypatch):
-    def axes(state):
-        if (
-            hasattr(state, "core")
-            and hasattr(state, "episodic")
-            and hasattr(state, "persistent")
-        ):
-            base = jax.tree.map(lambda _: None, state)
-            core_axes = jax.tree.map(lambda _: 0, state.core)
-            return base.update(core=core_axes)
-        return 0
-
-    monkeypatch.setattr(_vw, "_vmap_axes_from_state", axes, raising=True)
 
 
 class VectorObsEnv(Environment):
@@ -42,15 +26,13 @@ class VectorObsEnv(Environment):
 
     @cached_property
     def observation_space(self) -> Continuous:
-        return Continuous(
-            low=-jnp.inf, high=jnp.inf, shape=(self.dim,), dtype=jnp.float32
-        )
+        return Continuous.from_shape(low=-jnp.inf, high=jnp.inf, shape=(self.dim,))
 
     @cached_property
     def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0, shape=(self.dim,), dtype=jnp.float32)
+        return Continuous.from_shape(low=-1.0, high=1.0, shape=(self.dim,))
 
-    def reset(self, key):
+    def reset(self, key: Key, state: PyTree | None = None, **kwargs):
         s = jnp.linspace(0.0, 1.0, self.dim, dtype=jnp.float32)
         return s, InfoContainer(obs=s, reward=0.0, terminated=False, truncated=False)
 
@@ -77,16 +59,16 @@ class PyTreeObsEnv(Environment):
     def observation_space(self) -> PyTreeSpace:
         return PyTreeSpace(
             {
-                k: Continuous(low=-jnp.inf, high=jnp.inf, shape=v, dtype=jnp.float32)
+                k: Continuous.from_shape(low=-jnp.inf, high=jnp.inf, shape=v)
                 for k, v in self.shapes.items()
             }
         )
 
     @cached_property
     def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0, shape=(), dtype=jnp.float32)
+        return Continuous(low=-1.0, high=1.0)
 
-    def reset(self, key):
+    def reset(self, key, state: PyTree | None = None, **kwargs):
         obs = {
             k: jnp.arange(jnp.prod(jnp.asarray(v)), dtype=jnp.float32).reshape(v)
             for k, v in self.shapes.items()
@@ -122,13 +104,13 @@ def test_non_floating_observation_raises():
     class IntObsEnv(Environment):
         @cached_property
         def observation_space(self):
-            return Discrete(n=5, dtype=jnp.int32)
+            return Discrete(n=5)
 
         @cached_property
         def action_space(self):
-            return Discrete(n=2, dtype=jnp.int32)
+            return Discrete(n=2)
 
-        def reset(self, key):
+        def reset(self, key: Key, state: PyTree | None = None, **kwargs):
             s = jnp.array(0, dtype=jnp.int32)
             return s, InfoContainer(
                 obs=s, reward=0.0, terminated=False, truncated=False
@@ -159,7 +141,7 @@ def test_normalization_matches_manual(batch_size, dim):
     state, info = w.reset(key)
     # Manual rmv update on reshaped obs (-1, *spec.shape)
     reshaped = info.unnormalized_obs.reshape((-1,) + base.observation_space.shape)
-    rmv = update_rmv(state.persistent.obs_rmv_state, reshaped)
+    rmv = update_rmv(state.rmv_state, reshaped)
     # Manual normalized obs
     mean = jnp.broadcast_to(rmv.mean, info.unnormalized_obs.shape)
     std = jnp.broadcast_to(jnp.sqrt(rmv.var), info.unnormalized_obs.shape)
@@ -167,11 +149,11 @@ def test_normalization_matches_manual(batch_size, dim):
         base.observation_space.dtype
     )
     assert jnp.allclose(info.obs, manual, atol=1e-6, rtol=1e-6)
-    assert state.persistent.obs_rmv_state.count == batch_size
+    assert state.rmv_state.count == batch_size
     # After one step, counts add batch_size again
     action = w.env.action_space.sample(key)  # sample using vmapped env's action space
     state2, info2 = w.step(state, action)
-    assert state2.persistent.obs_rmv_state.count == 2 * batch_size
+    assert state2.rmv_state.count == 2 * batch_size
     assert "unnormalized_obs" in info2.__dict__ or hasattr(info2, "unnormalized_obs")
 
 
@@ -188,7 +170,7 @@ def test_nested_vmap_stats_count_and_shapes(b1, b2, dim):
     w = ObservationNormalizationWrapper(env=outer)
     key = jax.random.PRNGKey(123)
     state, info = w.reset(key)
-    assert state.persistent.obs_rmv_state.count == b1 * b2
+    assert state.rmv_state.count == b1 * b2
     assert info.obs.shape == (b1, b2, dim)
 
 
@@ -203,15 +185,17 @@ def test_jit_compatibility_smoke():
         env=VmapWrapper(env=CanonicalizeWrapper(env=base), batch_size=4)
     )
     key = jax.random.PRNGKey(0)
+    print(w)
 
     @jax.jit
     def run_once(k, a):
         s, i = w.reset(k)
+        print(f"s: {s}, a: {a}")
         ns, ni = w.step(s, a)
-        return ns.persistent.obs_rmv_state.count, ni.obs.shape
+        return ns.rmv_state.count, ni.obs.shape
 
     # Sample actions outside of jit to avoid tracing space construction
-    action = w.env.action_space.sample(key)
+    action = w.action_space.sample(key)
     cnt, shape = run_once(key, action)
     # Only check shapes; count semantics differ under various compositions
     assert shape == (4, 3)
@@ -223,23 +207,23 @@ def test_pickle_running_mean_var_in_state():
         env=VmapWrapper(env=CanonicalizeWrapper(env=base), batch_size=3)
     )
     state, info = w.reset(jax.random.PRNGKey(0))
-    blob = pickle.dumps(state.persistent.obs_rmv_state)
+    blob = pickle.dumps(state.rmv_state)
     rmv2: RunningMeanVar = pickle.loads(blob)
     assert jax.tree_util.tree_all(
         jax.tree.map(
             lambda a, b: jnp.allclose(a, b),
             rmv2.mean,
-            state.persistent.obs_rmv_state.mean,
+            state.rmv_state.mean,
         )
     )
     assert jax.tree_util.tree_all(
         jax.tree.map(
             lambda a, b: jnp.allclose(a, b),
             rmv2.var,
-            state.persistent.obs_rmv_state.var,
+            state.rmv_state.var,
         )
     )
-    assert rmv2.count == state.persistent.obs_rmv_state.count
+    assert rmv2.count == state.rmv_state.count
 
 
 # -----------------------------------------------------------------------------
@@ -268,7 +252,7 @@ def test_prop_normalization_consistency(batch_size, dim, seed):
     key = jax.random.PRNGKey(seed)
     state, info = w.reset(key)
     reshaped = info.unnormalized_obs.reshape((-1,) + base.observation_space.shape)
-    rmv = update_rmv(state.persistent.obs_rmv_state, reshaped)
+    rmv = update_rmv(state.rmv_state, reshaped)
     mean = jnp.broadcast_to(rmv.mean, info.unnormalized_obs.shape)
     std = jnp.broadcast_to(jnp.sqrt(rmv.var), info.unnormalized_obs.shape)
     manual = ((info.unnormalized_obs - mean) / (std + 1e-8)).astype(
@@ -295,15 +279,13 @@ class ConstantEnv(Environment):
 
     @cached_property
     def observation_space(self) -> Continuous:
-        return Continuous(
-            low=-jnp.inf, high=jnp.inf, shape=self.shape, dtype=self.dtype
-        )
+        return Continuous.from_shape(low=-jnp.inf, high=jnp.inf, shape=self.shape)
 
     @cached_property
     def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0, shape=(), dtype=jnp.float32)
+        return Continuous(low=-1.0, high=1.0)
 
-    def reset(self, key):
+    def reset(self, key: Key, state: PyTree | None = None, **kwargs):
         obs = jnp.asarray(self.value, self.dtype) * jnp.ones(self.shape, self.dtype)
         return 0, InfoContainer(obs=obs, reward=0.0, terminated=False, truncated=False)
 
@@ -337,9 +319,9 @@ def test_image_per_pixel_stats_spec_zero_mean_unit_std():
 
         @cached_property
         def action_space(self):
-            return Continuous(low=-1.0, high=1.0, shape=(), dtype=jnp.float32)
+            return Continuous(low=-1.0, high=1.0)
 
-        def reset(self, key):
+        def reset(self, key: Key, state: PyTree | None = None, **kwargs):
             k1, k2 = jax.random.split(key)
             obs = jax.random.normal(k1, (H, W, C), dtype=jnp.float32)
             return k2, InfoContainer(
@@ -383,9 +365,9 @@ def test_image_channelwise_stats_spec_dtype_cast():
 
         @cached_property
         def action_space(self):
-            return Continuous(low=-1.0, high=1.0, shape=(), dtype=jnp.float32)
+            return Continuous(low=-1.0, high=1.0)
 
-        def reset(self, key):
+        def reset(self, key: Key, state: PyTree | None = None, **kwargs):
             k1, k2 = jax.random.split(key)
             obs = jax.random.normal(k1, (H, W, C), dtype=jnp.float32)
             return k2, InfoContainer(

@@ -1,4 +1,5 @@
 import dataclasses
+from ast import List
 from dataclasses import KW_ONLY
 from typing import Any, Dict, Iterable, Iterator, Mapping, Self, Tuple, TypeVar, cast
 
@@ -48,32 +49,16 @@ class FrozenPyTreeNode:
             opts.update(dataclass_kwargs)
         dataclasses.dataclass(cls, **opts)  # modify in place
         cls.__is_jenv_pytreenode__ = True
-        jax.tree_util.register_pytree_node_class(cls)
 
-    # pytree protocol honoring static_field (metadata["pytree_node"]=False)
-    def tree_flatten(self):
-        children = []
+        data = []
         static = []
-        for f in dataclasses.fields(self):
-            v = getattr(self, f.name)
-            if f.metadata.get("pytree_node", True):
-                children.append(v)
-            else:
-                static.append(v)
-        # aux_data carries static values in dataclass field order
-        return tuple(children), tuple(static)
-
-    @classmethod
-    def tree_unflatten(cls, aux_data, children):
-        vals: Dict[str, Any] = {}
-        it_children = iter(children)
-        it_static = iter(aux_data)
         for f in dataclasses.fields(cls):
             if f.metadata.get("pytree_node", True):
-                vals[f.name] = next(it_children)
+                data.append(f.name)
             else:
-                vals[f.name] = next(it_static)
-        return cls(**vals)
+                static.append(f.name)
+
+        jax.tree_util.register_dataclass(cls, data, static)
 
     # convenience
     def replace(self, **changes):

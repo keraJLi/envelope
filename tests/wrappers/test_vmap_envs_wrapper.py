@@ -5,9 +5,9 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-import jenv.wrappers.vmap_envs_wrapper as _vwe
 from jenv.environment import Environment, Info, InfoContainer, State
 from jenv.spaces import BatchedSpace, Continuous
+from jenv.typing import Key, PyTree
 from jenv.wrappers.vmap_envs_wrapper import VmapEnvsWrapper
 
 
@@ -18,13 +18,15 @@ class ParamEnv(Environment):
 
     @cached_property
     def observation_space(self) -> Continuous:
-        return Continuous(low=-jnp.inf, high=jnp.inf, shape=(2,), dtype=jnp.float32)
+        return Continuous.from_shape(low=-jnp.inf, high=jnp.inf, shape=(2,))
 
     @cached_property
     def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0, shape=(2,), dtype=jnp.float32)
+        return Continuous.from_shape(low=-1.0, high=1.0, shape=(2,))
 
-    def reset(self, key) -> tuple[State, Info]:
+    def reset(
+        self, key: Key, state: PyTree | None = None, **kwargs
+    ) -> tuple[State, Info]:
         s = jnp.asarray([self.offset, -self.offset], dtype=jnp.float32)
         return s, InfoContainer(obs=s, reward=0.0, terminated=False, truncated=False)
 
@@ -33,19 +35,6 @@ class ParamEnv(Environment):
         reward = jnp.asarray(action, dtype=jnp.float32).sum()
         info = InfoContainer(obs=ns, reward=reward, terminated=False, truncated=False)
         return ns, info
-
-
-# Ensure only core is vmapped during tests; persistent stays static
-@pytest.fixture(autouse=True)
-def _patch_vmap_envs_axes(monkeypatch):
-    def axes(state):
-        if hasattr(state, "core"):
-            base = jax.tree.map(lambda _: None, state)
-            core_axes = jax.tree.map(lambda _: 0, state.core)
-            return base.update(core=core_axes)
-        return 0
-
-    monkeypatch.setattr(_vwe, "_vmap_axes_from_state", axes, raising=True)
 
 
 # -----------------------------------------------------------------------------

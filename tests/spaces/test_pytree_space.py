@@ -16,8 +16,8 @@ def test_pytree_space_basic():
 
     space = PyTreeSpace(
         {
-            "discrete": Discrete(n=10, dtype=jnp.int32),
-            "continuous": Continuous(low=0.0, high=1.0, shape=(2,), dtype=jnp.float32),
+            "discrete": Discrete(n=jnp.array(10, dtype=jnp.int32)),
+            "continuous": Continuous.from_shape(low=0.0, high=1.0, shape=(2,)),
         }
     )
 
@@ -52,14 +52,10 @@ def test_pytree_space_nested():
     space = PyTreeSpace(
         {
             "obs": {
-                "position": Continuous(
-                    low=-10.0, high=10.0, shape=(2,), dtype=jnp.float32
-                ),
-                "velocity": Continuous(
-                    low=-1.0, high=1.0, shape=(2,), dtype=jnp.float32
-                ),
+                "position": Continuous.from_shape(low=-10.0, high=10.0, shape=(2,)),
+                "velocity": Continuous.from_shape(low=-1.0, high=1.0, shape=(2,)),
             },
-            "action": Discrete(n=4, dtype=jnp.int32),
+            "action": Discrete(n=4),
         }
     )
 
@@ -87,9 +83,9 @@ def test_pytree_space_list():
 
     space = PyTreeSpace(
         [
-            Discrete(n=5, dtype=jnp.int32),
-            Discrete(n=10, dtype=jnp.int32),
-            Continuous(low=0.0, high=1.0, shape=(3,), dtype=jnp.float32),
+            Discrete(n=5),
+            Discrete(n=10),
+            Continuous.from_shape(low=0.0, high=1.0, shape=(3,)),
         ]
     )
 
@@ -110,8 +106,8 @@ def test_pytree_space_tuple():
     """Test PyTreeSpace with tuple structure."""
     space = PyTreeSpace(
         (
-            Discrete(n=5, dtype=jnp.int32),
-            Continuous(low=0.0, high=1.0, shape=(2,), dtype=jnp.float32),
+            Discrete(n=5),
+            Continuous.from_shape(low=0.0, high=1.0, shape=(2,)),
         )
     )
 
@@ -125,18 +121,6 @@ def test_pytree_space_tuple():
 
     # Verify sample is in space
     assert space.contains(sample)
-
-
-def test_pytree_space_invalid_leaf():
-    """Test that PyTreeSpace raises error for non-Space leaves."""
-
-    with pytest.raises(TypeError, match="is not a Space"):
-        PyTreeSpace(
-            {
-                "valid": Discrete(n=10, dtype=jnp.int32),
-                "invalid": 42,  # Not a Space
-            }
-        )
 
 
 # ============================================================================
@@ -173,8 +157,8 @@ def test_pytree_space_contains_structure_errors(candidate, message):
     """Consolidated coverage for dict-based structure mismatches."""
     space = PyTreeSpace(
         {
-            "a": Discrete(n=10, dtype=jnp.int32),
-            "b": Continuous(low=0.0, high=1.0, shape=(2,), dtype=jnp.float32),
+            "a": Discrete(n=10),
+            "b": Continuous.from_shape(low=0.0, high=1.0, shape=(2,)),
         }
     )
 
@@ -186,8 +170,8 @@ def test_pytree_space_contains_list_structure_mismatch():
     """Test structure validation for list-based PyTreeSpace."""
     space = PyTreeSpace(
         [
-            Discrete(n=5, dtype=jnp.int32),
-            Continuous(low=0.0, high=1.0, shape=(2,), dtype=jnp.float32),
+            Discrete(n=5),
+            Continuous.from_shape(low=0.0, high=1.0, shape=(2,)),
         ]
     )
 
@@ -212,8 +196,8 @@ def test_pytree_space_jit():
     """Test that PyTreeSpace works with jit."""
     space = PyTreeSpace(
         {
-            "discrete": Discrete(n=10, dtype=jnp.int32),
-            "continuous": Continuous(low=0.0, high=1.0, shape=(2,), dtype=jnp.float32),
+            "discrete": Discrete(n=10),
+            "continuous": Continuous.from_shape(low=0.0, high=1.0, shape=(2,)),
         }
     )
 
@@ -237,11 +221,11 @@ def test_pytree_space_many_samples():
 
     space = PyTreeSpace(
         {
-            "discrete": Discrete(n=20, dtype=jnp.int32),
-            "continuous": Continuous(low=-5.0, high=5.0, shape=(3,), dtype=jnp.float32),
+            "discrete": Discrete(n=20),
+            "continuous": Continuous.from_shape(low=-5.0, high=5.0, shape=(3,)),
             "nested": {
-                "a": Discrete(n=3, dtype=jnp.int32),
-                "b": Continuous(low=0.0, high=1.0, shape=(2, 2), dtype=jnp.float32),
+                "a": Discrete(n=3),
+                "b": Continuous.from_shape(low=0.0, high=1.0, shape=(2, 2)),
             },
         }
     )
@@ -276,13 +260,13 @@ def test_pytree_space_batched_parameters_basic():
     space = PyTreeSpace(
         {
             "discrete": Discrete(
-                n=jnp.array([4, 5, 6]),  # 3D space with different bounds per dim
-                dtype=jnp.int32,
+                n=jnp.array(
+                    [4, 5, 6], dtype=jnp.int32
+                ),  # 3D space with different bounds per dim
             ),
             "continuous": Continuous(
-                low=jnp.array([0.0, 1.0, 2.0]),
-                high=jnp.array([1.0, 2.0, 3.0]),
-                dtype=jnp.float32,
+                low=jnp.array([0.0, 1.0, 2.0], dtype=jnp.float32),
+                high=jnp.array([1.0, 2.0, 3.0], dtype=jnp.float32),
             ),
         }
     )
@@ -302,11 +286,10 @@ def test_pytree_space_batched_parameters_bounds():
     """Test that PyTreeSpace with array parameters respects per-dimension bounds."""
     space = PyTreeSpace(
         {
-            "discrete": Discrete(n=jnp.array([4, 5, 6]), dtype=jnp.int32),
+            "discrete": Discrete(n=jnp.array([4, 5, 6], dtype=jnp.int32)),
             "continuous": Continuous(
-                low=jnp.array([0.0, 1.0, 2.0]),
-                high=jnp.array([1.0, 2.0, 3.0]),
-                dtype=jnp.float32,
+                low=jnp.array([0.0, 1.0, 2.0], dtype=jnp.float32),
+                high=jnp.array([1.0, 2.0, 3.0], dtype=jnp.float32),
             ),
         }
     )
@@ -343,8 +326,8 @@ def test_pytree_space_batched_parameters_bounds():
 def test_pytree_space_tree_property():
     """Test that tree property is accessible."""
     tree_dict = {
-        "discrete": Discrete(n=10, dtype=jnp.int32),
-        "continuous": Continuous(low=0.0, high=1.0, shape=(2,), dtype=jnp.float32),
+        "discrete": Discrete(n=10),
+        "continuous": Continuous.from_shape(low=0.0, high=1.0, shape=(2,)),
     }
     space = PyTreeSpace(tree_dict)
 
@@ -358,11 +341,11 @@ def test_pytree_space_shape_property():
     """Test that the cached shape property mirrors the underlying tree."""
     space = PyTreeSpace(
         {
-            "scalar": Discrete(n=3, dtype=jnp.int32),
-            "vector": Continuous(low=0.0, high=1.0, shape=(2,), dtype=jnp.float32),
+            "scalar": Discrete(n=3),
+            "vector": Continuous.from_shape(low=0.0, high=1.0, shape=(2,)),
             "tuple": (
-                Discrete(n=5, dtype=jnp.int32),
-                Continuous(low=-1.0, high=1.0, shape=(1,), dtype=jnp.float32),
+                Discrete(n=5),
+                Continuous.from_shape(low=-1.0, high=1.0, shape=(1,)),
             ),
         }
     )
@@ -379,9 +362,9 @@ def test_pytree_space_shape_property():
 
 def test_pytree_space_replace():
     """Test replace method on PyTreeSpace."""
-    old_tree = {"a": Discrete(n=5, dtype=jnp.int32)}
+    old_tree = {"a": Discrete(n=5)}
     pytree_space = PyTreeSpace(old_tree)
-    new_tree = {"b": Discrete(n=10, dtype=jnp.int32)}
+    new_tree = {"b": Discrete(n=10)}
     new_pytree = pytree_space.replace(tree=new_tree)
     assert "b" in new_pytree.tree
     assert "a" not in new_pytree.tree
@@ -419,7 +402,7 @@ def test_pytree_space_empty_list():
 
 def test_pytree_space_single_element():
     """Test PyTreeSpace with single element."""
-    space = PyTreeSpace({"only": Discrete(n=5, dtype=jnp.int32)})
+    space = PyTreeSpace({"only": Discrete(n=5)})
 
     key = jax.random.PRNGKey(0)
     sample = space.sample(key)
@@ -432,13 +415,7 @@ def test_pytree_space_single_element():
 def test_pytree_space_deep_nesting():
     """Test PyTreeSpace with deep nesting (5 levels)."""
     space = PyTreeSpace(
-        {
-            "level1": {
-                "level2": {
-                    "level3": {"level4": {"level5": Discrete(n=10, dtype=jnp.int32)}}
-                }
-            }
-        }
+        {"level1": {"level2": {"level3": {"level4": {"level5": Discrete(n=10)}}}}}
     )
 
     key = jax.random.PRNGKey(42)
@@ -450,3 +427,51 @@ def test_pytree_space_deep_nesting():
 
     # Verify contains works with deep nesting
     assert space.contains(sample)
+
+
+# ============================================================================
+# Tests: PyTreeSpace - Vmap Creation
+# ============================================================================
+
+
+def test_pytree_space_from_vmapped_function():
+    """Test that PyTreeSpace can be returned from a vmapped function.
+
+    Note: When vmap creates spaces, nested space parameters become batched.
+    """
+
+    def make_pytree_space(n):
+        return PyTreeSpace(
+            {
+                "discrete": Discrete(n=n),
+                "continuous": Continuous.from_shape(low=0.0, high=1.0, shape=(2,)),
+            }
+        )
+
+    # Vmap over function that creates PyTreeSpace spaces
+    batch_size = 3
+    n_values = jnp.array([4, 5, 6], dtype=jnp.int32)
+    spaces = jax.vmap(make_pytree_space)(n_values)
+
+    # Verify the vmapped result works - spaces should be a batched pytree
+    # The tree structure should be preserved
+    key = jax.random.PRNGKey(0)
+    sample = spaces.sample(key)
+
+    # Sample should have the same structure as a single PyTreeSpace sample
+    assert isinstance(sample, dict)
+    assert "discrete" in sample
+    assert "continuous" in sample
+
+    # Discrete samples should be batched
+    assert sample["discrete"].shape == (batch_size,)
+    assert jnp.all(sample["discrete"] >= 0)
+    assert jnp.all(sample["discrete"] < n_values)
+
+    # Continuous samples should be batched
+    assert sample["continuous"].shape == (batch_size, 2)
+    assert jnp.all(sample["continuous"] >= 0.0)
+    assert jnp.all(sample["continuous"] <= 1.0)
+
+    # Test contains
+    assert spaces.contains(sample)

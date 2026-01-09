@@ -11,10 +11,14 @@ from jenv.wrappers.wrapper import WrappedState, Wrapper
 
 
 class VmapWrapper(Wrapper):
+    """Does not forward kwargs to the underlying env. Does not wrap the state."""
+
     batch_size: int = field(kw_only=True)
 
     @override
-    def reset(self, key: Key) -> tuple[WrappedState, Info]:
+    def reset(
+        self, key: Key, state: PyTree | None = None, **kwargs
+    ) -> tuple[WrappedState, Info]:
         # Accept single key or batched keys
         if key.shape == (2,):
             keys = jax.random.split(key, self.batch_size)
@@ -26,13 +30,14 @@ class VmapWrapper(Wrapper):
                 )
             keys = key
 
-        state, info = jax.vmap(self.env.reset)(keys)
+        state, info = jax.vmap(self.env.reset)(keys, state)
         return state, info
 
     @override
-    def step(self, state: WrappedState, action: PyTree) -> tuple[WrappedState, Info]:
-        vmap_axes = _vmap_axes_from_state(state)
-        state, info = jax.vmap(self.env.step, in_axes=(vmap_axes, 0))(state, action)
+    def step(
+        self, state: WrappedState, action: PyTree, **kwargs
+    ) -> tuple[WrappedState, Info]:
+        state, info = jax.vmap(self.env.step)(state, action)
         return state, info
 
     @override
@@ -44,11 +49,3 @@ class VmapWrapper(Wrapper):
     @cached_property
     def action_space(self) -> spaces.Space:
         return spaces.batch_space(self.env.action_space, self.batch_size)
-
-
-def _vmap_axes_from_state(state: WrappedState) -> PyTree:
-    axes = jax.tree.map(lambda _: None, state)
-    axes_core = jax.tree.map(lambda _: 0, state.core)
-    axes_ep = jax.tree.map(lambda _: 0, state.episodic)
-    axes_pers = jax.tree.map(lambda _: None, state.persistent)
-    return axes.update(core=axes_core, episodic=axes_ep, persistent=axes_pers)

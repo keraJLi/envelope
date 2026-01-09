@@ -22,3 +22,17 @@ print(step_info.obs, step_info.reward)
 states, step_infos = jax.lax.scan(env.step, state, actions)
 plt.plot(step_infos.reward.cumsum())  # plot cumulative reward
 ```
+
+## Good wrapper support
+Wrappers around gymnax environments can be hacky. Jenv promises to provide explicit support for wrappers that is easy to extend and comprehend. Wrapping semantics can quickly become complicated; let me outline the basic ones here. Consider wrappers
+- `AutoResetWrapper` (A): Resets environments on termination and truncation
+- `ObservationNormalizationWrapper` (O): normalizes observations, has state that persists across episodes
+- `VmapWrapper` (V): Vectorizes an environment using `jax.vmap(step)`
+
+By applying them in different orders, we get different semantics.
+
+## State and reset semantics
+- `State` is an opaque PyTree defined by each environment. Wrappers expose the wrapped env state as `inner_state` and may add their own fields.
+- `reset(key, state=None, **kwargs)` accepts an optional prior state for cross-episode persistence and arbitrary kwargs for env/wrapper-specific needs. `step(state, action, **kwargs)` mirrors this.
+- When using `jit`/`vmap`/`pmap`, pass a concrete state pytree (not `None`) to keep shapes/static structure stable; normalize `None` to a sentinel outside the traced function if needed.
+- Wrapper ordering still matters (e.g., `ObservationNormalizationWrapper` before vs. after `VmapWrapper` gives per-env vs. global normalization), but kwargs and optional state are forwarded through the stack.

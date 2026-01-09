@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from functools import cached_property
+from typing import override
 
 import jax
 from jax import numpy as jnp
@@ -19,27 +20,25 @@ class Space(ABC, FrozenPyTreeNode):
 class Discrete(Space):
     """
     A discrete space with a given number of elements. `n` can be a scalar or an array.
-    If `n` is a scalar, you may pass `shape` to produce array-valued samples.
+    The shape and dtype of the space are inferred from `n`.
 
     Args:
         n: The number of elements in the space.
-        shape: The shape of the space.
-        dtype: The dtype of the space.
     """
 
     n: int | jax.Array
-    shape: tuple[int, ...] = static_field(default=None)
-    dtype: jnp.dtype = static_field(default=jnp.int32)
 
-    def __post_init__(self):
-        if jnp.any(self.n < 1):
-            raise ValueError("n must be at least 1")
+    @classmethod
+    def from_shape(cls, n: int, shape: tuple[int]) -> "Discrete":
+        return cls(n=jnp.full(shape, n, dtype=jnp.asarray(n).dtype))
 
-        # If shape is None, infer it from n
-        if self.shape is None:
-            object.__setattr__(self, "shape", jnp.asarray(self.n).shape)
-        elif jnp.asarray(self.n).shape != ():
-            raise ValueError("shape can only be specified when n is a scalar")
+    @property
+    def shape(self) -> tuple[int, ...]:
+        return jnp.asarray(self.n).shape
+
+    @property
+    def dtype(self):
+        return jnp.asarray(self.n).dtype
 
     def sample(self, key: Key) -> jax.Array:
         return jax.random.randint(key, self.shape, 0, self.n, dtype=self.dtype)
@@ -48,58 +47,66 @@ class Discrete(Space):
         return jnp.all(x >= 0) & jnp.all(x < self.n)
 
     def __repr__(self) -> str:
-        dtype_str = getattr(self.dtype, "__name__", str(self.dtype))
-        return f"Discrete(n={self.n}, shape={self.shape}, dtype={dtype_str})"
+        return f"Discrete(shape={self.shape}, dtype={self.dtype}, n={self.n})"
 
 
 class Continuous(Space):
     """
-    A continuous space with a given lower and upper bound. `low` and `high` can be scalars or arrays.
-    If `low` and `high` are scalars, you may pass `shape` to produce array-valued samples.
+    A continuous space with a given lower and upper bound. `low` and `high` can be
+    scalars or arrays. The shape and dtype of the space are inferred from `low` and
+    `high`.
 
     Args:
         low: The lower bound of the space.
         high: The upper bound of the space.
-        shape: The shape of the space.
-        dtype: The dtype of the space.
     """
 
     low: float | jax.Array
     high: float | jax.Array
-    shape: tuple[int, ...] = static_field(default=None)
-    dtype: jnp.dtype = static_field(default=jnp.float32)
 
-    def __post_init__(self):
+    @classmethod
+    def from_shape(cls, low: float, high: float, shape: tuple[int]) -> "Continuous":
+        return cls(
+            low=jnp.full(shape, low, dtype=jnp.asarray(low).dtype),
+            high=jnp.full(shape, high, dtype=jnp.asarray(high).dtype),
+        )
+
+    @property
+    def dtype(self):
+        if jnp.asarray(self.low).dtype != jnp.asarray(self.high).dtype:
+            raise ValueError("low and high must have the same dtype")
+
+        return jnp.asarray(self.low).dtype
+
+    @property
+    def shape(self) -> tuple[int, ...]:
         if jnp.asarray(self.low).shape != jnp.asarray(self.high).shape:
             raise ValueError("low and high must have the same shape")
-        low_and_high_shape = jnp.asarray(self.low).shape
 
-        if jnp.any(self.low > self.high):
-            raise ValueError("low must be less than high")
+        return jnp.asarray(self.low).shape
 
-        # If shape is None, infer it from low/high
-        if self.shape is None:
-            object.__setattr__(self, "shape", low_and_high_shape)
-        elif low_and_high_shape != ():
-            raise ValueError("shape can only be specified when low and high are scalar")
-
+    @override
     def sample(self, key: Key) -> jax.Array:
         uniform_sample = jax.random.uniform(key, self.shape, self.dtype)
         return self.low + uniform_sample * (self.high - self.low)
 
+    @override
     def contains(self, x: jax.Array) -> bool:
-        return jnp.all(x >= self.low) & jnp.all(x <= self.high)
+        return jnp.all((x >= jnp.asarray(self.low)) & (x <= jnp.asarray(self.high)))
 
     def __repr__(self) -> str:
         dtype_str = getattr(self.dtype, "__name__", str(self.dtype))
-        return f"Continuous(low={self.low}, high={self.high}, shape={self.shape}, dtype={dtype_str})"
+        return (
+            f"Continuous(shape={self.shape}, dtype={dtype_str}, "
+            f"low={self.low}, high={self.high})"
+        )
 
 
 class PyTreeSpace(Space):
     """A Space defined by a PyTree structure of other Spaces.
 
     Args:
-        tree: A PyTree where all leaves are Space objects.
+        tree: A PyTree with Space objects leaves.
 
     Usage:
         space = PyTreeSpace({
@@ -110,13 +117,7 @@ class PyTreeSpace(Space):
 
     tree: PyTree
 
-    def __init__(self, tree: PyTree):
-        for leaf in jax.tree.leaves(tree, is_leaf=lambda x: isinstance(x, Space)):
-            if not isinstance(leaf, Space):
-                raise TypeError(f"Leaf {leaf} is not a Space")
-
-        object.__setattr__(self, "tree", tree)
-
+    @override
     def sample(self, key: Key) -> PyTree:
         leaves, treedef = jax.tree.flatten(
             self.tree, is_leaf=lambda x: isinstance(x, Space)
@@ -125,6 +126,7 @@ class PyTreeSpace(Space):
         samples = [space.sample(key) for key, space in zip(keys, leaves)]
         return jax.tree.unflatten(treedef, samples)
 
+    @override
     def contains(self, x: PyTree) -> bool:
         # Use tree.map to check containment for each space-value pair
         contains = jax.tree.map(
@@ -139,7 +141,7 @@ class PyTreeSpace(Space):
         """Return a string representation showing the tree structure."""
         return f"{self.__class__.__name__}({self.tree!r})"
 
-    @cached_property
+    @property
     def shape(self) -> PyTree:
         return jax.tree.map(
             lambda space: space.shape,

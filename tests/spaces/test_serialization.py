@@ -11,14 +11,14 @@ from jenv.spaces import Continuous, Discrete, PyTreeSpace, Space
 # ============================================================================
 
 
-_REPR_DISCRETE_SPACE = Discrete(n=10, dtype=jnp.int32)
+_REPR_DISCRETE_SPACE = Discrete(n=10)
 _REPR_DISCRETE_EXPECTED = (
     _REPR_DISCRETE_SPACE.__class__.__name__,
     str(_REPR_DISCRETE_SPACE.n),
     getattr(_REPR_DISCRETE_SPACE.dtype, "__name__", str(_REPR_DISCRETE_SPACE.dtype)),
 )
 
-_REPR_CONTINUOUS_SPACE = Continuous(low=0.0, high=1.0, shape=(3,), dtype=jnp.float32)
+_REPR_CONTINUOUS_SPACE = Continuous.from_shape(low=0.0, high=1.0, shape=(3,))
 _REPR_CONTINUOUS_EXPECTED = (
     _REPR_CONTINUOUS_SPACE.__class__.__name__,
     str(_REPR_CONTINUOUS_SPACE.low),
@@ -29,7 +29,7 @@ _REPR_CONTINUOUS_EXPECTED = (
 _REPR_PYTREE_SPACE = PyTreeSpace(
     {
         "discrete": _REPR_DISCRETE_SPACE.replace(n=5),
-        "continuous": _REPR_CONTINUOUS_SPACE.replace(shape=(2,)),
+        "continuous": Continuous.from_shape(low=0.0, high=1.0, shape=(2,)),
     }
 )
 _REPR_PYTREE_EXPECTED = (
@@ -76,7 +76,7 @@ def test_pytree_space_repr_nested():
         {
             "outer": {
                 "inner": {
-                    "discrete": Discrete(n=5, dtype=jnp.int32),
+                    "discrete": Discrete(n=5),
                 }
             }
         }
@@ -89,16 +89,14 @@ def test_pytree_space_repr_nested():
 
 def test_space_repr_with_array_parameters():
     """Test __repr__ for spaces with array parameters."""
-    discrete = Discrete(n=jnp.array([4, 5, 6]), dtype=jnp.int32)
+    discrete = Discrete(n=jnp.array([4, 5, 6], dtype=jnp.int32))
     repr_str = repr(discrete)
 
     assert "Discrete" in repr_str
     # Should show the array in some form
     assert "[4" in repr_str or "Array" in repr_str or "array" in repr_str.lower()
 
-    continuous = Continuous(
-        low=jnp.array([0.0, 1.0]), high=jnp.array([1.0, 2.0]), dtype=jnp.float32
-    )
+    continuous = Continuous.from_shape(low=0.0, high=1.0, shape=(2,))
     repr_str = repr(continuous)
 
     assert "Continuous" in repr_str
@@ -113,14 +111,14 @@ def test_discrete_space_pickle():
     """Test that Discrete space can be pickled and unpickled."""
     import pickle
 
-    space = Discrete(n=10, shape=(2,), dtype=jnp.int32)
+    space = Discrete.from_shape(n=10, shape=(2,))
 
     # Pickle and unpickle
     pickled = pickle.dumps(space)
     unpickled = pickle.loads(pickled)
 
     # Verify attributes are preserved
-    assert unpickled.n == space.n
+    assert jnp.array_equal(unpickled.n, space.n)
     assert unpickled.shape == space.shape
     assert unpickled.dtype == space.dtype
 
@@ -134,15 +132,15 @@ def test_continuous_space_pickle():
     """Test that Continuous space can be pickled and unpickled."""
     import pickle
 
-    space = Continuous(low=-1.0, high=1.0, shape=(3,), dtype=jnp.float32)
+    space = Continuous.from_shape(low=-1.0, high=1.0, shape=(3,))
 
     # Pickle and unpickle
     pickled = pickle.dumps(space)
     unpickled = pickle.loads(pickled)
 
     # Verify attributes are preserved
-    assert unpickled.low == space.low
-    assert unpickled.high == space.high
+    assert jnp.array_equal(unpickled.low, space.low)
+    assert jnp.array_equal(unpickled.high, space.high)
     assert unpickled.shape == space.shape
     assert unpickled.dtype == space.dtype
 
@@ -158,8 +156,8 @@ def test_pytree_space_pickle():
 
     space = PyTreeSpace(
         {
-            "discrete": Discrete(n=5, dtype=jnp.int32),
-            "continuous": Continuous(low=0.0, high=1.0, shape=(2,), dtype=jnp.float32),
+            "discrete": Discrete(n=5),
+            "continuous": Continuous.from_shape(low=0.0, high=1.0, shape=(2,)),
         }
     )
 
@@ -184,14 +182,15 @@ def test_space_pickle_with_array_parameters():
     import pickle
 
     # Discrete with array n
-    discrete = Discrete(n=jnp.array([4, 5, 6]), dtype=jnp.int32)
+    discrete = Discrete(n=jnp.array([4, 5, 6], dtype=jnp.int32))
     pickled = pickle.dumps(discrete)
     unpickled = pickle.loads(pickled)
     assert jnp.allclose(unpickled.n, discrete.n)
 
     # Continuous with array bounds
     continuous = Continuous(
-        low=jnp.array([0.0, 1.0]), high=jnp.array([1.0, 2.0]), dtype=jnp.float32
+        low=jnp.array([0.0, 1.0], dtype=jnp.float32),
+        high=jnp.array([1.0, 2.0], dtype=jnp.float32),
     )
     pickled = pickle.dumps(continuous)
     unpickled = pickle.loads(pickled)
@@ -203,11 +202,11 @@ def test_space_equality_after_pickle():
     """Test that pickled spaces maintain their properties."""
     import pickle
 
-    space1 = Discrete(n=10, dtype=jnp.int32)
+    space1 = Discrete(n=10)
     space2 = pickle.loads(pickle.dumps(space1))
 
     # While they're different objects, they should have same properties
-    assert space1.n == space2.n
+    assert jnp.array_equal(space1.n, space2.n)
     assert space1.dtype == space2.dtype
     assert space1.shape == space2.shape
 
@@ -229,19 +228,20 @@ def test_space_not_hashable():
     cannot be hashed. This documents expected behavior.
     """
     # Discrete with array n - not hashable
-    discrete_array = Discrete(n=jnp.array([4, 5, 6]), dtype=jnp.int32)
+    discrete_array = Discrete(n=jnp.array([4, 5, 6], dtype=jnp.int32))
     with pytest.raises(TypeError):
         hash(discrete_array)
 
     # Continuous with array bounds - not hashable
     continuous_array = Continuous(
-        low=jnp.array([0.0, 1.0]), high=jnp.array([1.0, 2.0]), dtype=jnp.float32
+        low=jnp.array([0.0, 1.0], dtype=jnp.float32),
+        high=jnp.array([1.0, 2.0], dtype=jnp.float32),
     )
     with pytest.raises(TypeError):
         hash(continuous_array)
 
     # PyTreeSpace - not hashable due to tree field
-    pytree_space = PyTreeSpace({"a": Discrete(n=10, dtype=jnp.int32)})
+    pytree_space = PyTreeSpace({"a": Discrete(n=10)})
     with pytest.raises(TypeError):
         hash(pytree_space)
 

@@ -1,29 +1,38 @@
+from dataclasses import KW_ONLY
+
 import jax
 
 from jenv.environment import Info
+from jenv.struct import field
 from jenv.typing import Key, PyTree
 from jenv.wrappers.wrapper import WrappedState, Wrapper
 
-RESET_KEY_NAME = "reset_key"
-
 
 class AutoResetWrapper(Wrapper):
-    def reset(self, key: Key) -> tuple[WrappedState, Info]:
+    class AutoResetState(WrappedState):
+        reset_key: jax.Array = field()
+
+    def reset(
+        self, key: Key, state: PyTree | None = None, **kwargs
+    ) -> tuple[WrappedState, Info]:
         key, subkey = jax.random.split(key)
-        state, info = self.env.reset(key)
-        episodic = state.episodic.update(**{RESET_KEY_NAME: subkey})
-        state = state.update(episodic=episodic)
+        inner_state = state.inner_state if state else None
+        inner_state, info = self.env.reset(key, inner_state, **kwargs)
+        state = self.AutoResetState(inner_state=inner_state, reset_key=subkey)
         return state, info.update(next_obs=info.obs)
 
-    def step(self, state: WrappedState, action: PyTree) -> tuple[WrappedState, Info]:
-        state_step, info_step = self.env.step(state, action)
+    def step(
+        self, state: WrappedState, action: PyTree, **kwargs
+    ) -> tuple[WrappedState, Info]:
+        inner_state, info_step = self.env.step(state.inner_state, action, **kwargs)
         done = info_step.terminated | info_step.truncated
-        reset_key = getattr(state_step.episodic, RESET_KEY_NAME)
 
+        state = self.AutoResetState(inner_state=inner_state, reset_key=state.reset_key)
         info = info_step.update(next_obs=info_step.obs)
-        state_next, info_next = jax.lax.cond(
+
+        state, info = jax.lax.cond(
             done,
-            lambda: self.reset(reset_key),
-            lambda: (state_step, info),
+            lambda: self.reset(state.reset_key),
+            lambda: (state, info),
         )
-        return state_next, info_next
+        return state, info
