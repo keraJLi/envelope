@@ -1,7 +1,6 @@
 import dataclasses
-from ast import List
 from dataclasses import KW_ONLY
-from typing import Any, Dict, Iterable, Iterator, Mapping, Self, Tuple, TypeVar, cast
+from typing import Any, Iterable, Iterator, Mapping, Self, Tuple
 
 import jax
 
@@ -39,7 +38,7 @@ class FrozenPyTreeNode:
     """
 
     # Turn subclasses into frozen dataclasses and register with JAX.
-    def __init_subclass__(cls, *, dataclass_kwargs: Dict[str, Any] | None = None, **kw):
+    def __init_subclass__(cls, *, dataclass_kwargs: dict[str, Any] | None = None, **kw):
         super().__init_subclass__(**kw)
         # Check if this specific class (not parent) has already been processed
         if "__is_jenv_pytreenode__" in cls.__dict__:
@@ -71,7 +70,7 @@ class Container:
     _: KW_ONLY
     _extras: Mapping[str, PyTree] = dataclasses.field(default_factory=dict, repr=False)
 
-    def __init_subclass__(cls, *, dataclass_kwargs: Dict[str, Any] | None = None, **kw):
+    def __init_subclass__(cls, *, dataclass_kwargs: dict[str, Any] | None = None, **kw):
         super().__init_subclass__(**kw)
         if "__is_container_dataclass__" in cls.__dict__:
             return
@@ -107,8 +106,8 @@ class Container:
 
     def update(self, **changes: PyTree) -> Self:
         core_names = {f.name for f in dataclasses.fields(self) if f.name != "_extras"}
-        core_updates: Dict[str, PyTree] = {}
-        extras_updates: Dict[str, PyTree] = {}
+        core_updates: dict[str, PyTree] = {}
+        extras_updates: dict[str, PyTree] = {}
 
         for k, v in changes.items():
             if k in core_names:

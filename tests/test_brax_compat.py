@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import pytest
 
 from jenv.compat.brax_jenv import BraxJenv
-from jenv.environment import Info, State
+from jenv.environment import Info
 
 
 def test_brax2jenv_wrapper():

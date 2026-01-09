@@ -224,7 +224,6 @@ def test_episode_truncation():
 def test_multiple_episodes():
     """Test multiple reset/step cycles."""
     env = _create_navix_env()
-    key = jax.random.PRNGKey(0)
 
     # Run multiple episodes
     for episode in range(3):

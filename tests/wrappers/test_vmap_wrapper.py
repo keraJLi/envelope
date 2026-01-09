@@ -7,7 +7,6 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-import jenv.wrappers.vmap_wrapper as _vw
 from jenv.environment import Environment, Info, InfoContainer, State
 from jenv.spaces import BatchedSpace, Continuous
 from jenv.typing import Key, PyTree

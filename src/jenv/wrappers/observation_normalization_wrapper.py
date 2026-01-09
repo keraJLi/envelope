@@ -3,7 +3,7 @@ from typing import override
 import jax
 from jax import numpy as jnp
 
-from jenv.environment import Info, State
+from jenv.environment import Info
 from jenv.spaces import BatchedSpace, PyTreeSpace, Space
 from jenv.struct import field, static_field
 from jenv.typing import Key, PyTree

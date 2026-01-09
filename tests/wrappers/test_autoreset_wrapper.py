@@ -4,7 +4,6 @@ from functools import cached_property
 
 import jax
 import jax.numpy as jnp
-import pytest
 
 from jenv.environment import Environment, InfoContainer
 from jenv.spaces import Continuous

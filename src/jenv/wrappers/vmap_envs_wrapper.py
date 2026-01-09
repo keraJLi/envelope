@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import Callable, override
+from typing import override
 
 import jax
 
