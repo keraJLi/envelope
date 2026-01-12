@@ -126,7 +126,7 @@ def test_space_contains():
 
 
 def test_container_conversion_reset():
-    """Test _convert_container on reset timestep."""
+    """Test convert_navix_to_jenv_info on reset timestep."""
     env = _create_navix_env()
     key = jax.random.PRNGKey(0)
 
@@ -157,7 +157,7 @@ def test_container_conversion_reset():
 
 
 def test_container_conversion_step():
-    """Test _convert_container on step timestep."""
+    """Test convert_navix_to_jenv_info on step timestep."""
     env = _create_navix_env()
     key = jax.random.PRNGKey(0)
 
@@ -247,7 +247,7 @@ def test_unsupported_space_type():
     import jax.numpy as jnp
     from navix import spaces as navix_spaces
 
-    from jenv.compat.navix_jenv import _convert_space
+    from jenv.compat.navix_jenv import convert_navix_to_jenv_space
 
     # Create a mock space that's neither Discrete nor Continuous
     class MockSpace(navix_spaces.Space):
@@ -261,21 +261,21 @@ def test_unsupported_space_type():
         maximum=jnp.array(10),
     )
     with pytest.raises(ValueError, match="Unsupported space type"):
-        _convert_space(mock_space)
+        convert_navix_to_jenv_space(mock_space)
 
 
 def test_step_type_conversion():
     """Test all navix StepType values are correctly converted."""
     import navix
 
-    from jenv.compat.navix_jenv import _convert_container
+    from jenv.compat.navix_jenv import convert_navix_to_jenv_info
 
     env = _create_navix_env()
     key = jax.random.PRNGKey(0)
 
     # Test TRANSITION step type (should be on reset)
     reset_timestep = env.navix_env.reset(key)
-    reset_info = _convert_container(reset_timestep)
+    reset_info = convert_navix_to_jenv_info(reset_timestep)
     # TRANSITION should map to neither terminated nor truncated
     assert reset_timestep.step_type == navix.StepType.TRANSITION
     assert not reset_info.terminated
@@ -285,7 +285,7 @@ def test_step_type_conversion():
     state, _ = env.reset(key)
     action = env.action_space.sample(jax.random.PRNGKey(1))
     step_timestep = env.navix_env.step(state, action)
-    step_info = _convert_container(step_timestep)
+    step_info = convert_navix_to_jenv_info(step_timestep)
     # TRANSITION should map to neither terminated nor truncated
     if step_timestep.step_type == navix.StepType.TRANSITION:
         assert not step_info.terminated
