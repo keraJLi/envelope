@@ -9,7 +9,7 @@ import pytest
 from jenv.compat import create
 from jenv.environment import Environment
 
-pytestmark = [pytest.mark.compat, pytest.mark.integration]
+pytestmark = pytest.mark.compat
 
 
 def test_create_brax_smoke(prng_key):

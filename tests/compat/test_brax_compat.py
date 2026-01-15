@@ -7,7 +7,7 @@ import pytest
 from brax.envs import Wrapper as BraxWrapper
 
 from jenv.compat.brax_jenv import BraxJenv
-from compat.contract import (
+from tests.compat.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )
@@ -39,9 +39,10 @@ def test_brax_contract_smoke(prng_key, brax_fast_env):
     assert_reset_step_contract(env, key=prng_key, obs_check=obs_check)
 
 
-def test_brax_contract_scan(prng_key, scan_num_steps, brax_fast_env):
-    env = brax_fast_env
-    assert_jitted_rollout_contract(env, key=prng_key, num_steps=scan_num_steps)
+def test_brax_contract_scan(prng_key, brax_fast_env, scan_num_steps):
+    assert_jitted_rollout_contract(
+        brax_fast_env, key=prng_key, num_steps=scan_num_steps
+    )
 
 
 def test_brax_info_preserves_brax_fields_on_reset(brax_fast_env, prng_key):

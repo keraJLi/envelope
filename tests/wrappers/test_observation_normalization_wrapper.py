@@ -1,87 +1,21 @@
 import pickle
-from functools import cached_property
 
 import jax
 import jax.numpy as jnp
 import pytest
 
-from jenv.environment import Environment, InfoContainer, State
-from jenv.spaces import Continuous, Discrete, PyTreeSpace
-from jenv.typing import Key, PyTree
 from jenv.wrappers.canonicalize_wrapper import CanonicalizeWrapper
 from jenv.wrappers.normalization import RunningMeanVar, update_rmv
 from jenv.wrappers.observation_normalization_wrapper import (
     ObservationNormalizationWrapper,
 )
 from jenv.wrappers.vmap_wrapper import VmapWrapper
-
-
-class VectorObsEnv(Environment):
-    """Deterministic env: obs equals current env_state; action adds to state."""
-
-    dim: int
-
-    def __init__(self, dim: int):
-        object.__setattr__(self, "dim", int(dim))
-
-    @cached_property
-    def observation_space(self) -> Continuous:
-        return Continuous.from_shape(low=-jnp.inf, high=jnp.inf, shape=(self.dim,))
-
-    @cached_property
-    def action_space(self) -> Continuous:
-        return Continuous.from_shape(low=-1.0, high=1.0, shape=(self.dim,))
-
-    def reset(self, key: Key, state: PyTree | None = None, **kwargs):
-        s = jnp.linspace(0.0, 1.0, self.dim, dtype=jnp.float32)
-        return s, InfoContainer(obs=s, reward=0.0, terminated=False, truncated=False)
-
-    def step(self, state: State, action: jax.Array):
-        ns = state + action
-        info = InfoContainer(
-            obs=ns,
-            reward=jnp.asarray(action, dtype=jnp.float32).sum(),
-            terminated=False,
-            truncated=False,
-        )
-        return ns, info
-
-
-class PyTreeObsEnv(Environment):
-    """Obs is a pytree of arrays."""
-
-    shapes: dict
-
-    def __init__(self, shapes: dict[str, tuple[int, ...]]):
-        object.__setattr__(self, "shapes", dict(shapes))
-
-    @cached_property
-    def observation_space(self) -> PyTreeSpace:
-        return PyTreeSpace(
-            {
-                k: Continuous.from_shape(low=-jnp.inf, high=jnp.inf, shape=v)
-                for k, v in self.shapes.items()
-            }
-        )
-
-    @cached_property
-    def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0)
-
-    def reset(self, key, state: PyTree | None = None, **kwargs):
-        obs = {
-            k: jnp.arange(jnp.prod(jnp.asarray(v)), dtype=jnp.float32).reshape(v)
-            for k, v in self.shapes.items()
-        }
-        s = obs
-        return s, InfoContainer(obs=obs, reward=0.0, terminated=False, truncated=False)
-
-    def step(self, state: State, action: jax.Array):
-        ns = state
-        return ns, InfoContainer(
-            obs=state, reward=float(action), terminated=False, truncated=False
-        )
-
+from tests.wrappers.helpers import (
+    ConstantObsEnv,
+    IntObsEnv,
+    RandomImageEnv,
+    VectorObsEnv,
+)
 
 # -----------------------------------------------------------------------------
 # Core: stats_spec inference and dtype validation
@@ -101,26 +35,6 @@ def test_stats_spec_infers_from_unbatched_space():
 
 
 def test_non_floating_observation_raises():
-    class IntObsEnv(Environment):
-        @cached_property
-        def observation_space(self):
-            return Discrete(n=5)
-
-        @cached_property
-        def action_space(self):
-            return Discrete(n=2)
-
-        def reset(self, key: Key, state: PyTree | None = None, **kwargs):
-            s = jnp.array(0, dtype=jnp.int32)
-            return s, InfoContainer(
-                obs=s, reward=0.0, terminated=False, truncated=False
-            )
-
-        def step(self, state, action):
-            return state, InfoContainer(
-                obs=state, reward=0.0, terminated=False, truncated=False
-            )
-
     env = IntObsEnv()
     with pytest.raises(ValueError):
         _ = ObservationNormalizationWrapper(env=env)
@@ -267,37 +181,8 @@ def test_prop_normalization_consistency(batch_size, dim, seed):
 # -----------------------------------------------------------------------------
 
 
-class ConstantEnv(Environment):
-    value: float
-    shape: tuple[int, ...]
-    dtype: jnp.dtype = jnp.float32
-
-    def __init__(self, value: float, shape: tuple[int, ...], dtype=jnp.float32):
-        object.__setattr__(self, "value", value)
-        object.__setattr__(self, "shape", shape)
-        object.__setattr__(self, "dtype", dtype)
-
-    @cached_property
-    def observation_space(self) -> Continuous:
-        return Continuous.from_shape(low=-jnp.inf, high=jnp.inf, shape=self.shape)
-
-    @cached_property
-    def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0)
-
-    def reset(self, key: Key, state: PyTree | None = None, **kwargs):
-        obs = jnp.asarray(self.value, self.dtype) * jnp.ones(self.shape, self.dtype)
-        return 0, InfoContainer(obs=obs, reward=0.0, terminated=False, truncated=False)
-
-    def step(self, state, action):
-        obs = jnp.asarray(self.value, self.dtype) * jnp.ones(self.shape, self.dtype)
-        return state, InfoContainer(
-            obs=obs, reward=float(action), terminated=False, truncated=False
-        )
-
-
 def test_constant_observations_produce_finite_near_zero_outputs():
-    env = ConstantEnv(value=7.0, shape=(5,), dtype=jnp.float32)
+    env = ConstantObsEnv(value=7.0, shape=(5,), dtype=jnp.float32)
     w = ObservationNormalizationWrapper(env=CanonicalizeWrapper(env=env))
     key = jax.random.PRNGKey(0)
     state, info = w.reset(key)
@@ -310,32 +195,7 @@ def test_constant_observations_produce_finite_near_zero_outputs():
 def test_image_per_pixel_stats_spec_zero_mean_unit_std():
     H, W, C, B, T = 8, 8, 3, 4, 64
 
-    class ImgEnv(Environment):
-        @cached_property
-        def observation_space(self):
-            return Continuous(
-                low=-jnp.inf, high=jnp.inf, shape=(H, W, C), dtype=jnp.float32
-            )
-
-        @cached_property
-        def action_space(self):
-            return Continuous(low=-1.0, high=1.0)
-
-        def reset(self, key: Key, state: PyTree | None = None, **kwargs):
-            k1, k2 = jax.random.split(key)
-            obs = jax.random.normal(k1, (H, W, C), dtype=jnp.float32)
-            return k2, InfoContainer(
-                obs=obs, reward=0.0, terminated=False, truncated=False
-            )
-
-        def step(self, state, action):
-            k1, k2 = jax.random.split(state)
-            obs = jax.random.normal(k1, (H, W, C), dtype=jnp.float32)
-            return k2, InfoContainer(
-                obs=obs, reward=0.0, terminated=False, truncated=False
-            )
-
-    env = ImgEnv()
+    env = RandomImageEnv(shape=(H, W, C), dtype=jnp.float32)
     v = VmapWrapper(env=CanonicalizeWrapper(env=env), batch_size=B)
     spec = jax.ShapeDtypeStruct((H, W, C), jnp.float32)
     w = ObservationNormalizationWrapper(env=v, stats_spec=spec)
@@ -355,33 +215,7 @@ def test_image_per_pixel_stats_spec_zero_mean_unit_std():
 
 def test_image_channelwise_stats_spec_dtype_cast():
     H, W, C, B = 8, 8, 3, 2
-
-    class ImgEnv(Environment):
-        @cached_property
-        def observation_space(self):
-            return Continuous(
-                low=-jnp.inf, high=jnp.inf, shape=(H, W, C), dtype=jnp.float32
-            )
-
-        @cached_property
-        def action_space(self):
-            return Continuous(low=-1.0, high=1.0)
-
-        def reset(self, key: Key, state: PyTree | None = None, **kwargs):
-            k1, k2 = jax.random.split(key)
-            obs = jax.random.normal(k1, (H, W, C), dtype=jnp.float32)
-            return k2, InfoContainer(
-                obs=obs, reward=0.0, terminated=False, truncated=False
-            )
-
-        def step(self, state, action):
-            k1, k2 = jax.random.split(state)
-            obs = jax.random.normal(k1, (H, W, C), dtype=jnp.float32)
-            return k2, InfoContainer(
-                obs=obs, reward=0.0, terminated=False, truncated=False
-            )
-
-    env = ImgEnv()
+    env = RandomImageEnv(shape=(H, W, C), dtype=jnp.float32)
     v = VmapWrapper(env=CanonicalizeWrapper(env=env), batch_size=B)
     spec = jax.ShapeDtypeStruct((1, 1, C), jnp.bfloat16)
     w = ObservationNormalizationWrapper(env=v, stats_spec=spec)

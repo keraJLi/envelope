@@ -9,7 +9,7 @@ import pytest
 pytest.importorskip("craftax")
 
 from jenv.spaces import Continuous, Discrete
-from compat.contract import (
+from tests.compat.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )
@@ -71,9 +71,8 @@ def test_craftax_contract_smoke(craftax_env, prng_key):
     assert_reset_step_contract(env, key=prng_key, obs_check=obs_check)
 
 
-def test_craftax_contract_scan(craftax_env, prng_key):
-    # Keep small: craftax compile cost can be high, and we only need batched reward + protocol.
-    assert_jitted_rollout_contract(craftax_env, key=prng_key, num_steps=5)
+def test_craftax_contract_scan(craftax_env, prng_key, scan_num_steps):
+    assert_jitted_rollout_contract(craftax_env, key=prng_key, num_steps=scan_num_steps)
 
 
 def test_spaces_exposed(craftax_env):

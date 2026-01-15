@@ -7,7 +7,7 @@ from gymnax.environments import spaces as gymnax_spaces
 
 from jenv.compat.gymnax_jenv import GymnaxJenv, _convert_space
 from jenv.spaces import Continuous, Discrete, PyTreeSpace
-from compat.contract import (
+from tests.compat.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )
@@ -207,6 +207,5 @@ def test_gymnax_contract_smoke(prng_key, gymnax_env):
     assert_reset_step_contract(env, key=prng_key, obs_check=obs_check)
 
 
-def test_gymnax_contract_scan(prng_key, scan_num_steps, gymnax_env):
-    env = gymnax_env
-    assert_jitted_rollout_contract(env, key=prng_key, num_steps=scan_num_steps)
+def test_gymnax_contract_scan(prng_key, gymnax_env, scan_num_steps):
+    assert_jitted_rollout_contract(gymnax_env, key=prng_key, num_steps=scan_num_steps)

@@ -13,7 +13,7 @@ from jumanji import specs
 import jenv.compat.jumanji_jenv as jumanji_jenv
 from jenv.compat.jumanji_jenv import JumanjiJenv, convert_jumanji_spec_to_jenv_space
 from jenv.spaces import Continuous, Discrete, PyTreeSpace
-from compat.contract import (
+from tests.compat.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )
@@ -51,9 +51,8 @@ def test_jumanji_contract_smoke(prng_key, jumanji_env):
     assert_reset_step_contract(env, key=prng_key, obs_check=obs_check)
 
 
-def test_jumanji_contract_scan(prng_key, scan_num_steps, jumanji_env):
-    env = jumanji_env
-    assert_jitted_rollout_contract(env, key=prng_key, num_steps=scan_num_steps)
+def test_jumanji_contract_scan(prng_key, jumanji_env, scan_num_steps):
+    assert_jitted_rollout_contract(jumanji_env, key=prng_key, num_steps=scan_num_steps)
 
 
 def test_observation_space_property_smoke(jumanji_env):

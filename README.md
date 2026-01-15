@@ -41,5 +41,6 @@ By applying them in different orders, we get different semantics.
 - **Default (no optional compat deps required)**:
   - `uv run pytest`
 - **Compat suite (requires full compat dependency group)**:
-  - `uv run pytest --run-compat`
+  - `uv sync --group compat`
+  - `uv run pytest -m compat` (or `uv run pytest tests/compat`)
   - If any compat dependency is missing/broken, the run will fail fast with an error telling you what to install.

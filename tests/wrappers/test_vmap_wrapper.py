@@ -1,5 +1,4 @@
 import pickle
-from functools import cached_property
 
 import jax
 import jax.numpy as jnp
@@ -7,70 +6,14 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from jenv.environment import Environment, Info, InfoContainer, State
-from jenv.spaces import BatchedSpace, Continuous
-from jenv.typing import Key, PyTree
+from jenv.environment import Info
+from jenv.spaces import BatchedSpace
 from jenv.wrappers.canonicalize_wrapper import CanonicalizeWrapper
 from jenv.wrappers.observation_normalization_wrapper import (
     ObservationNormalizationWrapper,
 )
 from jenv.wrappers.vmap_wrapper import VmapWrapper
-
-
-class ScalarToyEnv(Environment):
-    @cached_property
-    def observation_space(self) -> Continuous:
-        return Continuous(low=-jnp.inf, high=jnp.inf)
-
-    @cached_property
-    def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0)
-
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs
-    ) -> tuple[State, Info]:
-        s = jnp.asarray(0.0, dtype=jnp.float32)
-        return s, InfoContainer(obs=s, reward=0.0, terminated=False, truncated=False)
-
-    def step(self, state: State, action: jax.Array) -> tuple[State, Info]:
-        ns = state + action
-        info = InfoContainer(
-            obs=ns,
-            reward=jnp.asarray(action, dtype=jnp.float32),
-            terminated=False,
-            truncated=False,
-        )
-        return ns, info
-
-
-class VectorToyEnv(Environment):
-    """Action/obs are vectors of length D."""
-
-    dim: int
-
-    def __init__(self, dim: int):
-        object.__setattr__(self, "dim", int(dim))
-
-    @cached_property
-    def observation_space(self) -> Continuous:
-        return Continuous.from_shape(low=-jnp.inf, high=jnp.inf, shape=(self.dim,))
-
-    @cached_property
-    def action_space(self) -> Continuous:
-        return Continuous.from_shape(low=-1.0, high=1.0, shape=(self.dim,))
-
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs
-    ) -> tuple[State, Info]:
-        s = jnp.zeros((self.dim,), dtype=jnp.float32)
-        return s, InfoContainer(obs=s, reward=0.0, terminated=False, truncated=False)
-
-    def step(self, state: State, action: jax.Array) -> tuple[State, Info]:
-        ns = state + action
-        reward = jnp.asarray(action, dtype=jnp.float32).sum()
-        info = InfoContainer(obs=ns, reward=reward, terminated=False, truncated=False)
-        return ns, info
-
+from tests.wrappers.helpers import FlagDoneEnv, ScalarToyEnv, VectorToyEnv
 
 # -----------------------------------------------------------------------------
 # Core: Space shaping and protocol conformance
@@ -225,37 +168,8 @@ def test_nested_vmaps_equivalence_reset_and_step():
 
 
 def test_termination_truncation_propagation():
-    class TermEnv(Environment):
-        flags: jax.Array
-
-        def __init__(self, flags):
-            object.__setattr__(self, "flags", flags)
-
-        @cached_property
-        def observation_space(self):
-            return Continuous(low=-jnp.inf, high=jnp.inf)
-
-        @cached_property
-        def action_space(self):
-            return Continuous(low=-1.0, high=1.0)
-
-        def reset(self, key: Key, state: PyTree | None = None, **kwargs):
-            return jnp.array(0.0), InfoContainer(
-                obs=jnp.array(0.0), reward=0.0, terminated=False, truncated=False
-            )
-
-        def step(self, state, action):
-            t = self.flags.astype(bool)
-            info = InfoContainer(
-                obs=jnp.asarray(action, dtype=jnp.float32),
-                reward=jnp.asarray(action),
-                terminated=t,
-                truncated=~t,
-            )
-            return state, info
-
     flags = jnp.array([True, False, True], dtype=bool)
-    w = VmapWrapper(env=TermEnv(flags=flags), batch_size=3)
+    w = VmapWrapper(env=FlagDoneEnv(flags=flags), batch_size=3)
     s, _ = w.reset(jax.random.PRNGKey(0))
     _, info = w.step(s, jnp.array([0.1, 0.2, 0.3], dtype=jnp.float32))
     assert jnp.all(info.terminated == flags)

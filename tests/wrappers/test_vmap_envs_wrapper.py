@@ -1,41 +1,13 @@
 import pickle
-from functools import cached_property
 
 import jax
 import jax.numpy as jnp
 import pytest
 
-from jenv.environment import Environment, Info, InfoContainer, State
-from jenv.spaces import BatchedSpace, Continuous
-from jenv.typing import Key, PyTree
+from jenv.environment import Info
+from jenv.spaces import BatchedSpace
 from jenv.wrappers.vmap_envs_wrapper import VmapEnvsWrapper
-
-
-class ParamEnv(Environment):
-    """Environment parameterized by an offset; used for vmapping over env instances."""
-
-    offset: jax.Array
-
-    @cached_property
-    def observation_space(self) -> Continuous:
-        return Continuous.from_shape(low=-jnp.inf, high=jnp.inf, shape=(2,))
-
-    @cached_property
-    def action_space(self) -> Continuous:
-        return Continuous.from_shape(low=-1.0, high=1.0, shape=(2,))
-
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs
-    ) -> tuple[State, Info]:
-        s = jnp.asarray([self.offset, -self.offset], dtype=jnp.float32)
-        return s, InfoContainer(obs=s, reward=0.0, terminated=False, truncated=False)
-
-    def step(self, state: State, action: jax.Array) -> tuple[State, Info]:
-        ns = state + action + jnp.asarray(self.offset, dtype=jnp.float32)
-        reward = jnp.asarray(action, dtype=jnp.float32).sum()
-        info = InfoContainer(obs=ns, reward=reward, terminated=False, truncated=False)
-        return ns, info
-
+from tests.wrappers.helpers import ParamEnv
 
 # -----------------------------------------------------------------------------
 # Core: Space shaping and protocol conformance

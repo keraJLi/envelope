@@ -52,3 +52,11 @@ dev = [
     "pytest-cov>=7.0.0",
     "ruff>=0.14.2",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+  "compat: tests requiring optional compat dependencies",
+]
+pythonpath = [
+  ".",
+]

@@ -7,7 +7,7 @@ import pytest
 
 from jenv.compat.navix_jenv import NavixJenv
 from jenv.spaces import Continuous, Discrete
-from compat.contract import (
+from tests.compat.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )
@@ -46,9 +46,8 @@ def test_navix_contract_smoke(prng_key, navix_env):
     assert_reset_step_contract(env, key=prng_key, obs_check=obs_check)
 
 
-def test_navix_contract_scan(prng_key, navix_env):
-    # Keep small: we only want to validate batched rewards + protocol.
-    assert_jitted_rollout_contract(navix_env, key=prng_key, num_steps=5)
+def test_navix_contract_scan(prng_key, navix_env, scan_num_steps):
+    assert_jitted_rollout_contract(navix_env, key=prng_key, num_steps=scan_num_steps)
 
 
 def test_action_space_conversion(navix_env):

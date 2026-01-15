@@ -1,124 +1,28 @@
 """Tests for jenv.wrappers.environment_wrapper.Wrapper."""
 
 import dataclasses
-from functools import cached_property
 
 import jax
 import jax.numpy as jnp
 import pytest
 
-from jenv.environment import Environment
-from jenv.spaces import Continuous, Discrete
-from jenv.struct import FrozenPyTreeNode, static_field
-from jenv.typing import Key, PyTree
+from jenv.spaces import Discrete
 from jenv.wrappers.wrapper import Wrapper
+from tests.wrappers.helpers import (
+    TestInfo as Info,
+)
+from tests.wrappers.helpers import (
+    WrapperEnvWithFields,
+    WrapperEnvWithMethods,
+    WrapperSimpleEnv,
+    make_wrapper_complex_state_env,
+    make_wrapper_discrete_env,
+    make_wrapper_env_with_private_attr,
+)
 
 # ============================================================================
 # Test Fixtures
 # ============================================================================
-
-
-class Info(FrozenPyTreeNode):
-    """Simple StepInfo implementation for testing."""
-
-    obs: jax.Array
-    reward: float
-    terminated: bool = False
-    truncated: bool = False
-
-    @property
-    def done(self) -> bool:
-        return self.terminated or self.truncated
-
-
-class SimpleEnv(Environment):
-    """Simple environment for testing wrappers."""
-
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs
-    ) -> tuple[jax.Array, Info]:
-        state = jnp.array(0.0)
-        info = Info(obs=state, reward=0.0, terminated=False, truncated=False)
-        return state, info
-
-    def step(self, state: jax.Array, action: jax.Array) -> tuple[jax.Array, Info]:
-        next_state = state + action
-        info = Info(
-            obs=next_state, reward=float(action), terminated=False, truncated=False
-        )
-        return next_state, info
-
-    @cached_property
-    def observation_space(self) -> Continuous:
-        return Continuous(low=-jnp.inf, high=jnp.inf)
-
-    @cached_property
-    def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0)
-
-
-class EnvWithFields(Environment):
-    """Environment with custom fields for testing."""
-
-    some_field: int = static_field(default=42)
-    another_field: str = static_field(default="test")
-
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs
-    ) -> tuple[jax.Array, Info]:
-        state = jnp.array(0.0)
-        info = Info(obs=state, reward=0.0, terminated=False, truncated=False)
-        return state, info
-
-    def step(self, state: jax.Array, action: jax.Array) -> tuple[jax.Array, Info]:
-        next_state = state + action
-        info = Info(
-            obs=next_state, reward=float(action), terminated=False, truncated=False
-        )
-        return next_state, info
-
-    @cached_property
-    def observation_space(self) -> Continuous:
-        return Continuous(low=-jnp.inf, high=jnp.inf)
-
-    @cached_property
-    def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0)
-
-
-class EnvWithMethods(Environment):
-    """Environment with custom methods for testing."""
-
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs
-    ) -> tuple[jax.Array, Info]:
-        state = jnp.array(0.0)
-        info = Info(obs=state, reward=0.0, terminated=False, truncated=False)
-        return state, info
-
-    def step(self, state: jax.Array, action: jax.Array) -> tuple[jax.Array, Info]:
-        next_state = state + action
-        info = Info(
-            obs=next_state, reward=float(action), terminated=False, truncated=False
-        )
-        return next_state, info
-
-    @cached_property
-    def observation_space(self) -> Continuous:
-        return Continuous(low=-jnp.inf, high=jnp.inf)
-
-    @cached_property
-    def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0)
-
-    def custom_method(self) -> str:
-        """Custom method for testing attribute delegation."""
-        return "custom_value"
-
-    @property
-    def custom_property(self) -> int:
-        """Custom property for testing."""
-        return 42
 
 
 # ============================================================================
@@ -131,7 +35,7 @@ class TestWrapperCoreMethods:
 
     def test_reset_delegation(self):
         """Verify reset() delegates to wrapped environment."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
         key = jax.random.PRNGKey(0)
@@ -143,7 +47,7 @@ class TestWrapperCoreMethods:
 
     def test_step_delegation(self):
         """Verify step() delegates to wrapped environment."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
         key = jax.random.PRNGKey(0)
@@ -155,7 +59,7 @@ class TestWrapperCoreMethods:
 
     def test_reset_return_values(self):
         """Verify reset() returns correct types and values."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
         key = jax.random.PRNGKey(0)
@@ -172,7 +76,7 @@ class TestWrapperCoreMethods:
 
     def test_step_return_values(self):
         """Verify step() returns correct types and values."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
         key = jax.random.PRNGKey(0)
@@ -200,7 +104,7 @@ class TestWrapperSpaceProperties:
 
     def test_observation_space_delegation(self):
         """Verify observation_space delegates correctly."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
         assert environment_wrapper.observation_space == env.observation_space
@@ -208,7 +112,7 @@ class TestWrapperSpaceProperties:
 
     def test_action_space_delegation(self):
         """Verify action_space delegates correctly."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
         assert environment_wrapper.action_space == env.action_space
@@ -216,7 +120,7 @@ class TestWrapperSpaceProperties:
 
     def test_space_cached_property(self):
         """Verify spaces are cached properties."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
         # Access multiple times, should be same object
@@ -230,7 +134,7 @@ class TestWrapperSpaceProperties:
 
     def test_space_identity(self):
         """Verify space objects maintain identity."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
         # Spaces should be the exact same objects as env's spaces
@@ -248,7 +152,7 @@ class TestWrapperUnwrapping:
 
     def test_unwrapped_single_level(self):
         """Verify unwrapped with one environment_wrapper level."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
         assert environment_wrapper.unwrapped is env
@@ -256,7 +160,7 @@ class TestWrapperUnwrapping:
 
     def test_unwrapped_multiple_levels(self):
         """Verify unwrapped traverses multiple environment_wrapper levels."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper1 = Wrapper(env=env)
         environment_wrapper2 = Wrapper(env=environment_wrapper1)
         environment_wrapper3 = Wrapper(env=environment_wrapper2)
@@ -267,20 +171,20 @@ class TestWrapperUnwrapping:
 
     def test_unwrapped_chain_termination(self):
         """Verify unwrapping stops at base environment."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper1 = Wrapper(env=env)
         environment_wrapper2 = Wrapper(env=environment_wrapper1)
 
         unwrapped = environment_wrapper2.unwrapped
 
         # Should be the base environment, not a environment_wrapper
-        assert isinstance(unwrapped, SimpleEnv)
+        assert isinstance(unwrapped, WrapperSimpleEnv)
         assert not isinstance(unwrapped, Wrapper)
         assert unwrapped is env
 
     def test_unwrapped_identity(self):
         """Verify unwrapped returns same object as direct access."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
         # unwrapped should be same as env.unwrapped
@@ -298,7 +202,7 @@ class TestWrapperAttributeDelegation:
 
     def test_getattr_environment_methods(self):
         """Verify delegation of environment methods."""
-        env = EnvWithMethods()
+        env = WrapperEnvWithMethods()
         environment_wrapper = Wrapper(env=env)
 
         # Should delegate custom methods
@@ -307,7 +211,7 @@ class TestWrapperAttributeDelegation:
 
     def test_getattr_environment_properties(self):
         """Verify delegation of environment properties."""
-        env = EnvWithMethods()
+        env = WrapperEnvWithMethods()
         environment_wrapper = Wrapper(env=env)
 
         # Should delegate custom properties
@@ -316,7 +220,7 @@ class TestWrapperAttributeDelegation:
 
     def test_getattr_custom_attributes(self):
         """Verify delegation of custom environment attributes."""
-        env = EnvWithFields(some_field=100, another_field="hello")
+        env = WrapperEnvWithFields(some_field=100, another_field="hello")
         environment_wrapper = Wrapper(env=env)
 
         # Should delegate custom fields
@@ -325,7 +229,7 @@ class TestWrapperAttributeDelegation:
 
     def test_getattr_nested_attributes(self):
         """Verify delegation through nested wrappers."""
-        env = EnvWithMethods()
+        env = WrapperEnvWithMethods()
         environment_wrapper1 = Wrapper(env=env)
         environment_wrapper2 = Wrapper(env=environment_wrapper1)
 
@@ -335,7 +239,7 @@ class TestWrapperAttributeDelegation:
 
     def test_getattr_missing_attribute(self):
         """Verify AttributeError for non-existent attributes."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
         with pytest.raises(AttributeError):
@@ -343,7 +247,7 @@ class TestWrapperAttributeDelegation:
 
     def test_getattr_setstate_raises(self):
         """Verify __setstate__ raises AttributeError."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
         with pytest.raises(AttributeError):
@@ -351,12 +255,7 @@ class TestWrapperAttributeDelegation:
 
     def test_getattr_private_attributes(self):
         """Verify behavior with private attributes."""
-
-        # Create env with private attribute
-        class EnvWithPrivate(SimpleEnv):
-            _private: int = 10
-
-        env = EnvWithPrivate()
+        env = make_wrapper_env_with_private_attr(private_value=10)
         environment_wrapper = Wrapper(env=env)
 
         # Private attributes should be accessible via __getattr__
@@ -373,7 +272,7 @@ class TestWrapperNested:
 
     def test_nested_reset_delegation(self):
         """Verify reset() through nested wrappers."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper1 = Wrapper(env=env)
         environment_wrapper2 = Wrapper(env=environment_wrapper1)
 
@@ -385,7 +284,7 @@ class TestWrapperNested:
 
     def test_nested_step_delegation(self):
         """Verify step() through nested wrappers."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper1 = Wrapper(env=env)
         environment_wrapper2 = Wrapper(env=environment_wrapper1)
 
@@ -398,7 +297,7 @@ class TestWrapperNested:
 
     def test_nested_space_access(self):
         """Verify space access through nested wrappers."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper1 = Wrapper(env=env)
         environment_wrapper2 = Wrapper(env=environment_wrapper1)
 
@@ -410,7 +309,7 @@ class TestWrapperNested:
 
     def test_nested_unwrapped_chain(self):
         """Verify unwrapped chain with nested wrappers."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper1 = Wrapper(env=env)
         environment_wrapper2 = Wrapper(env=environment_wrapper1)
         environment_wrapper3 = Wrapper(env=environment_wrapper2)
@@ -422,7 +321,7 @@ class TestWrapperNested:
 
     def test_composition_order_independence(self):
         """Verify environment_wrapper order doesn't break functionality."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper1 = Wrapper(env=env)
         environment_wrapper2 = Wrapper(env=environment_wrapper1)
 
@@ -437,7 +336,7 @@ class TestWrapperNested:
 
     def test_composition_state_preservation(self):
         """Verify state preserved through environment_wrapper layers."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper1 = Wrapper(env=env)
         environment_wrapper2 = Wrapper(env=environment_wrapper1)
 
@@ -460,7 +359,7 @@ class TestWrapperJAXCompatibility:
 
     def test_jax_tree_flatten(self):
         """Verify JAX tree_flatten works correctly."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
         children, aux_data = jax.tree.flatten(environment_wrapper)
@@ -472,18 +371,18 @@ class TestWrapperJAXCompatibility:
 
     def test_jax_tree_unflatten(self):
         """Verify JAX tree_unflatten reconstructs correctly."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
         children, aux_data = jax.tree.flatten(environment_wrapper)
         reconstructed = jax.tree.unflatten(aux_data, children)
 
         assert isinstance(reconstructed, Wrapper)
-        assert isinstance(reconstructed.env, SimpleEnv)
+        assert isinstance(reconstructed.env, WrapperSimpleEnv)
 
     def test_jax_tree_map(self):
         """Verify JAX tree_map operations work."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
         # Map a function over the tree
@@ -496,11 +395,11 @@ class TestWrapperJAXCompatibility:
 
         # Should transform arrays in env if any
         assert isinstance(result, Wrapper)
-        assert isinstance(result.env, SimpleEnv)
+        assert isinstance(result.env, WrapperSimpleEnv)
 
     def test_nested_jax_operations(self):
         """Verify JAX operations with nested wrappers."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper1 = Wrapper(env=env)
         environment_wrapper2 = Wrapper(env=environment_wrapper1)
 
@@ -510,7 +409,7 @@ class TestWrapperJAXCompatibility:
 
         assert isinstance(reconstructed, Wrapper)
         assert isinstance(reconstructed.env, Wrapper)
-        assert isinstance(reconstructed.env.env, SimpleEnv)
+        assert isinstance(reconstructed.env.env, WrapperSimpleEnv)
 
 
 # ============================================================================
@@ -523,7 +422,7 @@ class TestWrapperEdgeCases:
 
     def test_wrapper_preserves_dataclass_fields(self):
         """Test that dataclasses.fields() on wrapped env shows unwrapped env's fields."""
-        env = EnvWithFields(some_field=100, another_field="hello")
+        env = WrapperEnvWithFields(some_field=100, another_field="hello")
         environment_wrapper = Wrapper(env=env)
 
         # dataclasses.fields() on environment_wrapper should show environment_wrapper's fields
@@ -541,31 +440,7 @@ class TestWrapperEdgeCases:
 
     def test_wrapper_with_different_space_types(self):
         """Test environment_wrapper with different space types."""
-
-        class DiscreteEnv(Environment):
-            def reset(self, key: Key) -> tuple[jax.Array, Info]:
-                state = jnp.array(0, dtype=jnp.int32)
-                info = Info(obs=state, reward=0.0, terminated=False, truncated=False)
-                return state, info
-
-            def step(
-                self, state: jax.Array, action: jax.Array
-            ) -> tuple[jax.Array, Info]:
-                next_state = state + 1
-                info = Info(
-                    obs=next_state, reward=1.0, terminated=False, truncated=False
-                )
-                return next_state, info
-
-            @cached_property
-            def observation_space(self) -> Discrete:
-                return Discrete(n=10)
-
-            @cached_property
-            def action_space(self) -> Discrete:
-                return Discrete(n=5)
-
-        env = DiscreteEnv()
+        env = make_wrapper_discrete_env()
         environment_wrapper = Wrapper(env=env)
 
         assert isinstance(environment_wrapper.observation_space, Discrete)
@@ -575,7 +450,7 @@ class TestWrapperEdgeCases:
 
     def test_wrapper_identity_preservation(self):
         """Verify environment_wrapper preserves environment identity."""
-        env = SimpleEnv()
+        env = WrapperSimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
         # env attribute should be same reference
@@ -586,40 +461,7 @@ class TestWrapperEdgeCases:
 
     def test_wrapper_with_complex_state(self):
         """Test environment_wrapper with complex state structures."""
-
-        class ComplexStateEnv(Environment):
-            def reset(self, key: Key, state: PyTree | None = None) -> tuple[dict, Info]:
-                state = {
-                    "position": jnp.array([0.0, 0.0]),
-                    "velocity": jnp.array([1.0, 1.0]),
-                }
-                info = Info(
-                    obs=state["position"], reward=0.0, terminated=False, truncated=False
-                )
-                return state, info
-
-            def step(self, state: dict, action: jax.Array) -> tuple[dict, Info]:
-                next_state = {
-                    "position": state["position"] + state["velocity"],
-                    "velocity": state["velocity"] + action,
-                }
-                info = Info(
-                    obs=next_state["position"],
-                    reward=1.0,
-                    terminated=False,
-                    truncated=False,
-                )
-                return next_state, info
-
-            @cached_property
-            def observation_space(self) -> Continuous:
-                return Continuous.from_shape(low=-jnp.inf, high=jnp.inf, shape=(2,))
-
-            @cached_property
-            def action_space(self) -> Continuous:
-                return Continuous.from_shape(low=-1.0, high=1.0, shape=(2,))
-
-        env = ComplexStateEnv()
+        env = make_wrapper_complex_state_env()
         environment_wrapper = Wrapper(env=env)
 
         key = jax.random.PRNGKey(0)

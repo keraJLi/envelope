@@ -22,7 +22,7 @@ from kinetix.environment import (
 from jenv.compat.kinetix_jenv import KinetixJenv, _normalize_level_id
 from jenv.environment import Info
 from jenv.spaces import Continuous
-from compat.contract import (
+from tests.compat.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )
@@ -114,9 +114,10 @@ def test_kinetix_contract_smoke(prng_key, kinetix_random_env):
     assert_reset_step_contract(env, key=prng_key, obs_check=obs_check)
 
 
-def test_kinetix_contract_scan(prng_key, kinetix_random_env):
-    # Keep small: we only want to validate batched rewards + protocol.
-    assert_jitted_rollout_contract(kinetix_random_env, key=prng_key, num_steps=5)
+def test_kinetix_contract_scan(prng_key, kinetix_random_env, scan_num_steps):
+    assert_jitted_rollout_contract(
+        kinetix_random_env, key=prng_key, num_steps=scan_num_steps
+    )
 
 
 def test_action_space_is_continuous_by_default(kinetix_random_env):

@@ -1,155 +1,18 @@
-from functools import cached_property
-
 import jax
 import jax.numpy as jnp
 import pytest
 
-from jenv.environment import Environment, InfoContainer
-from jenv.spaces import Continuous, Discrete
-from jenv.struct import FrozenPyTreeNode
-from jenv.typing import Key, PyTree
 from jenv.wrappers.canonicalize_wrapper import CanonicalizeWrapper
 from jenv.wrappers.truncation_wrapper import TruncationWrapper
-
-
-class State(FrozenPyTreeNode):
-    env_state: jax.Array
-    steps: int
-
-
-class NoStepsState(FrozenPyTreeNode):
-    env_state: jax.Array
-
-
-class ScalarEnvWithSteps(Environment):
-    @cached_property
-    def observation_space(self) -> Continuous:
-        return Continuous(low=-jnp.inf, high=jnp.inf)
-
-    @cached_property
-    def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0)
-
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs
-    ) -> tuple[State, InfoContainer]:
-        s = State(env_state=jnp.array(0.0), steps=0)
-        return s, InfoContainer(
-            obs=s.env_state, reward=0.0, terminated=False, truncated=False
-        )
-
-    def step(self, state: State, action: jax.Array) -> tuple[State, InfoContainer]:
-        ns = State(env_state=state.env_state + action, steps=state.steps + 1)
-        info = InfoContainer(
-            obs=ns.env_state,
-            reward=jnp.asarray(action),
-            terminated=False,
-            truncated=False,
-        )
-        return ns, info
-
-
-class DiscreteEnvWithSteps(ScalarEnvWithSteps):
-    @cached_property
-    def action_space(self) -> Discrete:
-        return Discrete(n=5)
-
-    def step(self, state: State, action: jax.Array) -> tuple[State, InfoContainer]:
-        ns = State(
-            env_state=state.env_state + action.astype(jnp.float32),
-            steps=state.steps + 1,
-        )
-        info = InfoContainer(
-            obs=ns.env_state,
-            reward=jnp.asarray(action),
-            terminated=False,
-            truncated=False,
-        )
-        return ns, info
-
-
-class EnvMissingSteps(Environment):
-    @cached_property
-    def observation_space(self) -> Continuous:
-        return Continuous(low=-jnp.inf, high=jnp.inf)
-
-    @cached_property
-    def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0)
-
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs
-    ) -> tuple[NoStepsState, InfoContainer]:
-        s = NoStepsState(env_state=jnp.array(0.0))
-        return s, InfoContainer(
-            obs=s.env_state, reward=0.0, terminated=False, truncated=False
-        )
-
-    def step(
-        self, state: NoStepsState, action: jax.Array
-    ) -> tuple[NoStepsState, InfoContainer]:
-        ns = NoStepsState(env_state=state.env_state + action)
-        info = InfoContainer(
-            obs=ns.env_state, reward=float(action), terminated=False, truncated=False
-        )
-        return ns, info
-
-
-class EnvResetTruncated(ScalarEnvWithSteps):
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs
-    ) -> tuple[State, InfoContainer]:
-        s = State(env_state=jnp.array(0.0), steps=0)
-        return s, InfoContainer(
-            obs=s.env_state, reward=0.0, terminated=False, truncated=True
-        )
-
-
-class EnvStepAlwaysTruncated(ScalarEnvWithSteps):
-    def step(self, state: State, action: jax.Array) -> tuple[State, InfoContainer]:
-        ns = State(env_state=state.env_state + action, steps=state.steps + 1)
-        info = InfoContainer(
-            obs=ns.env_state,
-            reward=jnp.asarray(action),
-            terminated=False,
-            truncated=True,
-        )
-        return ns, info
-
-
-class EnvWithArraySteps(Environment):
-    @cached_property
-    def observation_space(self) -> Continuous:
-        return Continuous(low=-jnp.inf, high=jnp.inf)
-
-    @cached_property
-    def action_space(self) -> Continuous:
-        return Continuous(low=-1.0, high=1.0)
-
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs
-    ) -> tuple[State, InfoContainer]:
-        s = State(env_state=jnp.array(0.0), steps=jnp.array(0, dtype=jnp.int32))
-        return s, InfoContainer(
-            obs=s.env_state, reward=0.0, terminated=False, truncated=False
-        )
-
-    def step(self, state: State, action: jax.Array) -> tuple[State, InfoContainer]:
-        ns = State(
-            env_state=state.env_state + action,
-            steps=state.steps + jnp.array(1, dtype=jnp.int32),
-        )
-        info = InfoContainer(
-            obs=ns.env_state,
-            reward=jnp.asarray(action),
-            terminated=False,
-            truncated=False,
-        )
-        return ns, info
+from tests.wrappers.helpers import (
+    DiscreteStepCounterEnv,
+    NoStepsEnv,
+    StepCounterEnv,
+)
 
 
 def test_reset_sets_truncated_false():
-    env = ScalarEnvWithSteps()
+    env = StepCounterEnv()
     w = TruncationWrapper(env=CanonicalizeWrapper(env=env), max_steps=3)
     key = jax.random.PRNGKey(0)
     state, info = w.reset(key)
@@ -160,9 +23,9 @@ def test_reset_sets_truncated_false():
 @pytest.mark.parametrize(
     "env_factory,actions,max_steps,expected_truncated_seq",
     [
-        (ScalarEnvWithSteps, [0.1, 0.2, 0.3, 0.4], 3, [False, False, True, True]),
-        (ScalarEnvWithSteps, [0.1], 1, [True]),
-        (DiscreteEnvWithSteps, [1, 2, 3], 2, [False, True, True]),
+        (StepCounterEnv, [0.1, 0.2, 0.3, 0.4], 3, [False, False, True, True]),
+        (StepCounterEnv, [0.1], 1, [True]),
+        (DiscreteStepCounterEnv, [1, 2, 3], 2, [False, True, True]),
     ],
     ids=["cont_ms3", "cont_ms1", "disc_ms2"],
 )
@@ -181,7 +44,7 @@ def test_step_truncates_at_threshold(
 
 
 def test_preserves_other_info_fields():
-    env = ScalarEnvWithSteps()
+    env = StepCounterEnv()
     w = TruncationWrapper(env=CanonicalizeWrapper(env=env), max_steps=2)
     key = jax.random.PRNGKey(0)
     state, info = w.reset(key)
@@ -197,7 +60,7 @@ def test_preserves_other_info_fields():
 
 
 def test_reset_overrides_underlying_truncated_true():
-    env = EnvResetTruncated()
+    env = StepCounterEnv(reset_truncated=True)
     w = TruncationWrapper(env=CanonicalizeWrapper(env=env), max_steps=5)
     key = jax.random.PRNGKey(0)
     state, info = w.reset(key)
@@ -206,7 +69,7 @@ def test_reset_overrides_underlying_truncated_true():
 
 @pytest.mark.parametrize("max_steps", [0, 1])
 def test_max_steps_edge_values(max_steps):
-    env = ScalarEnvWithSteps()
+    env = StepCounterEnv()
     w = TruncationWrapper(env=CanonicalizeWrapper(env=env), max_steps=max_steps)
     key = jax.random.PRNGKey(0)
     state, info = w.reset(key)
@@ -218,7 +81,7 @@ def test_max_steps_edge_values(max_steps):
 
 
 def test_truncated_remains_true_after_threshold():
-    env = ScalarEnvWithSteps()
+    env = StepCounterEnv()
     w = TruncationWrapper(env=CanonicalizeWrapper(env=env), max_steps=2)
     key = jax.random.PRNGKey(0)
     state, info = w.reset(key)
@@ -234,7 +97,7 @@ def test_truncated_remains_true_after_threshold():
 
 
 def test_wrapper_overrides_underlying_truncated_on_step():
-    env = EnvStepAlwaysTruncated()
+    env = StepCounterEnv(step_truncated=True)
     w = TruncationWrapper(env=CanonicalizeWrapper(env=env), max_steps=10)
     key = jax.random.PRNGKey(0)
     state, info = w.reset(key)
@@ -244,7 +107,7 @@ def test_wrapper_overrides_underlying_truncated_on_step():
 
 
 def test_steps_as_jax_scalar_array_behaves_correctly():
-    env = EnvWithArraySteps()
+    env = StepCounterEnv(steps_dtype=jnp.int32)
     w = TruncationWrapper(env=CanonicalizeWrapper(env=env), max_steps=2)
     key = jax.random.PRNGKey(0)
     state, info = w.reset(key)
@@ -260,8 +123,8 @@ def test_steps_as_jax_scalar_array_behaves_correctly():
 @pytest.mark.parametrize(
     "env_factory,action",
     [
-        (ScalarEnvWithSteps, jnp.asarray(0.3)),
-        (DiscreteEnvWithSteps, jnp.asarray(3, dtype=jnp.int32)),
+        (StepCounterEnv, jnp.asarray(0.3)),
+        (DiscreteStepCounterEnv, jnp.asarray(3, dtype=jnp.int32)),
     ],
     ids=["jit-cont", "jit-disc"],
 )
