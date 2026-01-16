@@ -75,3 +75,16 @@ def test_create_craftax_smoke(prng_key):
 
     _state, info = env.reset(prng_key)
     assert hasattr(info, "obs")
+
+
+def test_create_mujoco_playground_smoke(prng_key):
+    pytest.importorskip("mujoco_playground")
+
+    from jenv.compat.mujoco_playground_jenv import MujocoPlaygroundJenv
+
+    env = create("mujoco_playground::CartpoleBalance")
+    assert isinstance(env, MujocoPlaygroundJenv)
+    assert isinstance(env, Environment)
+
+    _state, info = env.reset(prng_key)
+    assert hasattr(info, "obs")

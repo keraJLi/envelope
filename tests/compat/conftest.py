@@ -9,6 +9,7 @@ _COMPAT_IMPORTS: tuple[str, ...] = (
     "navix",
     "jumanji",
     "kinetix",
+    "mujoco_playground",
 )
 
 

@@ -10,6 +10,7 @@ _env_module_map = {
     "jumanji": ("jenv.compat.jumanji_jenv", "JumanjiJenv"),
     "kinetix": ("jenv.compat.kinetix_jenv", "KinetixJenv"),
     "craftax": ("jenv.compat.craftax_jenv", "CraftaxJenv"),
+    "mujoco_playground": ("jenv.compat.mujoco_playground_jenv", "MujocoPlaygroundJenv"),
 }
 
 
