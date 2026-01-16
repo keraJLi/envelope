@@ -7,7 +7,7 @@ import pytest
 from brax.envs import Wrapper as BraxWrapper
 
 from jenv.compat.brax_jenv import BraxJenv
-from tests.compat.contract import (
+from .contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )

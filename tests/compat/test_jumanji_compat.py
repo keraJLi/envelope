@@ -13,7 +13,7 @@ from jumanji import specs
 import jenv.compat.jumanji_jenv as jumanji_jenv
 from jenv.compat.jumanji_jenv import JumanjiJenv, convert_jumanji_spec_to_jenv_space
 from jenv.spaces import Continuous, Discrete, PyTreeSpace
-from tests.compat.contract import (
+from .contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )

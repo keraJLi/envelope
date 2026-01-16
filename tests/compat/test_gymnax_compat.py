@@ -7,7 +7,7 @@ from gymnax.environments import spaces as gymnax_spaces
 
 from jenv.compat.gymnax_jenv import GymnaxJenv, _convert_space
 from jenv.spaces import Continuous, Discrete, PyTreeSpace
-from tests.compat.contract import (
+from .contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )

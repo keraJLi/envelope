@@ -22,7 +22,7 @@ from kinetix.environment import (
 from jenv.compat.kinetix_jenv import KinetixJenv, _normalize_level_id
 from jenv.environment import Info
 from jenv.spaces import Continuous
-from tests.compat.contract import (
+from .contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )

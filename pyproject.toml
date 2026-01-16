@@ -58,6 +58,3 @@ dev = [
 markers = [
   "compat: tests requiring optional compat dependencies",
 ]
-pythonpath = [
-  ".",
-]
