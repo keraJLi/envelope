@@ -326,9 +326,7 @@ class TestAutoResetComposability:
     def test_with_truncation_wrapper(self):
         """Test that autoreset works correctly when truncation wrapper sets truncated=True."""
         env = StepCounterEnv()
-        w = AutoResetWrapper(
-            env=TruncationWrapper(env=env, max_steps=3)
-        )
+        w = AutoResetWrapper(env=TruncationWrapper(env=env, max_steps=3))
         key = jax.random.PRNGKey(0)
 
         state, _ = w.reset(key)
@@ -344,9 +342,7 @@ class TestAutoResetComposability:
     def test_with_vmap_wrapper(self):
         """Test autoreset in batched environments."""
         env = StepCounterEnv(terminate_after=2)
-        w = VmapWrapper(
-            env=AutoResetWrapper(env=env), batch_size=3
-        )
+        w = VmapWrapper(env=AutoResetWrapper(env=env), batch_size=3)
         key = jax.random.PRNGKey(0)
 
         state, info = w.reset(key)
@@ -410,9 +406,7 @@ class TestAutoResetComposability:
 
         termination_steps = jnp.array([2, 3, 4])
         envs = jax.vmap(make_env)(termination_steps)
-        w = VmapEnvsWrapper(
-            env=AutoResetWrapper(env=envs), batch_size=3
-        )
+        w = VmapEnvsWrapper(env=AutoResetWrapper(env=envs), batch_size=3)
         key = jax.random.PRNGKey(0)
 
         state, _ = w.reset(key)
@@ -431,9 +425,7 @@ class TestAutoResetComposability:
     def test_nested_wrappers(self):
         """Test autoreset with multiple wrapper layers."""
         env = StepCounterEnv(terminate_after=2)
-        w = AutoResetWrapper(
-            env=TruncationWrapper(env=env, max_steps=10)
-        )
+        w = AutoResetWrapper(env=TruncationWrapper(env=env, max_steps=10))
         key = jax.random.PRNGKey(0)
 
         state, _ = w.reset(key)
@@ -522,7 +514,7 @@ def test_auto_reset_passes_state_to_inner_wrapper():
 
     This is a regression test: AutoResetWrapper should pass the current state
     when calling reset() on auto-reset, so inner wrappers can access state
-    fields (like task_state for UED).
+    fields (like state_state for UED).
     """
 
     # Create a wrapper that tracks whether it receives state on reset
