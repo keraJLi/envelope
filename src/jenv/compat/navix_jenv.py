@@ -1,5 +1,4 @@
 import dataclasses
-import warnings
 from functools import cached_property
 from typing import Any, override
 
@@ -10,7 +9,11 @@ from navix.environments.environment import Environment as NavixEnv
 
 from jenv import spaces as jenv_spaces
 from jenv.environment import Environment, Info, InfoContainer, State
+from jenv.struct import static_field
 from jenv.typing import Key, PyTree
+
+
+_NAVIX_DEFAULT_MAX_STEPS = 100
 
 
 class NavixJenv(Environment):
@@ -21,16 +24,18 @@ class NavixJenv(Environment):
         cls, env_name: str, env_kwargs: dict[str, Any] | None = None
     ) -> "NavixJenv":
         env_kwargs = env_kwargs or {}
-
-        max_steps = env_kwargs.setdefault("max_steps", jnp.inf)
-        if max_steps < jnp.inf:
-            warnings.warn(
-                "Creating a NavixJenv with a finite max_steps is not recommended, use "
-                "a TruncationWrapper instead."
+        if "max_steps" in env_kwargs:
+            raise ValueError(
+                "Cannot override 'max_steps' directly. "
+                "Use TruncationWrapper for episode length control."
             )
-
+        env_kwargs["max_steps"] = jnp.inf
         navix_env = navix.make(env_name, **env_kwargs)
         return cls(navix_env=navix_env)
+
+    @property
+    def default_max_steps(self) -> int:
+        return _NAVIX_DEFAULT_MAX_STEPS
 
     @override
     def reset(self, key: Key) -> tuple[State, Info]:

@@ -20,22 +20,32 @@ class JumanjiJenv(Environment):
     """Wrapper to convert a Jumanji environment to a jenv environment."""
 
     jumanji_env: Any = static_field()
+    _default_time_limit: int | None = static_field(default=None)
 
     @classmethod
     def from_name(
         cls, env_name: str, env_kwargs: dict[str, Any] | None = None
     ) -> "JumanjiJenv":
         env_kwargs = env_kwargs or {}
-
-        time_limit = env_kwargs.setdefault("time_limit", _MAX_INT)
-        if time_limit < _MAX_INT:
-            warnings.warn(
-                "Creating a JumanjiJenv with a finite time_limit is not recommended, "
-                "use a TruncationWrapper instead."
+        if "time_limit" in env_kwargs:
+            raise ValueError(
+                "Cannot override 'time_limit' directly. "
+                "Use TruncationWrapper for episode length control."
             )
 
+        # Create env first with defaults to capture default time_limit
+        temp_env = jumanji.make(env_name, **env_kwargs)
+        default_time_limit = getattr(temp_env, "time_limit", None)
+
+        # Now create env with time_limit=_MAX_INT (if env supports it)
+        if default_time_limit is not None:
+            env_kwargs["time_limit"] = _MAX_INT
         env = jumanji.make(env_name, **env_kwargs)
-        return cls(jumanji_env=env)
+        return cls(jumanji_env=env, _default_time_limit=default_time_limit)
+
+    @property
+    def default_max_steps(self) -> int | None:
+        return self._default_time_limit
 
     @override
     def reset(self, key: Key) -> tuple[State, Info]:

@@ -126,24 +126,6 @@ def test_from_name_with_env_kwargs(prng_key):
     assert state is not None
 
 
-def test_from_name_with_episode_length_warning(prng_key):
-    """Test that from_name warns when using finite episode_length."""
-    # Test warning for finite episode_length
-    with pytest.warns(
-        UserWarning,
-        match="Creating a MujocoPlaygroundJenv with a finite episode_length is not recommended",
-    ):
-        env = MujocoPlaygroundJenv.from_name(
-            "CartpoleBalance", env_kwargs={"episode_length": 100}
-        )
-
-    # Environment should still be created
-    assert env is not None
-    key = prng_key
-    state, info = env.reset(key)
-    assert state is not None
-
-
 def test_episode_length_defaults_to_inf(mujoco_playground_env):
     """Test that by default episode_length is set to a very large value (effectively inf)."""
     env = mujoco_playground_env

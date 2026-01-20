@@ -147,21 +147,6 @@ def test_create_random_with_auto_reset_warning(prng_key):
     assert isinstance(info, Info)
 
 
-def test_create_random_with_finite_max_timesteps_warning(prng_key):
-    # Only run if Kinetix's EnvParams has max_timesteps and supports .replace(...)
-    ep = EnvParams()
-    if not hasattr(ep, "max_timesteps") or not hasattr(ep, "replace"):
-        pytest.skip("Kinetix EnvParams does not expose max_timesteps/.replace")
-
-    ep_finite = ep.replace(max_timesteps=10)
-    with pytest.warns(UserWarning, match="finite max_timesteps is not recommended"):
-        env = _create_kinetix_env("random", env_params=ep_finite)
-
-    state, info = env.reset(prng_key)
-    assert state is not None
-    assert isinstance(info, Info)
-
-
 def test_key_splitting(kinetix_random_env, prng_key):
     env = kinetix_random_env
     key = prng_key

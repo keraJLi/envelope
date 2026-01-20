@@ -1,4 +1,3 @@
-import warnings
 from functools import cached_property
 from typing import Any, override
 
@@ -29,17 +28,20 @@ class GymnaxJenv(Environment):
         env_kwargs: dict[str, Any] | None = None,
     ) -> "GymnaxJenv":
         env_kwargs = env_kwargs or {}
+        if "max_steps_in_episode" in env_kwargs:
+            raise ValueError(
+                "Cannot override 'max_steps_in_episode' directly. "
+                "Use TruncationWrapper for episode length control."
+            )
         gymnax_env, default_params = gymnax_create(env_name, **env_kwargs)
         default_params = default_params.replace(max_steps_in_episode=jnp.inf)
 
         env_params = env_params or default_params
-        if env_params.max_steps_in_episode < jnp.inf:
-            warnings.warn(
-                "Creating a GymnaxJenv with a finite max_steps_in_episode is not "
-                "recommended, use a TruncationWrapper instead."
-            )
-
         return cls(gymnax_env=gymnax_env, env_params=env_params)
+
+    @property
+    def default_max_steps(self) -> int:
+        return int(self.gymnax_env.default_params.max_steps_in_episode)
 
     @override
     def reset(self, key: Key) -> tuple[State, Info]:

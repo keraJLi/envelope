@@ -14,6 +14,9 @@ from jenv.environment import Environment, Info, InfoContainer, State
 from jenv.struct import static_field
 from jenv.typing import Key, PyTree
 
+# Default episode_length in brax.envs.create()
+_BRAX_DEFAULT_EPISODE_LENGTH = 1000
+
 
 class BraxJenv(Environment):
     """Wrapper to convert a Brax environment to a jenv environment."""
@@ -25,22 +28,25 @@ class BraxJenv(Environment):
         cls, env_name: str, env_kwargs: dict[str, Any] | None = None
     ) -> "BraxJenv":
         env_kwargs = env_kwargs or {}
-        auto_reset = env_kwargs.setdefault("auto_reset", False)
-        if auto_reset:
-            warnings.warn(
-                "Creating a BraxJenv with auto_reset=True is not recommended, use "
-                "an AutoResetWrapper instead."
+        if "episode_length" in env_kwargs:
+            raise ValueError(
+                "Cannot override 'episode_length' directly. "
+                "Use TruncationWrapper for episode length control."
+            )
+        if "auto_reset" in env_kwargs:
+            raise ValueError(
+                "Cannot override 'auto_reset' directly. "
+                "Use AutoResetWrapper for auto-reset behavior."
             )
 
-        episode_length = env_kwargs.setdefault("episode_length", jnp.inf)
-        if episode_length < jnp.inf:
-            warnings.warn(
-                "Creating a BraxJenv with a finite episode_length is not recommended, "
-                "as brax does not differentiate between truncation and termination. "
-            )
-
+        env_kwargs["episode_length"] = jnp.inf
+        env_kwargs["auto_reset"] = False
         env = brax_create(env_name, **env_kwargs)
         return cls(brax_env=env)
+
+    @property
+    def default_max_steps(self) -> int:
+        return _BRAX_DEFAULT_EPISODE_LENGTH
 
     def __post_init__(self) -> "BraxJenv":
         if isinstance(self.brax_env, BraxWrapper):

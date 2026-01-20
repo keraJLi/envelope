@@ -73,35 +73,10 @@ def test_brax_terminated_matches_done_on_step(brax_fast_env, prng_key):
     assert info.terminated == info.done
 
 
-def test_from_name_with_episode_length_warning(prng_key):
-    """Test that from_name warns when using finite episode_length."""
-    # Test warning for finite episode_length
-    with pytest.warns(
-        UserWarning,
-        match="Creating a BraxJenv with a finite episode_length is not recommended",
-    ):
-        env = BraxJenv.from_name("fast", env_kwargs={"episode_length": 100})
-
-    # Environment should still be created
-    assert env is not None
-    key = prng_key
-    state, info = env.reset(key)
-    assert state is not None
-
-
-def test_from_name_with_auto_reset_warning(prng_key):
-    """Test that from_name warns when using auto_reset=True."""
-    # Test warning for auto_reset=True
-    with pytest.warns(
-        UserWarning, match="Creating a BraxJenv with auto_reset=True is not recommended"
-    ):
-        env = BraxJenv.from_name("fast", env_kwargs={"auto_reset": True})
-
-    # Environment should still be created
-    assert env is not None
-    key = prng_key
-    state, info = env.reset(key)
-    assert state is not None
+def test_from_name_with_auto_reset_error():
+    """Test that from_name raises ValueError when using auto_reset."""
+    with pytest.raises(ValueError, match="Cannot override 'auto_reset' directly"):
+        BraxJenv.from_name("fast", env_kwargs={"auto_reset": True})
 
 
 def test_wrapper_unwrapping():

@@ -62,15 +62,6 @@ def test_observation_space_property_smoke(jumanji_env):
     assert isinstance(space, PyTreeSpace)
 
 
-def test_from_name_with_time_limit_warning():
-    """Warn when user passes a finite time_limit, like other compat wrappers."""
-    with pytest.warns(
-        UserWarning,
-        match="Creating a JumanjiJenv with a finite time_limit is not recommended",
-    ):
-        _create_jumanji_env(time_limit=10)
-
-
 def test_discrete_spec_conversion(prng_key):
     """Test conversion of DiscreteArray specs to jenv Discrete space."""
     spec = specs.DiscreteArray(num_values=7, dtype=np.int32, name="d")

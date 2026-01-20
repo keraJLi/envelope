@@ -69,6 +69,10 @@ class KinetixJenv(Environment):
     kinetix_env: Any = static_field()
     env_params: Any
 
+    @property
+    def default_max_steps(self) -> int:
+        return int(EnvParams().max_timesteps)
+
     @classmethod
     def from_name(
         cls,
@@ -77,13 +81,18 @@ class KinetixJenv(Environment):
         env_kwargs: dict[str, Any] | None = None,
     ) -> "KinetixJenv":
         env_kwargs = env_kwargs or {}
-        auto_reset = env_kwargs.setdefault("auto_reset", False)
-        if auto_reset:
-            warnings.warn(
-                "Creating a KinetixJenv with auto_reset=True is not recommended, use "
-                "an AutoResetWrapper instead."
+        if "max_timesteps" in env_kwargs:
+            raise ValueError(
+                "Cannot override 'max_timesteps' directly. "
+                "Use TruncationWrapper for episode length control."
+            )
+        if "auto_reset" in env_kwargs:
+            raise ValueError(
+                "Cannot override 'auto_reset' directly. "
+                "Use AutoResetWrapper for auto-reset behavior."
             )
 
+        env_kwargs["auto_reset"] = False
         if env_name == "random":
             return cls.create_random(env_params, **env_kwargs)
 
@@ -132,16 +141,14 @@ class KinetixJenv(Environment):
         cls,
         action_type: ActionType = ActionType.CONTINUOUS,
         observation_type: ObservationType = ObservationType.SYMBOLIC_FLAT,
-        env_params: EnvParams = EnvParams().replace(max_timesteps=jnp.inf),
+        env_params: EnvParams | None = None,
         static_env_params: StaticEnvParams = StaticEnvParams(),
         auto_reset: bool = False,
     ) -> "KinetixJenv":
         _warn_auto_reset(auto_reset)
-        if env_params.max_timesteps < jnp.inf:
-            warnings.warn(
-                "Creating a KinetixJenv with a finite max_timesteps is not "
-                "recommended, use a TruncationWrapper instead."
-            )
+        if env_params is None:
+            env_params = EnvParams()
+        env_params = env_params.replace(max_timesteps=jnp.inf)
 
         reset_fn = make_reset_fn_sample_kinetix_level(env_params, static_env_params)
         kinetix_env = make_kinetix_env(
@@ -155,10 +162,7 @@ class KinetixJenv(Environment):
         return cls(kinetix_env=kinetix_env, env_params=env_params)
 
     @override
-    def reset(
-        self, key: Key, state: State | None = None, **kwargs
-    ) -> tuple[State, Info]:
-        # Keep signature compatible with base class (ignore optional state/kwargs).
+    def reset(self, key: Key) -> tuple[State, Info]:
         key, subkey = jax.random.split(key)
         obs, env_state = self.kinetix_env.reset(subkey, self.env_params)
         state_out = Container().update(key=key, env_state=env_state)
@@ -167,7 +171,7 @@ class KinetixJenv(Environment):
         return state_out, info
 
     @override
-    def step(self, state: State, action: PyTree, **kwargs) -> tuple[State, Info]:
+    def step(self, state: State, action: PyTree) -> tuple[State, Info]:
         key, subkey = jax.random.split(state.key)
         obs, env_state, reward, done, env_info = self.kinetix_env.step(
             subkey, state.env_state, action, self.env_params

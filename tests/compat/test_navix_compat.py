@@ -215,22 +215,6 @@ def test_step_type_conversion(navix_env, prng_key):
     )
 
 
-def test_from_name_with_max_steps_warning(prng_key):
-    """Test that from_name warns when using finite max_steps."""
-    # Test warning for finite max_steps
-    with pytest.warns(
-        UserWarning,
-        match="Creating a NavixJenv with a finite max_steps is not recommended",
-    ):
-        env = NavixJenv.from_name("Navix-Empty-5x5-v0", env_kwargs={"max_steps": 100})
-
-    # Environment should still be created
-    assert env is not None
-    key = prng_key
-    state, info = env.reset(key)
-    assert state is not None
-
-
 def test_discrete_space_conversion():
     """Test conversion of discrete spaces from navix to jenv."""
     from navix import spaces as navix_spaces

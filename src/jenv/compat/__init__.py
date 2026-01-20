@@ -79,7 +79,16 @@ def create(env_name: str, env_kwargs: dict[str, Any] | None = None, **kwargs):
             f"Original error: {e}"
         ) from e
 
-    return env_class.from_name(env_name, env_kwargs=env_kwargs, **kwargs)
+    env = env_class.from_name(env_name, env_kwargs=env_kwargs, **kwargs)
+
+    # Wrap with TruncationWrapper using adapter's default
+    default_max_steps = getattr(env, "default_max_steps", None)
+    if default_max_steps is not None:
+        from jenv.wrappers.truncation_wrapper import TruncationWrapper
+
+        env = TruncationWrapper(env=env, max_steps=int(default_max_steps))
+
+    return env
 
 
 __all__ = ["create"]

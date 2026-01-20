@@ -111,32 +111,10 @@ class _DummyEnv:
         self.default_params = default_params
 
 
-def test_from_name_warns_on_auto_reset(monkeypatch: pytest.MonkeyPatch):
+def test_from_name_errors_on_auto_reset():
     from jenv.compat import craftax_jenv
 
-    def fake_make(_name: str, **_kwargs):
-        return _DummyEnv(default_params=_DummyParams(max_timesteps=10))
-
-    monkeypatch.setattr(craftax_jenv, "make_craftax_env_from_name", fake_make)
-
-    with pytest.warns(UserWarning, match="auto_reset=True"):
+    with pytest.raises(ValueError, match="Cannot override 'auto_reset' directly"):
         craftax_jenv.CraftaxJenv.from_name("AnyEnv", env_kwargs={"auto_reset": True})
 
 
-def test_from_name_warns_on_finite_max_timesteps_when_params_provided(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    from jenv.compat import craftax_jenv
-
-    def fake_make(_name: str, **_kwargs):
-        return _DummyEnv(default_params=_DummyParams(max_timesteps=999))
-
-    monkeypatch.setattr(craftax_jenv, "make_craftax_env_from_name", fake_make)
-
-    with pytest.warns(UserWarning, match="finite max_timesteps"):
-        provided = _DummyParams(max_timesteps=10)
-        env = craftax_jenv.CraftaxJenv.from_name("AnyEnv", env_params=provided)
-
-    # Important: user-provided env_params should not be overwritten; only warn.
-    assert env.env_params is provided
-    assert env.env_params.max_timesteps == 10

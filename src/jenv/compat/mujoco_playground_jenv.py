@@ -1,5 +1,4 @@
 import dataclasses
-import warnings
 from functools import cached_property
 from typing import Any, override
 
@@ -14,10 +13,14 @@ from jenv.typing import Key, PyTree
 _MAX_INT = int(jnp.iinfo(jnp.int32).max)
 
 
+_MUJOCO_PLAYGROUND_DEFAULT_EPISODE_LENGTH = 1000
+
+
 class MujocoPlaygroundJenv(Environment):
     """Wrapper to convert a mujoco_playground environment to a jenv environment."""
 
     mujoco_playground_env: Any = static_field()
+    _default_max_steps: int = static_field(default=_MUJOCO_PLAYGROUND_DEFAULT_EPISODE_LENGTH)
 
     @classmethod
     def from_name(
@@ -26,28 +29,36 @@ class MujocoPlaygroundJenv(Environment):
         """Creates a MujocoPlaygroundJenv from a name and keyword arguments. env_kwargs
         are passed to config_overrides of mujoco_playground.registry.load."""
         env_kwargs = env_kwargs or {}
-
-        # Set episode_length to a very large value by default if not provided
-        # (mujoco_playground uses int for episode_length, so we use max int instead of inf)
-        episode_length = env_kwargs.setdefault("episode_length", _MAX_INT)
-        if episode_length < _MAX_INT:
-            warnings.warn(
-                "Creating a MujocoPlaygroundJenv with a finite episode_length is not "
-                "recommended, use a TruncationWrapper instead."
+        if "episode_length" in env_kwargs:
+            raise ValueError(
+                "Cannot override 'episode_length' directly. "
+                "Use TruncationWrapper for episode length control."
             )
+
+        # Get default episode_length from registry config
+        default_config = registry.get_default_config(env_name)
+        default_max_steps = default_config.episode_length
+
+        # Set episode_length to a very large value
+        # (mujoco_playground uses int for episode_length, so we use max int instead of inf)
+        env_kwargs["episode_length"] = _MAX_INT
 
         # Pass all env_kwargs as config_overrides
         env = registry.load(
             env_name, config_overrides=env_kwargs if env_kwargs else None
         )
-        return cls(mujoco_playground_env=env)
+        return cls(mujoco_playground_env=env, _default_max_steps=default_max_steps)
+
+    @property
+    def default_max_steps(self) -> int:
+        return self._default_max_steps
 
     @override
     def reset(self, key: Key) -> tuple[State, Info]:
-        state = self.mujoco_playground_env.reset(key)
-        info = InfoContainer(obs=state.obs, reward=0.0, terminated=False)
-        info = info.update(**dataclasses.asdict(state))
-        return state, info
+        env_state = self.mujoco_playground_env.reset(key)
+        info = InfoContainer(obs=env_state.obs, reward=0.0, terminated=False)
+        info = info.update(**dataclasses.asdict(env_state))
+        return env_state, info
 
     @override
     def step(self, state: State, action: PyTree) -> tuple[State, Info]:
