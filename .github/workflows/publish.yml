@@ -25,7 +25,7 @@ jobs:
       - name: Install dependencies
         run: |
           test -f uv.lock
-          uv sync --group dev
+          uv sync --group dev --locked
 
       - name: Run tests
         run: uv run pytest -m "not compat"
@@ -41,7 +41,7 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Build package
-        run: uv build --locked
+        run: uv build
 
       - name: Store distribution packages
         uses: actions/upload-artifact@v4
