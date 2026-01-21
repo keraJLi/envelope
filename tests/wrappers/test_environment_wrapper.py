@@ -1,4 +1,4 @@
-"""Tests for jenv.wrappers.environment_wrapper.Wrapper."""
+"""Tests for envelope.wrappers.environment_wrapper.Wrapper."""
 
 import dataclasses
 
@@ -6,8 +6,8 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from jenv.spaces import Discrete
-from jenv.wrappers.wrapper import Wrapper
+from envelope.spaces import Discrete
+from envelope.wrappers.wrapper import Wrapper
 from tests.wrappers.helpers import (
     TestInfo as Info,
 )

@@ -1,4 +1,4 @@
-"""Robust tests for jenv.struct.Container (JAX pytree dataclass container)."""
+"""Robust tests for envelope.struct.Container (JAX pytree dataclass container)."""
 
 import pickle
 from dataclasses import KW_ONLY
@@ -7,8 +7,8 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from jenv.struct import Container
-from jenv.typing import PyTree
+from envelope.struct import Container
+from envelope.typing import PyTree
 
 # ============================================================================
 # Container subclasses used across tests

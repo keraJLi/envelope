@@ -1,14 +1,14 @@
-"""Tests for jenv.wrappers.autoreset_wrapper.AutoResetWrapper."""
+"""Tests for envelope.wrappers.autoreset_wrapper.AutoResetWrapper."""
 
 import jax
 import jax.numpy as jnp
 
-from jenv.struct import field
-from jenv.wrappers.autoreset_wrapper import AutoResetWrapper
-from jenv.wrappers.truncation_wrapper import TruncationWrapper
-from jenv.wrappers.vmap_envs_wrapper import VmapEnvsWrapper
-from jenv.wrappers.vmap_wrapper import VmapWrapper
-from jenv.wrappers.wrapper import WrappedState, Wrapper
+from envelope.struct import field
+from envelope.wrappers.autoreset_wrapper import AutoResetWrapper
+from envelope.wrappers.truncation_wrapper import TruncationWrapper
+from envelope.wrappers.vmap_envs_wrapper import VmapEnvsWrapper
+from envelope.wrappers.vmap_wrapper import VmapWrapper
+from envelope.wrappers.wrapper import WrappedState, Wrapper
 from tests.wrappers.helpers import (
     AlternatingTerminationEnv,
     StepCounterEnv,

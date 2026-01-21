@@ -1,4 +1,4 @@
-"""Tests for jenv.compat.brax_jenv module."""
+"""Tests for envelope.compat.brax_envelope module."""
 
 from copy import deepcopy
 
@@ -6,7 +6,7 @@ import jax
 import pytest
 from brax.envs import Wrapper as BraxWrapper
 
-from jenv.compat.brax_jenv import BraxJenv
+from envelope.compat.brax_envelope import BraxEnvelope
 from tests.compat.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
@@ -17,7 +17,7 @@ pytestmark = pytest.mark.compat
 
 @pytest.fixture(scope="module")
 def brax_fast_env():
-    return BraxJenv.from_name("fast")
+    return BraxEnvelope.from_name("fast")
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -76,7 +76,7 @@ def test_brax_terminated_matches_done_on_step(brax_fast_env, prng_key):
 def test_from_name_with_auto_reset_error():
     """Test that from_name raises ValueError when using auto_reset."""
     with pytest.raises(ValueError, match="Cannot override 'auto_reset' directly"):
-        BraxJenv.from_name("fast", env_kwargs={"auto_reset": True})
+        BraxEnvelope.from_name("fast", env_kwargs={"auto_reset": True})
 
 
 def test_wrapper_unwrapping():
@@ -96,11 +96,11 @@ def test_wrapper_unwrapping():
 
     wrapped_env = SimpleWrapper(base_env)
 
-    # Initialize BraxJenv with wrapped environment
+    # Initialize BraxEnvelope with wrapped environment
     with pytest.warns(
-        UserWarning, match="Environment wrapping should be handled by jenv"
+        UserWarning, match="Environment wrapping should be handled by envelope"
     ):
-        env = BraxJenv(brax_env=wrapped_env)
+        env = BraxEnvelope(brax_env=wrapped_env)
 
     # Verify environment is properly unwrapped
     assert not isinstance(env.brax_env, BraxWrapper)

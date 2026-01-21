@@ -4,7 +4,7 @@ from typing import Any, Iterable, Iterator, Mapping, Self, Tuple
 
 import jax
 
-from jenv.typing import PyTree
+from envelope.typing import PyTree
 
 __all__ = ["FrozenPyTreeNode", "field", "static_field", "Container"]
 
@@ -41,13 +41,13 @@ class FrozenPyTreeNode:
     def __init_subclass__(cls, *, dataclass_kwargs: dict[str, Any] | None = None, **kw):
         super().__init_subclass__(**kw)
         # Check if this specific class (not parent) has already been processed
-        if "__is_jenv_pytreenode__" in cls.__dict__:
+        if "__is_envelope_pytreenode__" in cls.__dict__:
             return
         opts = dict(frozen=True, eq=True, repr=True, slots=False)
         if dataclass_kwargs:
             opts.update(dataclass_kwargs)
         dataclasses.dataclass(cls, **opts)  # modify in place
-        cls.__is_jenv_pytreenode__ = True
+        cls.__is_envelope_pytreenode__ = True
 
         data = []
         static = []

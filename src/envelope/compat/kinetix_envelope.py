@@ -1,9 +1,9 @@
 """Kinetix compatibility wrapper.
 
-This module exposes Kinetix environments through the `jenv.environment.Environment`
-API. It mirrors jenv's compat philosophy:
-- prefer *no* environment-side auto-reset (use `AutoResetWrapper` in jenv)
-- prefer *no* fixed episode time-limits (use `TruncationWrapper` in jenv)
+This module exposes Kinetix environments through the `envelope.environment.Environment`
+API. It mirrors envelope's compat philosophy:
+- prefer *no* environment-side auto-reset (use `AutoResetWrapper` in envelope)
+- prefer *no* fixed episode time-limits (use `TruncationWrapper` in envelope)
 
 `from_name` supports premade level ids like `s/h4_thrust_aim` (optionally with
 `.json`). For maximum flexibility, users can bypass level handling entirely by
@@ -28,11 +28,11 @@ from kinetix.environment import (
 from kinetix.environment.ued.ued import make_reset_fn_sample_kinetix_level
 from kinetix.util.saving import load_from_json_file
 
-from jenv import spaces as jenv_spaces
-from jenv.compat.gymnax_jenv import _convert_space as _convert_gymnax_space
-from jenv.environment import Environment, Info, InfoContainer, State
-from jenv.struct import Container, static_field
-from jenv.typing import Key, PyTree
+from envelope import spaces as envelope_spaces
+from envelope.compat.gymnax_envelope import _convert_space as _convert_gymnax_space
+from envelope.environment import Environment, Info, InfoContainer, State
+from envelope.struct import Container, static_field
+from envelope.typing import Key, PyTree
 
 LevelResetFn = Callable[[Key], Any]
 
@@ -57,14 +57,14 @@ def _normalize_level_id(level_id: str) -> str:
 def _warn_auto_reset(auto_reset: bool) -> None:
     if auto_reset:
         warnings.warn(
-            "Creating a KinetixJenv with auto_reset=True is not recommended, use an "
-            "AutoResetWrapper instead.",
+            "Creating a KinetixEnvelope with auto_reset=True is not recommended, use "
+            "an AutoResetWrapper instead.",
             stacklevel=2,
         )
 
 
-class KinetixJenv(Environment):
-    """Wrapper to convert a Kinetix environment to a jenv environment."""
+class KinetixEnvelope(Environment):
+    """Wrapper to convert a Kinetix environment to a envelope environment."""
 
     kinetix_env: Any = static_field()
     env_params: Any
@@ -79,7 +79,7 @@ class KinetixJenv(Environment):
         env_name: str | Literal["random"],
         env_params: EnvParams | None = None,
         env_kwargs: dict[str, Any] | None = None,
-    ) -> "KinetixJenv":
+    ) -> "KinetixEnvelope":
         env_kwargs = env_kwargs or {}
         if "max_timesteps" in env_kwargs:
             raise ValueError(
@@ -94,7 +94,7 @@ class KinetixJenv(Environment):
 
         env_kwargs["auto_reset"] = False
         if env_name == "random":
-            return cls.create_random(env_params, **env_kwargs)
+            return cls.create_random(env_params=env_params, **env_kwargs)
 
         if (
             env_params is not None
@@ -103,7 +103,7 @@ class KinetixJenv(Environment):
         ):
             raise ValueError(
                 "env_params and static_env_params cannot be passed when creating a "
-                "KinetixJenv from a premade level."
+                "KinetixEnvelope from a premade level."
             )
         return cls.create_premade(env_name, **env_kwargs)
 
@@ -114,7 +114,7 @@ class KinetixJenv(Environment):
         action_type: ActionType = ActionType.CONTINUOUS,
         observation_type: ObservationType = ObservationType.SYMBOLIC_FLAT,
         auto_reset: bool = False,
-    ) -> "KinetixJenv":
+    ) -> "KinetixEnvelope":
         _warn_auto_reset(auto_reset)
 
         # Load level.
@@ -144,7 +144,7 @@ class KinetixJenv(Environment):
         env_params: EnvParams | None = None,
         static_env_params: StaticEnvParams = StaticEnvParams(),
         auto_reset: bool = False,
-    ) -> "KinetixJenv":
+    ) -> "KinetixEnvelope":
         _warn_auto_reset(auto_reset)
         if env_params is None:
             env_params = EnvParams()
@@ -183,12 +183,12 @@ class KinetixJenv(Environment):
 
     @override
     @cached_property
-    def action_space(self) -> jenv_spaces.Space:
+    def action_space(self) -> envelope_spaces.Space:
         return _convert_gymnax_space(self.kinetix_env.action_space(self.env_params))
 
     @override
     @cached_property
-    def observation_space(self) -> jenv_spaces.Space:
+    def observation_space(self) -> envelope_spaces.Space:
         return _convert_gymnax_space(
             self.kinetix_env.observation_space(self.env_params)
         )

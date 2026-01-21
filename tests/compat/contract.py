@@ -14,7 +14,7 @@ from collections.abc import Callable
 import jax
 import jax.numpy as jnp
 
-from jenv.environment import Info
+from envelope.environment import Info
 
 ObsCheck = Callable[[object, object], None]
 

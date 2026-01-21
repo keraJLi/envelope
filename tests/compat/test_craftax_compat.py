@@ -1,4 +1,4 @@
-"""Tests for jenv.compat.craftax_jenv module."""
+"""Tests for envelope.compat.craftax_envelope module."""
 
 import math
 
@@ -8,7 +8,7 @@ import pytest
 
 pytest.importorskip("craftax")
 
-from jenv.spaces import Continuous, Discrete
+from envelope.spaces import Continuous, Discrete
 from tests.compat.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
@@ -33,9 +33,9 @@ def craftax_env_id(request: pytest.FixtureRequest) -> str:
 
 @pytest.fixture(scope="module")
 def craftax_env(craftax_env_id: str):
-    from jenv.compat.craftax_jenv import CraftaxJenv
+    from envelope.compat.craftax_envelope import CraftaxEnvelope
 
-    return CraftaxJenv.from_name(craftax_env_id)
+    return CraftaxEnvelope.from_name(craftax_env_id)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -112,9 +112,7 @@ class _DummyEnv:
 
 
 def test_from_name_errors_on_auto_reset():
-    from jenv.compat import craftax_jenv
+    from envelope.compat.craftax_envelope import CraftaxEnvelope
 
     with pytest.raises(ValueError, match="Cannot override 'auto_reset' directly"):
-        craftax_jenv.CraftaxJenv.from_name("AnyEnv", env_kwargs={"auto_reset": True})
-
-
+        CraftaxEnvelope.from_name("AnyEnv", env_kwargs={"auto_reset": True})

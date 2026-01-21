@@ -3,11 +3,11 @@ from typing import override
 
 import jax
 
-from jenv import spaces
-from jenv.environment import Environment, Info
-from jenv.struct import field
-from jenv.typing import Key, PyTree
-from jenv.wrappers.wrapper import WrappedState, Wrapper
+from envelope import spaces
+from envelope.environment import Environment, Info
+from envelope.struct import field
+from envelope.typing import Key, PyTree
+from envelope.wrappers.wrapper import WrappedState, Wrapper
 
 
 class VmapEnvsWrapper(Wrapper):

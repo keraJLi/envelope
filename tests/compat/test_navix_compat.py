@@ -1,12 +1,12 @@
-"""Tests for jenv.compat.navix_jenv module."""
+"""Tests for envelope.compat.navix_envelope module."""
 
 import jax
 import jax.numpy as jnp
 import navix
 import pytest
 
-from jenv.compat.navix_jenv import NavixJenv
-from jenv.spaces import Continuous, Discrete
+from envelope.compat.navix_envelope import NavixEnvelope
+from envelope.spaces import Continuous, Discrete
 from tests.compat.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
@@ -16,9 +16,9 @@ pytestmark = pytest.mark.compat
 
 
 def _create_navix_env(env_name: str = "Navix-Empty-5x5-v0", **kwargs):
-    """Helper to create a NavixJenv wrapper."""
+    """Helper to create a NavixEnvelope wrapper."""
     navix_env = navix.make(env_name, **kwargs)
-    return NavixJenv(navix_env=navix_env)
+    return NavixEnvelope(navix_env=navix_env)
 
 
 @pytest.fixture(scope="module")
@@ -51,7 +51,7 @@ def test_navix_contract_scan(prng_key, navix_env, scan_num_steps):
 
 
 def test_action_space_conversion(navix_env):
-    """Test conversion of navix action spaces to jenv spaces."""
+    """Test conversion of navix action spaces to envelope spaces."""
     env = navix_env
 
     # Check that action space is converted correctly
@@ -62,24 +62,24 @@ def test_action_space_conversion(navix_env):
 
 
 def test_observation_space_conversion(navix_env):
-    """Test conversion of navix observation spaces to jenv spaces."""
+    """Test conversion of navix observation spaces to envelope spaces."""
     env = navix_env
 
     # Check that observation space is converted correctly
     assert isinstance(env.observation_space, Discrete)
-    # Navix n might be scalar, jenv n is array - check if all elements equal navix n
+    # Navix n might be scalar, envelope n is array - check if all elements equal navix n
     navix_n = env.navix_env.observation_space.n
-    jenv_n = env.observation_space.n
+    envelope_n = env.observation_space.n
     if jnp.ndim(navix_n) == 0:  # scalar
-        assert jnp.all(jenv_n == navix_n)
+        assert jnp.all(envelope_n == navix_n)
     else:
-        assert jnp.array_equal(jenv_n, navix_n)
+        assert jnp.array_equal(envelope_n, navix_n)
     assert env.observation_space.shape == env.navix_env.observation_space.shape
     assert env.observation_space.dtype == env.navix_env.observation_space.dtype
 
 
 def test_container_conversion_reset(navix_env, prng_key):
-    """Test convert_navix_to_jenv_info on reset timestep."""
+    """Test convert_navix_to_envelope_info on reset timestep."""
     env = navix_env
     key = prng_key
 
@@ -110,7 +110,7 @@ def test_container_conversion_reset(navix_env, prng_key):
 
 
 def test_container_conversion_step(navix_env, prng_key):
-    """Test convert_navix_to_jenv_info on step timestep."""
+    """Test convert_navix_to_envelope_info on step timestep."""
     env = navix_env
     key = prng_key
 
@@ -155,7 +155,7 @@ def test_unsupported_space_type():
     import jax.numpy as jnp
     from navix import spaces as navix_spaces
 
-    from jenv.compat.navix_jenv import convert_navix_to_jenv_space
+    from envelope.compat.navix_envelope import convert_navix_to_envelope_space
 
     # Create a mock space that's neither Discrete nor Continuous
     class MockSpace(navix_spaces.Space):
@@ -169,21 +169,21 @@ def test_unsupported_space_type():
         maximum=jnp.array(10),
     )
     with pytest.raises(ValueError, match="Unsupported space type"):
-        convert_navix_to_jenv_space(mock_space)
+        convert_navix_to_envelope_space(mock_space)
 
 
 def test_step_type_conversion(navix_env, prng_key):
     """Test all navix StepType values are correctly converted."""
     import navix
 
-    from jenv.compat.navix_jenv import convert_navix_to_jenv_info
+    from envelope.compat.navix_envelope import convert_navix_to_envelope_info
 
     env = navix_env
     key = prng_key
 
     # Test TRANSITION step type (should be on reset)
     reset_timestep = env.navix_env.reset(key)
-    reset_info = convert_navix_to_jenv_info(reset_timestep)
+    reset_info = convert_navix_to_envelope_info(reset_timestep)
     # TRANSITION should map to neither terminated nor truncated
     assert reset_timestep.step_type == navix.StepType.TRANSITION
     assert not reset_info.terminated
@@ -193,7 +193,7 @@ def test_step_type_conversion(navix_env, prng_key):
     state, _ = env.reset(key)
     action = env.action_space.sample(jax.random.fold_in(prng_key, 1))
     step_timestep = env.navix_env.step(state, action)
-    step_info = convert_navix_to_jenv_info(step_timestep)
+    step_info = convert_navix_to_envelope_info(step_timestep)
     # TRANSITION should map to neither terminated nor truncated
     if step_timestep.step_type == navix.StepType.TRANSITION:
         assert not step_info.terminated
@@ -216,31 +216,31 @@ def test_step_type_conversion(navix_env, prng_key):
 
 
 def test_discrete_space_conversion():
-    """Test conversion of discrete spaces from navix to jenv."""
+    """Test conversion of discrete spaces from navix to envelope."""
     from navix import spaces as navix_spaces
 
-    from jenv.compat.navix_jenv import convert_navix_to_jenv_space
+    from envelope.compat.navix_envelope import convert_navix_to_envelope_space
 
     # Create a navix Discrete space
     navix_discrete = navix_spaces.Discrete.create(10, shape=(3,), dtype=jnp.int32)
-    jenv_discrete = convert_navix_to_jenv_space(navix_discrete)
-    assert isinstance(jenv_discrete, Discrete)
-    # Navix n might be scalar, jenv n can be broadcast to shape.
+    envelope_discrete = convert_navix_to_envelope_space(navix_discrete)
+    assert isinstance(envelope_discrete, Discrete)
+    # Navix n might be scalar, envelope n can be broadcast to shape.
     navix_n = navix_discrete.n
-    jenv_n = jenv_discrete.n
+    envelope_n = envelope_discrete.n
     if jnp.ndim(navix_n) == 0:
-        assert jnp.all(jenv_n == navix_n)
+        assert jnp.all(envelope_n == navix_n)
     else:
-        assert jnp.array_equal(jenv_n, navix_n)
-    assert jenv_discrete.shape == navix_discrete.shape
-    assert jenv_discrete.dtype == navix_discrete.dtype
+        assert jnp.array_equal(envelope_n, navix_n)
+    assert envelope_discrete.shape == navix_discrete.shape
+    assert envelope_discrete.dtype == navix_discrete.dtype
 
 
 def test_continuous_space_conversion():
-    """Test conversion of continuous spaces from navix to jenv."""
+    """Test conversion of continuous spaces from navix to envelope."""
     from navix import spaces as navix_spaces
 
-    from jenv.compat.navix_jenv import convert_navix_to_jenv_space
+    from envelope.compat.navix_envelope import convert_navix_to_envelope_space
 
     # Create a navix Continuous space
     navix_continuous = navix_spaces.Continuous.create(
@@ -250,12 +250,12 @@ def test_continuous_space_conversion():
         dtype=jnp.float32,
     )
 
-    # Convert to jenv space
-    jenv_continuous = convert_navix_to_jenv_space(navix_continuous)
+    # Convert to envelope space
+    envelope_continuous = convert_navix_to_envelope_space(navix_continuous)
 
     # Verify conversion
-    assert isinstance(jenv_continuous, Continuous)
-    assert jenv_continuous.shape == navix_continuous.shape
-    assert jenv_continuous.dtype == navix_continuous.dtype
-    assert jnp.array_equal(jenv_continuous.low, navix_continuous.minimum)
-    assert jnp.array_equal(jenv_continuous.high, navix_continuous.maximum)
+    assert isinstance(envelope_continuous, Continuous)
+    assert envelope_continuous.shape == navix_continuous.shape
+    assert envelope_continuous.dtype == navix_continuous.dtype
+    assert jnp.array_equal(envelope_continuous.low, navix_continuous.minimum)
+    assert jnp.array_equal(envelope_continuous.high, navix_continuous.maximum)

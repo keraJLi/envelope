@@ -4,9 +4,9 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from jenv.environment import Info
-from jenv.spaces import BatchedSpace
-from jenv.wrappers.vmap_envs_wrapper import VmapEnvsWrapper
+from envelope.environment import Info
+from envelope.spaces import BatchedSpace
+from envelope.wrappers.vmap_envs_wrapper import VmapEnvsWrapper
 from tests.wrappers.helpers import ParamEnv
 
 # -----------------------------------------------------------------------------

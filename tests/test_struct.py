@@ -1,4 +1,4 @@
-"""Tests for jenv.struct module.
+"""Tests for envelope.struct module.
 
 This module tests:
 - Immutability (frozen dataclasses)
@@ -14,7 +14,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from jenv.struct import FrozenPyTreeNode, field, static_field
+from envelope.struct import FrozenPyTreeNode, field, static_field
 
 # ============================================================================
 # Test Fixtures and Helper Classes

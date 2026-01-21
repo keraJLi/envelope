@@ -1,4 +1,4 @@
-"""Tests for jenv.compat.jumanji_jenv module."""
+"""Tests for envelope.compat.jumanji_envelope module."""
 
 from __future__ import annotations
 
@@ -10,9 +10,12 @@ import numpy as np
 import pytest
 from jumanji import specs
 
-import jenv.compat.jumanji_jenv as jumanji_jenv
-from jenv.compat.jumanji_jenv import JumanjiJenv, convert_jumanji_spec_to_jenv_space
-from jenv.spaces import Continuous, Discrete, PyTreeSpace
+import envelope.compat.jumanji_envelope as jumanji_envelope
+from envelope.compat.jumanji_envelope import (
+    JumanjiEnvelope,
+    convert_jumanji_spec_to_envelope_space,
+)
+from envelope.spaces import Continuous, Discrete, PyTreeSpace
 from tests.compat.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
@@ -21,9 +24,9 @@ from tests.compat.contract import (
 pytestmark = pytest.mark.compat
 
 
-def _create_jumanji_env(env_name: str = "Snake-v1", **env_kwargs) -> JumanjiJenv:
-    """Helper to create a JumanjiJenv wrapper."""
-    return JumanjiJenv.from_name(env_name, env_kwargs=env_kwargs or None)
+def _create_jumanji_env(env_name: str = "Snake-v1", **env_kwargs) -> JumanjiEnvelope:
+    """Helper to create a JumanjiEnvelope wrapper."""
+    return JumanjiEnvelope.from_name(env_name, env_kwargs=env_kwargs or None)
 
 
 @pytest.fixture(scope="module")
@@ -63,9 +66,9 @@ def test_observation_space_property_smoke(jumanji_env):
 
 
 def test_discrete_spec_conversion(prng_key):
-    """Test conversion of DiscreteArray specs to jenv Discrete space."""
+    """Test conversion of DiscreteArray specs to envelope Discrete space."""
     spec = specs.DiscreteArray(num_values=7, dtype=np.int32, name="d")
-    space = convert_jumanji_spec_to_jenv_space(spec)
+    space = convert_jumanji_spec_to_envelope_space(spec)
     assert isinstance(space, Discrete)
     assert space.shape == ()
     assert int(jnp.asarray(space.n)) == 7
@@ -75,11 +78,11 @@ def test_discrete_spec_conversion(prng_key):
 
 
 def test_multidiscrete_spec_conversion(prng_key):
-    """Test conversion of MultiDiscreteArray specs to jenv Discrete with array n."""
+    """Test conversion of MultiDiscreteArray specs to envelope Discrete with array n."""
     md = specs.MultiDiscreteArray(
         num_values=jnp.asarray([2, 3, 4], dtype=jnp.int32), dtype=np.int32, name="md"
     )
-    space = convert_jumanji_spec_to_jenv_space(md)
+    space = convert_jumanji_spec_to_envelope_space(md)
 
     assert isinstance(space, Discrete)
     assert space.shape == (3,)
@@ -94,7 +97,7 @@ def test_bounded_array_spec_conversion_broadcasts_bounds(prng_key):
     b = specs.BoundedArray(
         shape=(2, 3), dtype=np.float32, minimum=0.0, maximum=1.0, name="b"
     )
-    space = convert_jumanji_spec_to_jenv_space(b)
+    space = convert_jumanji_spec_to_envelope_space(b)
     assert isinstance(space, Continuous)
     assert space.shape == (2, 3)
     assert jnp.all(space.low == 0.0)
@@ -107,7 +110,7 @@ def test_bounded_array_spec_conversion_broadcasts_bounds(prng_key):
 def test_array_spec_conversion_float_is_unbounded_box():
     """Float Array converts to Continuous(-inf, +inf)."""
     spec = specs.Array(shape=(2, 3), dtype=np.float32, name="a")
-    space = convert_jumanji_spec_to_jenv_space(spec)
+    space = convert_jumanji_spec_to_envelope_space(spec)
     assert isinstance(space, Continuous)
     assert space.shape == (2, 3)
     assert jnp.all(jnp.isneginf(space.low))
@@ -118,7 +121,7 @@ def test_array_spec_conversion_non_float_not_supported():
     """Non-float Array specs are intentionally not supported."""
     spec = specs.Array(shape=(2,), dtype=np.int32, name="ai")
     with pytest.raises(NotImplementedError):
-        convert_jumanji_spec_to_jenv_space(spec)
+        convert_jumanji_spec_to_envelope_space(spec)
 
 
 def test_deepcopy_warning(jumanji_env):
@@ -142,13 +145,13 @@ def test_namedtuple_observation_preserved_for_info():
         def last(self):
             return False
 
-    info = jumanji_jenv.convert_jumanji_to_jenv_info(DummyTimestep())
+    info = jumanji_envelope.convert_jumanji_to_envelope_info(DummyTimestep())
     assert isinstance(info.obs, tuple)
     assert hasattr(info.obs, "_asdict")
 
 
 def test_structured_spec_dict_conversion():
-    """Hit Spec._specs dict branch in convert_jumanji_spec_to_jenv_space."""
+    """Hit Spec._specs dict branch in convert_jumanji_spec_to_envelope_space."""
 
     class DummySpec:
         _specs = {
@@ -158,7 +161,7 @@ def test_structured_spec_dict_conversion():
             ),
         }
 
-    space = convert_jumanji_spec_to_jenv_space(DummySpec())
+    space = convert_jumanji_spec_to_envelope_space(DummySpec())
     assert isinstance(space, PyTreeSpace)
     assert isinstance(space.tree, dict)
     assert set(space.tree.keys()) == {"d", "b"}
@@ -172,7 +175,7 @@ def test_spec_discrete_broadcast_branch_exercised():
     )
     md._shape = (2, 3)
 
-    space = convert_jumanji_spec_to_jenv_space(md)
+    space = convert_jumanji_spec_to_envelope_space(md)
     assert isinstance(space, Discrete)
     assert space.shape == (2, 3)
     assert jnp.array_equal(space.n, jnp.broadcast_to(jnp.asarray([2, 3, 4]), (2, 3)))
@@ -184,7 +187,7 @@ def test_structured_spec_tuple_list_and_unsupported(prng_key):
         shape=(2,), dtype=np.float32, minimum=0.0, maximum=1.0, name="b"
     )
 
-    space = convert_jumanji_spec_to_jenv_space([d, b])
+    space = convert_jumanji_spec_to_envelope_space([d, b])
     assert isinstance(space, PyTreeSpace)
     assert isinstance(space.tree, tuple)
     assert isinstance(space.tree[0], Discrete)
@@ -194,4 +197,4 @@ def test_structured_spec_tuple_list_and_unsupported(prng_key):
     assert space.contains(sample)
 
     with pytest.raises(ValueError, match="Unsupported spec type"):
-        convert_jumanji_spec_to_jenv_space(object())
+        convert_jumanji_spec_to_envelope_space(object())

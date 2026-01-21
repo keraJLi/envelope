@@ -9,24 +9,24 @@ from brax.envs import Wrapper as BraxWrapper
 from brax.envs import create as brax_create
 from jax import numpy as jnp
 
-from jenv import spaces
-from jenv.environment import Environment, Info, InfoContainer, State
-from jenv.struct import static_field
-from jenv.typing import Key, PyTree
+from envelope import spaces
+from envelope.environment import Environment, Info, InfoContainer, State
+from envelope.struct import static_field
+from envelope.typing import Key, PyTree
 
 # Default episode_length in brax.envs.create()
 _BRAX_DEFAULT_EPISODE_LENGTH = 1000
 
 
-class BraxJenv(Environment):
-    """Wrapper to convert a Brax environment to a jenv environment."""
+class BraxEnvelope(Environment):
+    """Wrapper to convert a Brax environment to a envelope environment."""
 
     brax_env: BraxEnv = static_field()
 
     @classmethod
     def from_name(
         cls, env_name: str, env_kwargs: dict[str, Any] | None = None
-    ) -> "BraxJenv":
+    ) -> "BraxEnvelope":
         env_kwargs = env_kwargs or {}
         if "episode_length" in env_kwargs:
             raise ValueError(
@@ -48,10 +48,10 @@ class BraxJenv(Environment):
     def default_max_steps(self) -> int:
         return _BRAX_DEFAULT_EPISODE_LENGTH
 
-    def __post_init__(self) -> "BraxJenv":
+    def __post_init__(self) -> "BraxEnvelope":
         if isinstance(self.brax_env, BraxWrapper):
             warnings.warn(
-                "Environment wrapping should be handled by jenv. "
+                "Environment wrapping should be handled by envelope. "
                 "Unwrapping brax environment before converting..."
             )
             object.__setattr__(self, "brax_env", self.brax_env.unwrapped)

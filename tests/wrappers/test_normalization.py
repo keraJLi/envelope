@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from jenv.wrappers.normalization import RunningMeanVar, update_rmv
+from envelope.wrappers.normalization import RunningMeanVar, update_rmv
 
 
 def _init_rmv_from_example(x_like, dtype=jnp.float32, count=0) -> RunningMeanVar:

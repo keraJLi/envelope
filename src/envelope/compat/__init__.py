@@ -4,13 +4,16 @@ from typing import Any, Protocol, Self
 
 # Lazy imports to avoid requiring all dependencies at once
 _env_module_map = {
-    "gymnax": ("jenv.compat.gymnax_jenv", "GymnaxJenv"),
-    "brax": ("jenv.compat.brax_jenv", "BraxJenv"),
-    "navix": ("jenv.compat.navix_jenv", "NavixJenv"),
-    "jumanji": ("jenv.compat.jumanji_jenv", "JumanjiJenv"),
-    "kinetix": ("jenv.compat.kinetix_jenv", "KinetixJenv"),
-    "craftax": ("jenv.compat.craftax_jenv", "CraftaxJenv"),
-    "mujoco_playground": ("jenv.compat.mujoco_playground_jenv", "MujocoPlaygroundJenv"),
+    "gymnax": ("envelope.compat.gymnax_envelope", "GymnaxEnvelope"),
+    "brax": ("envelope.compat.brax_envelope", "BraxEnvelope"),
+    "navix": ("envelope.compat.navix_envelope", "NavixEnvelope"),
+    "jumanji": ("envelope.compat.jumanji_envelope", "JumanjiEnvelope"),
+    "kinetix": ("envelope.compat.kinetix_envelope", "KinetixEnvelope"),
+    "craftax": ("envelope.compat.craftax_envelope", "CraftaxEnvelope"),
+    "mujoco_playground": (
+        "envelope.compat.mujoco_playground_envelope",
+        "MujocoPlaygroundEnvelope",
+    ),
 }
 
 
@@ -84,7 +87,7 @@ def create(env_name: str, env_kwargs: dict[str, Any] | None = None, **kwargs):
     # Wrap with TruncationWrapper using adapter's default
     default_max_steps = getattr(env, "default_max_steps", None)
     if default_max_steps is not None:
-        from jenv.wrappers.truncation_wrapper import TruncationWrapper
+        from envelope.wrappers.truncation_wrapper import TruncationWrapper
 
         env = TruncationWrapper(env=env, max_steps=int(default_max_steps))
 

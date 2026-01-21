@@ -9,17 +9,17 @@ from craftax.craftax_classic.envs.craftax_state import (
 )
 from craftax.craftax_env import make_craftax_env_from_name
 
-from jenv import spaces as jenv_spaces
-from jenv.compat.gymnax_jenv import _convert_space as _convert_gymnax_space
-from jenv.environment import Environment, Info, InfoContainer, State
-from jenv.struct import Container, static_field
-from jenv.typing import Key, PyTree, TypeAlias
+from envelope import spaces as envelope_spaces
+from envelope.compat.gymnax_envelope import _convert_space as _convert_gymnax_space
+from envelope.environment import Environment, Info, InfoContainer, State
+from envelope.struct import Container, static_field
+from envelope.typing import Key, PyTree, TypeAlias
 
 EnvParams: TypeAlias = CraftaxEnvParams | CraftaxClassicEnvParams
 
 
-class CraftaxJenv(Environment):
-    """Wrapper to convert a Craftax environment to a jenv environment."""
+class CraftaxEnvelope(Environment):
+    """Wrapper to convert a Craftax environment to a envelope environment."""
 
     craftax_env: Any = static_field()
     env_params: PyTree
@@ -30,7 +30,7 @@ class CraftaxJenv(Environment):
         env_name: str,
         env_params: EnvParams | None = None,
         env_kwargs: dict[str, Any] | None = None,
-    ) -> "CraftaxJenv":
+    ) -> "CraftaxEnvelope":
         env_kwargs = env_kwargs or {}
         if "max_timesteps" in env_kwargs:
             raise ValueError(
@@ -75,12 +75,12 @@ class CraftaxJenv(Environment):
 
     @override
     @cached_property
-    def action_space(self) -> jenv_spaces.Space:
+    def action_space(self) -> envelope_spaces.Space:
         return _convert_gymnax_space(self.craftax_env.action_space(self.env_params))
 
     @override
     @cached_property
-    def observation_space(self) -> jenv_spaces.Space:
+    def observation_space(self) -> envelope_spaces.Space:
         return _convert_gymnax_space(
             self.craftax_env.observation_space(self.env_params)
         )

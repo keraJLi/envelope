@@ -1,2 +1,1 @@
-"""Tests for jenv.spaces module."""
-
+"""Tests for envelope.spaces module."""

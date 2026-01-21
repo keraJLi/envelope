@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from jenv.wrappers.truncation_wrapper import TruncationWrapper
+from envelope.wrappers.truncation_wrapper import TruncationWrapper
 from tests.wrappers.helpers import (
     DiscreteStepCounterEnv,
     NoStepsEnv,

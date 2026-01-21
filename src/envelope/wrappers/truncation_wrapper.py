@@ -1,9 +1,9 @@
 import jax.numpy as jnp
 
-from jenv.environment import Info
-from jenv.struct import field
-from jenv.typing import Key, PyTree
-from jenv.wrappers.wrapper import WrappedState, Wrapper
+from envelope.environment import Info
+from envelope.struct import field
+from envelope.typing import Key, PyTree
+from envelope.wrappers.wrapper import WrappedState, Wrapper
 
 
 class TruncationWrapper(Wrapper):

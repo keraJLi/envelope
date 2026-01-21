@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from jenv.spaces import Continuous, Discrete, PyTreeSpace
+from envelope.spaces import Continuous, Discrete, PyTreeSpace
 
 # ============================================================================
 # Tests: PyTreeSpace - Basic Functionality

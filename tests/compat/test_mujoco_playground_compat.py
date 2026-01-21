@@ -1,12 +1,12 @@
-"""Tests for jenv.compat.mujoco_playground_jenv module."""
+"""Tests for envelope.compat.mujoco_playground_envelope module."""
 
 import jax
 import jax.numpy as jnp
 import pytest
 
-from jenv.compat.mujoco_playground_jenv import MujocoPlaygroundJenv
-from jenv.environment import Info
-from jenv.spaces import Continuous, PyTreeSpace
+from envelope.compat.mujoco_playground_envelope import MujocoPlaygroundEnvelope
+from envelope.environment import Info
+from envelope.spaces import Continuous, PyTreeSpace
 from tests.compat.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
@@ -16,8 +16,8 @@ pytestmark = pytest.mark.compat
 
 
 def _create_mujoco_playground_env(env_name: str = "CartpoleBalance", **kwargs):
-    """Helper to create a MujocoPlaygroundJenv wrapper."""
-    return MujocoPlaygroundJenv.from_name(env_name, env_kwargs=kwargs or None)
+    """Helper to create a MujocoPlaygroundEnvelope wrapper."""
+    return MujocoPlaygroundEnvelope.from_name(env_name, env_kwargs=kwargs or None)
 
 
 @pytest.fixture(scope="module")
@@ -80,7 +80,7 @@ def test_action_space_property(mujoco_playground_env):
 
 def test_observation_space_int_obs_size(prng_key):
     """Test observation_space for envs with int observation_size (e.g. CartpoleBalance)."""
-    env = MujocoPlaygroundJenv.from_name("CartpoleBalance")
+    env = MujocoPlaygroundEnvelope.from_name("CartpoleBalance")
 
     # CartpoleBalance has int observation_size, should return Continuous space
     obs_size = env.mujoco_playground_env.observation_size
@@ -95,7 +95,7 @@ def test_observation_space_int_obs_size(prng_key):
 
 def test_observation_space_dict_obs_size(prng_key):
     """Test observation_space for envs with dict observation_size (e.g. Go1Handstand)."""
-    env = MujocoPlaygroundJenv.from_name("Go1Handstand")
+    env = MujocoPlaygroundEnvelope.from_name("Go1Handstand")
 
     # Go1Handstand has dict observation_size, should return PyTreeSpace
     obs_size = env.mujoco_playground_env.observation_size
@@ -118,7 +118,7 @@ def test_from_name_with_env_kwargs(prng_key):
     """Test that from_name accepts env_kwargs (even if not used by registry.load)."""
     # Note: mujoco_playground.registry.load may not accept kwargs,
     # but from_name should still accept env_kwargs for consistency
-    env = MujocoPlaygroundJenv.from_name("CartpoleBalance", env_kwargs={})
+    env = MujocoPlaygroundEnvelope.from_name("CartpoleBalance", env_kwargs={})
 
     assert env is not None
     key = prng_key
@@ -174,7 +174,7 @@ def test_from_name_rejects_unknown_env_kwargs():
     # Try with an unknown config key - mujoco_playground may raise KeyError
     # or silently ignore it depending on implementation
     try:
-        env = MujocoPlaygroundJenv.from_name(
+        env = MujocoPlaygroundEnvelope.from_name(
             "CartpoleBalance", env_kwargs={"unknown_key": 123}
         )
         # If it doesn't raise, that's also acceptable behavior
@@ -191,7 +191,7 @@ def test_from_name_rejects_unknown_env_kwargs():
 def test_config_overrides_are_passed_correctly(prng_key):
     """Test that config_overrides are correctly passed to registry.load."""
     # Test with a known config parameter (ctrl_dt)
-    env = MujocoPlaygroundJenv.from_name(
+    env = MujocoPlaygroundEnvelope.from_name(
         "CartpoleBalance", env_kwargs={"ctrl_dt": 0.072}
     )
 
@@ -199,7 +199,7 @@ def test_config_overrides_are_passed_correctly(prng_key):
     assert env.mujoco_playground_env.dt == 0.072
 
     # Test with another known parameter (sim_dt)
-    env2 = MujocoPlaygroundJenv.from_name(
+    env2 = MujocoPlaygroundEnvelope.from_name(
         "CartpoleBalance", env_kwargs={"sim_dt": 0.005}
     )
 

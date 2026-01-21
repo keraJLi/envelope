@@ -12,10 +12,10 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 
-from jenv.environment import Environment, Info, InfoContainer, State
-from jenv.spaces import Continuous, Discrete, PyTreeSpace
-from jenv.struct import FrozenPyTreeNode, static_field
-from jenv.typing import Key, PyTree
+from envelope.environment import Environment, Info, InfoContainer, State
+from envelope.spaces import Continuous, Discrete, PyTreeSpace
+from envelope.struct import FrozenPyTreeNode, static_field
+from envelope.typing import Key, PyTree
 
 # ============================================================================
 # Step-based envs (used by autoreset/truncation tests)
@@ -522,7 +522,7 @@ class RandomImageEnv(Environment):
 
 
 # ============================================================================
-# Wrapper base (`jenv.wrappers.wrapper.Wrapper`) delegation helpers
+# Wrapper base (`envelope.wrappers.wrapper.Wrapper`) delegation helpers
 # ============================================================================
 
 

@@ -1,11 +1,11 @@
-"""Tests for jenv.wrappers.state_injection_wrapper.StateInjectionWrapper."""
+"""Tests for envelope.wrappers.state_injection_wrapper.StateInjectionWrapper."""
 
 import jax
 import jax.numpy as jnp
 import pytest
 
-from jenv.wrappers.autoreset_wrapper import AutoResetWrapper
-from jenv.wrappers.state_injection_wrapper import StateInjectionWrapper
+from envelope.wrappers.autoreset_wrapper import AutoResetWrapper
+from envelope.wrappers.state_injection_wrapper import StateInjectionWrapper
 from tests.wrappers.helpers import StepCounterEnv, StepState
 
 # ============================================================================

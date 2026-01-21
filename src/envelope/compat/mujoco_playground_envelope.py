@@ -5,10 +5,10 @@ from typing import Any, override
 from jax import numpy as jnp
 from mujoco_playground import registry
 
-from jenv import spaces
-from jenv.environment import Environment, Info, InfoContainer, State
-from jenv.struct import static_field
-from jenv.typing import Key, PyTree
+from envelope import spaces as envelope_spaces
+from envelope.environment import Environment, Info, InfoContainer, State
+from envelope.struct import static_field
+from envelope.typing import Key, PyTree
 
 _MAX_INT = int(jnp.iinfo(jnp.int32).max)
 
@@ -16,18 +16,20 @@ _MAX_INT = int(jnp.iinfo(jnp.int32).max)
 _MUJOCO_PLAYGROUND_DEFAULT_EPISODE_LENGTH = 1000
 
 
-class MujocoPlaygroundJenv(Environment):
-    """Wrapper to convert a mujoco_playground environment to a jenv environment."""
+class MujocoPlaygroundEnvelope(Environment):
+    """Wrapper to convert a mujoco_playground environment to a envelope environment."""
 
     mujoco_playground_env: Any = static_field()
-    _default_max_steps: int = static_field(default=_MUJOCO_PLAYGROUND_DEFAULT_EPISODE_LENGTH)
+    _default_max_steps: int = static_field(
+        default=_MUJOCO_PLAYGROUND_DEFAULT_EPISODE_LENGTH
+    )
 
     @classmethod
     def from_name(
         cls, env_name: str, env_kwargs: dict[str, Any] | None = None
-    ) -> "MujocoPlaygroundJenv":
-        """Creates a MujocoPlaygroundJenv from a name and keyword arguments. env_kwargs
-        are passed to config_overrides of mujoco_playground.registry.load."""
+    ) -> "MujocoPlaygroundEnvelope":
+        """Creates a MujocoPlaygroundEnvelope from a name and keyword arguments.
+        env_kwargs are passed to config_overrides of mujoco_playground.registry.load."""
         env_kwargs = env_kwargs or {}
         if "episode_length" in env_kwargs:
             raise ValueError(
@@ -69,25 +71,31 @@ class MujocoPlaygroundJenv(Environment):
 
     @override
     @cached_property
-    def action_space(self) -> spaces.Space:
+    def action_space(self) -> envelope_spaces.Space:
         # MuJoCo Playground actions are typically bounded [-1, 1]
-        return spaces.Continuous.from_shape(
+        return envelope_spaces.Continuous.from_shape(
             low=-1.0, high=1.0, shape=(self.mujoco_playground_env.action_size,)
         )
 
     @override
     @cached_property
-    def observation_space(self) -> spaces.Space:
+    def observation_space(self) -> envelope_spaces.Space:
         import jax
 
         def to_space(size):
             shape = (size,) if isinstance(size, int) else size
-            return spaces.Continuous.from_shape(low=-jnp.inf, high=jnp.inf, shape=shape)
+            return envelope_spaces.Continuous.from_shape(
+                low=-jnp.inf, high=jnp.inf, shape=shape
+            )
 
         def is_leaf(x):
-            return isinstance(x, int) or (isinstance(x, tuple) and all(isinstance(i, int) for i in x))
+            return isinstance(x, int) or (
+                isinstance(x, tuple) and all(isinstance(i, int) for i in x)
+            )
 
-        space_tree = jax.tree.map(to_space, self.mujoco_playground_env.observation_size, is_leaf=is_leaf)
-        if isinstance(space_tree, spaces.Space):
+        space_tree = jax.tree.map(
+            to_space, self.mujoco_playground_env.observation_size, is_leaf=is_leaf
+        )
+        if isinstance(space_tree, envelope_spaces.Space):
             return space_tree
-        return spaces.PyTreeSpace(space_tree)
+        return envelope_spaces.PyTreeSpace(space_tree)

@@ -4,8 +4,8 @@ from typing import NamedTuple
 import jax
 from jax import numpy as jnp
 
-from jenv.struct import FrozenPyTreeNode
-from jenv.typing import Array, PyTree
+from envelope.struct import FrozenPyTreeNode
+from envelope.typing import Array, PyTree
 
 
 class MeanVarPair(NamedTuple):

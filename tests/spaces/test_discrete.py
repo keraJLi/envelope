@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from jenv.spaces import Discrete
+from envelope.spaces import Discrete
 
 try:
     from hypothesis import given, settings

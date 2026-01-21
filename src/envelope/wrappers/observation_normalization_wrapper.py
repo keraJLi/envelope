@@ -3,12 +3,12 @@ from typing import override
 import jax
 from jax import numpy as jnp
 
-from jenv.environment import Info
-from jenv.spaces import BatchedSpace, PyTreeSpace, Space
-from jenv.struct import field, static_field
-from jenv.typing import Key, PyTree
-from jenv.wrappers.normalization import RunningMeanVar, update_rmv
-from jenv.wrappers.wrapper import WrappedState, Wrapper
+from envelope.environment import Info
+from envelope.spaces import BatchedSpace, PyTreeSpace, Space
+from envelope.struct import field, static_field
+from envelope.typing import Key, PyTree
+from envelope.wrappers.normalization import RunningMeanVar, update_rmv
+from envelope.wrappers.wrapper import WrappedState, Wrapper
 
 
 class ObservationNormalizationWrapper(Wrapper):

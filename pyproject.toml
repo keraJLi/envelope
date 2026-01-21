@@ -1,5 +1,5 @@
 [project]
-name = "jenv"
+name = "envelope"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -21,11 +21,11 @@ keywords = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/keraJLi/jenv"
-Repository = "https://github.com/keraJLi/jenv"
-Documentation = "https://github.com/keraJLi/jenv#readme"
-Issues = "https://github.com/keraJLi/jenv/issues"
-Changelog = "https://github.com/keraJLi/jenv/releases"
+Homepage = "https://github.com/keraJLi/envelope"
+Repository = "https://github.com/keraJLi/envelope"
+Documentation = "https://github.com/keraJLi/envelope#readme"
+Issues = "https://github.com/keraJLi/envelope/issues"
+Changelog = "https://github.com/keraJLi/envelope/releases"
 
 [build-system]
 requires = ["hatchling"]

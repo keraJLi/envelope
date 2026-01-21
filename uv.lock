@@ -551,6 +551,51 @@ wheels = [
 ]
 
 [[package]]
+name = "envelope"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "jax" },
+]
+
+[package.dev-dependencies]
+compat = [
+    { name = "brax" },
+    { name = "craftax" },
+    { name = "gymnax" },
+    { name = "jumanji" },
+    { name = "kinetix-env" },
+    { name = "navix" },
+    { name = "playground" },
+]
+dev = [
+    { name = "hypothesis" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "jax", specifier = ">=0.5.0" }]
+
+[package.metadata.requires-dev]
+compat = [
+    { name = "brax", specifier = ">=0.13.0" },
+    { name = "craftax", specifier = ">=1.4.3" },
+    { name = "gymnax", git = "https://github.com/RobertTLange/gymnax" },
+    { name = "jumanji", specifier = ">=1.0.1" },
+    { name = "kinetix-env", specifier = ">=2.0.0" },
+    { name = "navix", specifier = ">=0.7.0" },
+    { name = "playground", specifier = ">=0.1.0" },
+]
+dev = [
+    { name = "hypothesis", specifier = ">=6.148.1" },
+    { name = "pytest", specifier = ">=9.0.0" },
+    { name = "pytest-cov", specifier = ">=7.0.0" },
+    { name = "ruff", specifier = ">=0.14.2" },
+]
+
+[[package]]
 name = "esquilax"
 version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1137,51 +1182,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/72/3a/79a912fbd4d8dd6fbb02bf69afd3bb72cf0c729bb3063c6f4498603db17a/jedi-0.19.2.tar.gz", hash = "sha256:4770dc3de41bde3966b02eb84fbcf557fb33cce26ad23da12c742fb50ecb11f0", size = 1231287, upload-time = "2024-11-11T01:41:42.873Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c0/5a/9cac0c82afec3d09ccd97c8b6502d48f165f9124db81b4bcb90b4af974ee/jedi-0.19.2-py2.py3-none-any.whl", hash = "sha256:a8ef22bde8490f57fe5c7681a3c83cb58874daf72b4784de3cce5b6ef6edb5b9", size = 1572278, upload-time = "2024-11-11T01:41:40.175Z" },
-]
-
-[[package]]
-name = "jenv"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "jax" },
-]
-
-[package.dev-dependencies]
-compat = [
-    { name = "brax" },
-    { name = "craftax" },
-    { name = "gymnax" },
-    { name = "jumanji" },
-    { name = "kinetix-env" },
-    { name = "navix" },
-    { name = "playground" },
-]
-dev = [
-    { name = "hypothesis" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "jax", specifier = ">=0.5.0" }]
-
-[package.metadata.requires-dev]
-compat = [
-    { name = "brax", specifier = ">=0.13.0" },
-    { name = "craftax", specifier = ">=1.4.3" },
-    { name = "gymnax", git = "https://github.com/RobertTLange/gymnax" },
-    { name = "jumanji", specifier = ">=1.0.1" },
-    { name = "kinetix-env", specifier = ">=2.0.0" },
-    { name = "navix", specifier = ">=0.7.0" },
-    { name = "playground", specifier = ">=0.1.0" },
-]
-dev = [
-    { name = "hypothesis", specifier = ">=6.148.1" },
-    { name = "pytest", specifier = ">=9.0.0" },
-    { name = "pytest-cov", specifier = ">=7.0.0" },
-    { name = "ruff", specifier = ">=0.14.2" },
 ]
 
 [[package]]

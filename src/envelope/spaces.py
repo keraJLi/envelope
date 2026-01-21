@@ -5,8 +5,8 @@ from typing import override
 import jax
 from jax import numpy as jnp
 
-from jenv.struct import FrozenPyTreeNode, static_field
-from jenv.typing import Key, PyTree
+from envelope.struct import FrozenPyTreeNode, static_field
+from envelope.typing import Key, PyTree
 
 
 class Space(ABC, FrozenPyTreeNode):

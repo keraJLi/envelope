@@ -1,4 +1,4 @@
-"""Unit tests for jenv.compat.create() factory function.
+"""Unit tests for envelope.compat.create() factory function.
 
 These tests are dependency-free (no brax/gymnax/navix imports) and focus on:
 - parsing/validation of the env id
@@ -12,8 +12,8 @@ import types
 
 import pytest
 
-import jenv.compat as compat
-from jenv.compat import create
+import envelope.compat as compat
+from envelope.compat import create
 
 pytestmark = pytest.mark.compat
 

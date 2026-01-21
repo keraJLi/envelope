@@ -1,4 +1,4 @@
-"""Tests for jenv.compat.kinetix_jenv module."""
+"""Tests for envelope.compat.kinetix_envelope module."""
 
 # ruff: noqa: E402
 
@@ -19,9 +19,9 @@ from kinetix.environment import (
     StaticEnvParams,
 )
 
-from jenv.compat.kinetix_jenv import KinetixJenv, _normalize_level_id
-from jenv.environment import Info
-from jenv.spaces import Continuous
+from envelope.compat.kinetix_envelope import KinetixEnvelope, _normalize_level_id
+from envelope.environment import Info
+from envelope.spaces import Continuous
 from tests.compat.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
@@ -31,7 +31,7 @@ from tests.compat.contract import (
 @pytest.fixture(scope="module")
 def kinetix_random_env():
     """Create a single random Kinetix env for the whole module."""
-    return KinetixJenv.create_random()
+    return KinetixEnvelope.create_random()
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -55,10 +55,10 @@ def kinetix_random_env_warmup(kinetix_random_env, prng_key):
 
 
 def _create_kinetix_env(level_id: str = "random", **kwargs):
-    """Helper to create a KinetixJenv wrapper."""
+    """Helper to create a KinetixEnvelope wrapper."""
     if level_id == "random":
-        return KinetixJenv.create_random(**kwargs)
-    return KinetixJenv.from_name(level_id, env_kwargs=kwargs)
+        return KinetixEnvelope.create_random(**kwargs)
+    return KinetixEnvelope.from_name(level_id, env_kwargs=kwargs)
 
 
 def test_normalize_level_id_appends_json():
@@ -138,7 +138,7 @@ def test_from_name_premade_level_smoke(prng_key):
 def test_create_random_with_auto_reset_warning(prng_key):
     with pytest.warns(
         UserWarning,
-        match="Creating a KinetixJenv with auto_reset=True is not recommended",
+        match="Creating a KinetixEnvelope with auto_reset=True is not recommended",
     ):
         env = _create_kinetix_env("random", auto_reset=True)
 
@@ -186,18 +186,18 @@ def test_random_premade_kinetix_envs(prng_key):
 
 def test_from_name_rejects_unknown_env_kwargs():
     with pytest.raises(TypeError, match="unexpected keyword argument"):
-        KinetixJenv.from_name("s/h4_thrust_aim", env_kwargs={"unknown": 1})
+        KinetixEnvelope.from_name("s/h4_thrust_aim", env_kwargs={"unknown": 1})
 
 
 def test_from_name_allows_premade_state_none(monkeypatch: pytest.MonkeyPatch):
     """Current implementation does not guard against missing premade state."""
-    from jenv.compat import kinetix_jenv
+    from envelope.compat import kinetix_envelope
 
     def mock_load(_level_id: str):
         return None, StaticEnvParams(), EnvParams()
 
-    monkeypatch.setattr(kinetix_jenv, "load_from_json_file", mock_load)
-    env = KinetixJenv.from_name("s/h4_thrust_aim")
+    monkeypatch.setattr(kinetix_envelope, "load_from_json_file", mock_load)
+    env = KinetixEnvelope.from_name("s/h4_thrust_aim")
     assert env is not None
 
 
@@ -212,12 +212,12 @@ def test_create_premade_replace_failure_raises(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(EnvParams, "replace", failing_replace)
     monkeypatch.setattr(
-        "jenv.compat.kinetix_jenv.load_from_json_file",
+        "envelope.compat.kinetix_envelope.load_from_json_file",
         lambda _level_id: (object(), StaticEnvParams(), ep),
     )
 
     with pytest.raises(AttributeError, match="replace failed"):
-        KinetixJenv.from_name("s/h4_thrust_aim")
+        KinetixEnvelope.from_name("s/h4_thrust_aim")
 
 
 #

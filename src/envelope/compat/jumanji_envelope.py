@@ -8,16 +8,16 @@ import jumanji
 from jumanji.specs import Array, BoundedArray, DiscreteArray, MultiDiscreteArray
 from jumanji.types import TimeStep as JumanjiTimeStep
 
-from jenv import spaces as jenv_spaces
-from jenv.environment import Environment, Info, InfoContainer, State
-from jenv.struct import static_field
-from jenv.typing import Key, PyTree
+from envelope import spaces as envelope_spaces
+from envelope.environment import Environment, Info, InfoContainer, State
+from envelope.struct import static_field
+from envelope.typing import Key, PyTree
 
 _MAX_INT = jnp.iinfo(jnp.int32).max
 
 
-class JumanjiJenv(Environment):
-    """Wrapper to convert a Jumanji environment to a jenv environment."""
+class JumanjiEnvelope(Environment):
+    """Wrapper to convert a Jumanji environment to a envelope environment."""
 
     jumanji_env: Any = static_field()
     _default_time_limit: int | None = static_field(default=None)
@@ -25,7 +25,7 @@ class JumanjiJenv(Environment):
     @classmethod
     def from_name(
         cls, env_name: str, env_kwargs: dict[str, Any] | None = None
-    ) -> "JumanjiJenv":
+    ) -> "JumanjiEnvelope":
         env_kwargs = env_kwargs or {}
         if "time_limit" in env_kwargs:
             raise ValueError(
@@ -50,24 +50,24 @@ class JumanjiJenv(Environment):
     @override
     def reset(self, key: Key) -> tuple[State, Info]:
         env_state, timestep = self.jumanji_env.reset(key)
-        info = convert_jumanji_to_jenv_info(timestep)
+        info = convert_jumanji_to_envelope_info(timestep)
         return env_state, info
 
     @override
     def step(self, state: State, action: PyTree) -> tuple[State, Info]:
         env_state, timestep = self.jumanji_env.step(state, action)
-        info = convert_jumanji_to_jenv_info(timestep)
+        info = convert_jumanji_to_envelope_info(timestep)
         return env_state, info
 
     @override
     @cached_property
-    def action_space(self) -> jenv_spaces.Space:
-        return convert_jumanji_spec_to_jenv_space(self.jumanji_env.action_spec)
+    def action_space(self) -> envelope_spaces.Space:
+        return convert_jumanji_spec_to_envelope_space(self.jumanji_env.action_spec)
 
     @override
     @cached_property
-    def observation_space(self) -> jenv_spaces.Space:
-        return convert_jumanji_spec_to_jenv_space(self.jumanji_env.observation_spec)
+    def observation_space(self) -> envelope_spaces.Space:
+        return convert_jumanji_spec_to_envelope_space(self.jumanji_env.observation_spec)
 
     def __deepcopy__(self, memo):
         warnings.warn(
@@ -80,26 +80,26 @@ class JumanjiJenv(Environment):
         return copy(self)
 
 
-def convert_jumanji_to_jenv_info(timestep: JumanjiTimeStep) -> InfoContainer:
+def convert_jumanji_to_envelope_info(timestep: JumanjiTimeStep) -> InfoContainer:
     info = InfoContainer(
         obs=timestep.observation, reward=timestep.reward, terminated=timestep.last()
     ).update(**timestep.extras)
     return info
 
 
-def convert_jumanji_spec_to_jenv_space(spec: Any) -> jenv_spaces.Space:
-    """Convert a Jumanji Spec to a jenv Space."""
+def convert_jumanji_spec_to_envelope_space(spec: Any) -> envelope_spaces.Space:
+    """Convert a Jumanji Spec to a envelope Space."""
 
     if isinstance(spec, (DiscreteArray, MultiDiscreteArray)):
         n = jnp.asarray(spec.num_values, dtype=spec.dtype)
         if getattr(spec, "shape", ()) not in ((), n.shape):
             n = jnp.broadcast_to(n, spec.shape)
-        return jenv_spaces.Discrete(n=n)
+        return envelope_spaces.Discrete(n=n)
 
     if isinstance(spec, BoundedArray):
         low = jnp.broadcast_to(jnp.asarray(spec.minimum, dtype=spec.dtype), spec.shape)
         high = jnp.broadcast_to(jnp.asarray(spec.maximum, dtype=spec.dtype), spec.shape)
-        return jenv_spaces.Continuous(low=low, high=high)
+        return envelope_spaces.Continuous(low=low, high=high)
 
     if isinstance(spec, Array):
         dtype = jnp.dtype(spec.dtype)
@@ -110,16 +110,18 @@ def convert_jumanji_spec_to_jenv_space(spec: Any) -> jenv_spaces.Space:
             )
         low = jnp.full(spec.shape, -jnp.inf, dtype=dtype)
         high = jnp.full(spec.shape, jnp.inf, dtype=dtype)
-        return jenv_spaces.Continuous(low=low, high=high)
+        return envelope_spaces.Continuous(low=low, high=high)
 
     # Structured specs (most Jumanji envs): access private mapping when available.
     subspecs = getattr(spec, "_specs", None)
     if isinstance(subspecs, dict):
-        tree = {k: convert_jumanji_spec_to_jenv_space(v) for k, v in subspecs.items()}
-        return jenv_spaces.PyTreeSpace(tree)
+        tree = {
+            k: convert_jumanji_spec_to_envelope_space(v) for k, v in subspecs.items()
+        }
+        return envelope_spaces.PyTreeSpace(tree)
 
     if isinstance(spec, (tuple, list)):
-        tree = tuple(convert_jumanji_spec_to_jenv_space(s) for s in spec)
-        return jenv_spaces.PyTreeSpace(tree)
+        tree = tuple(convert_jumanji_spec_to_envelope_space(s) for s in spec)
+        return envelope_spaces.PyTreeSpace(tree)
 
     raise ValueError(f"Unsupported spec type: {type(spec)}")

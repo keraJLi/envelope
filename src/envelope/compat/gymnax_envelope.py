@@ -8,14 +8,14 @@ from gymnax.environments import spaces as gymnax_spaces
 from gymnax.environments.environment import Environment as GymnaxEnv
 from gymnax.environments.environment import EnvParams as GymnaxEnvParams
 
-from jenv import spaces as jenv_spaces
-from jenv.environment import Environment, Info, InfoContainer, State
-from jenv.struct import Container, static_field
-from jenv.typing import Key, PyTree
+from envelope import spaces as envelope_spaces
+from envelope.environment import Environment, Info, InfoContainer, State
+from envelope.struct import Container, static_field
+from envelope.typing import Key, PyTree
 
 
-class GymnaxJenv(Environment):
-    """Wrapper to convert a Gymnax environment to a jenv environment."""
+class GymnaxEnvelope(Environment):
+    """Wrapper to convert a Gymnax environment to a envelope environment."""
 
     gymnax_env: GymnaxEnv = static_field()
     env_params: PyTree
@@ -26,7 +26,7 @@ class GymnaxJenv(Environment):
         env_name: str,
         env_params: GymnaxEnvParams | None = None,
         env_kwargs: dict[str, Any] | None = None,
-    ) -> "GymnaxJenv":
+    ) -> "GymnaxEnvelope":
         env_kwargs = env_kwargs or {}
         if "max_steps_in_episode" in env_kwargs:
             raise ValueError(
@@ -65,27 +65,27 @@ class GymnaxJenv(Environment):
 
     @override
     @cached_property
-    def action_space(self) -> jenv_spaces.Space:
+    def action_space(self) -> envelope_spaces.Space:
         return _convert_space(self.gymnax_env.action_space(self.env_params))
 
     @override
     @cached_property
-    def observation_space(self) -> jenv_spaces.Space:
+    def observation_space(self) -> envelope_spaces.Space:
         return _convert_space(self.gymnax_env.observation_space(self.env_params))
 
 
-def _convert_space(gmx_space: gymnax_spaces.Space) -> jenv_spaces.Space:
+def _convert_space(gmx_space: gymnax_spaces.Space) -> envelope_spaces.Space:
     if isinstance(gmx_space, gymnax_spaces.Box):
         low = jnp.broadcast_to(gmx_space.low, gmx_space.shape).astype(gmx_space.dtype)
         high = jnp.broadcast_to(gmx_space.high, gmx_space.shape).astype(gmx_space.dtype)
-        return jenv_spaces.Continuous(low=low, high=high)
+        return envelope_spaces.Continuous(low=low, high=high)
     elif isinstance(gmx_space, gymnax_spaces.Discrete):
         n = jnp.broadcast_to(gmx_space.n, gmx_space.shape).astype(gmx_space.dtype)
-        return jenv_spaces.Discrete(n=n)
+        return envelope_spaces.Discrete(n=n)
     elif isinstance(gmx_space, gymnax_spaces.Tuple):
         spaces = tuple(_convert_space(space) for space in gmx_space.spaces)
-        return jenv_spaces.PyTreeSpace(spaces)
+        return envelope_spaces.PyTreeSpace(spaces)
     elif isinstance(gmx_space, gymnax_spaces.Dict):
         spaces = {k: _convert_space(space) for k, space in gmx_space.spaces.items()}
-        return jenv_spaces.PyTreeSpace(spaces)
+        return envelope_spaces.PyTreeSpace(spaces)
     raise ValueError(f"Unsupported space type: {type(gmx_space)}")

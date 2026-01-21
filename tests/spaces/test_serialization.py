@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from jenv.spaces import Continuous, Discrete, PyTreeSpace, Space
+from envelope.spaces import Continuous, Discrete, PyTreeSpace, Space
 
 # ============================================================================
 # Test Data for Repr Tests

@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from jenv.spaces import Continuous
+from envelope.spaces import Continuous
 
 # ============================================================================
 # Tests: Continuous Space - Basic Functionality

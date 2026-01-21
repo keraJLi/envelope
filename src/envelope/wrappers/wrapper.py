@@ -2,10 +2,10 @@ from dataclasses import KW_ONLY
 from functools import cached_property
 from typing import override
 
-from jenv import spaces
-from jenv.environment import Environment, Info, State
-from jenv.struct import FrozenPyTreeNode, field
-from jenv.typing import Key, PyTree
+from envelope import spaces
+from envelope.environment import Environment, Info, State
+from envelope.struct import FrozenPyTreeNode, field
+from envelope.typing import Key, PyTree
 
 
 class WrappedState(FrozenPyTreeNode):

@@ -7,22 +7,22 @@ import navix
 from navix import spaces as navix_spaces
 from navix.environments.environment import Environment as NavixEnv
 
-from jenv import spaces as jenv_spaces
-from jenv.environment import Environment, Info, InfoContainer, State
-from jenv.struct import static_field
-from jenv.typing import Key, PyTree
-
+from envelope import spaces as envelope_spaces
+from envelope.environment import Environment, Info, InfoContainer, State
+from envelope.typing import Key, PyTree
 
 _NAVIX_DEFAULT_MAX_STEPS = 100
 
 
-class NavixJenv(Environment):
+class NavixEnvelope(Environment):
+    """Wrapper to convert a Navix environment to a envelope environment."""
+
     navix_env: NavixEnv
 
     @classmethod
     def from_name(
         cls, env_name: str, env_kwargs: dict[str, Any] | None = None
-    ) -> "NavixJenv":
+    ) -> "NavixEnvelope":
         env_kwargs = env_kwargs or {}
         if "max_steps" in env_kwargs:
             raise ValueError(
@@ -40,25 +40,25 @@ class NavixJenv(Environment):
     @override
     def reset(self, key: Key) -> tuple[State, Info]:
         timestep = self.navix_env.reset(key)
-        return timestep, convert_navix_to_jenv_info(timestep)
+        return timestep, convert_navix_to_envelope_info(timestep)
 
     @override
     def step(self, state: State, action: PyTree) -> tuple[State, Info]:
         timestep = self.navix_env.step(state, action)
-        return timestep, convert_navix_to_jenv_info(timestep)
+        return timestep, convert_navix_to_envelope_info(timestep)
 
     @override
     @cached_property
-    def action_space(self) -> jenv_spaces.Space:
-        return convert_navix_to_jenv_space(self.navix_env.action_space)
+    def action_space(self) -> envelope_spaces.Space:
+        return convert_navix_to_envelope_space(self.navix_env.action_space)
 
     @override
     @cached_property
-    def observation_space(self) -> jenv_spaces.Space:
-        return convert_navix_to_jenv_space(self.navix_env.observation_space)
+    def observation_space(self) -> envelope_spaces.Space:
+        return convert_navix_to_envelope_space(self.navix_env.observation_space)
 
 
-def convert_navix_to_jenv_info(nvx_timestep: navix.Timestep) -> InfoContainer:
+def convert_navix_to_envelope_info(nvx_timestep: navix.Timestep) -> InfoContainer:
     timestep_dict = dataclasses.asdict(nvx_timestep)
     step_type = timestep_dict.pop("step_type")
     info = InfoContainer(
@@ -71,16 +71,16 @@ def convert_navix_to_jenv_info(nvx_timestep: navix.Timestep) -> InfoContainer:
     return info
 
 
-def convert_navix_to_jenv_space(
+def convert_navix_to_envelope_space(
     nvx_space: navix_spaces.Space,
-) -> jenv_spaces.Space:
+) -> envelope_spaces.Space:
     if isinstance(nvx_space, navix_spaces.Discrete):
         n = jnp.asarray(nvx_space.n).astype(nvx_space.dtype)
-        return jenv_spaces.Discrete.from_shape(n, shape=nvx_space.shape)
+        return envelope_spaces.Discrete.from_shape(n, shape=nvx_space.shape)
 
     elif isinstance(nvx_space, navix_spaces.Continuous):
         low = jnp.asarray(nvx_space.minimum).astype(nvx_space.dtype)
         high = jnp.asarray(nvx_space.maximum).astype(nvx_space.dtype)
-        return jenv_spaces.Continuous.from_shape(low, high, shape=nvx_space.shape)
+        return envelope_spaces.Continuous.from_shape(low, high, shape=nvx_space.shape)
 
     raise ValueError(f"Unsupported space type: {type(nvx_space)}")

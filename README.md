@@ -1,7 +1,7 @@
-# 🌍 Jenv: a JAX-native environment interface
+# 💌 Envelope: a JAX-native environment interface
 ```python
 # Create environments from JAX-native suites you have installed, ...
-env = jenv.create("gymnax::CartPole-v1")
+env = envelope.create("gymnax::CartPole-v1")
 
 # ... interact with the environments using a simple interface, ...
 state, info = env.reset(key)
@@ -9,12 +9,12 @@ states, infos = jax.lax.scan(env.step, state, actions)
 plt.plot(infos.reward.cumsum())
 
 # ... and enjoy a powerful ecosystem of wrappers.
-env = jenv.wrappers.AutoResetWrapper(env)
-env = jenv.wrappers.VmapWrapper(env)
-env = jenv.wrappers.ObservationNormalizationWrapper(env)
+env = envelope.wrappers.AutoResetWrapper(env)
+env = envelope.wrappers.VmapWrapper(env)
+env = envelope.wrappers.ObservationNormalizationWrapper(env)
 ```
 
-## 🌍 A simple, expressive, jax-native interface!
+## 🌍 Simple, expressive interaction!
 * **Environments are pytrees**. Squish them through JAX transformations and trace their parameters.
 * **Idiomatic jax-y interface** of `reset(key: Key) -> State, Info` and `step(state: State, action: PyTree) -> State, Info`. You can directly `jax.scan` over a `step(...)`!
 * **Spaces are super simple**. No `Tuple`, `Dict` nonsense! There are two spaces: `Continuous` and `Discrete`, which you can compose into a `PyTreeSpace`.
@@ -39,7 +39,7 @@ env = jenv.wrappers.ObservationNormalizationWrapper(env)
 | Total | 🕺 / 👯 | 193 / 1 |
 
 ```python
-jenv.create("📦::🌍")
+envelope.create("📦::🌍")
 ```
 let's you create environments from any of the above!
 
@@ -49,6 +49,11 @@ let's you create environments from any of the above!
   - `uv sync --group compat`
   - `uv run pytest -m compat`
   - If any compat dependency is missing/broken, the run will fail fast with an error telling you what to install.
+
+## 🏗️ Installation
+```bash
+pip install jax-envelope
+```
 
 ## 💞 Related projects
 * [stoax](https://github.com/EdanToledo/Stoa) is a very similar project that provides adapters and wrappers for the jumanji-like interface.

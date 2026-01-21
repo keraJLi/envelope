@@ -4,11 +4,11 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from jenv.wrappers.normalization import RunningMeanVar, update_rmv
-from jenv.wrappers.observation_normalization_wrapper import (
+from envelope.wrappers.normalization import RunningMeanVar, update_rmv
+from envelope.wrappers.observation_normalization_wrapper import (
     ObservationNormalizationWrapper,
 )
-from jenv.wrappers.vmap_wrapper import VmapWrapper
+from envelope.wrappers.vmap_wrapper import VmapWrapper
 from tests.wrappers.helpers import (
     ConstantObsEnv,
     IntObsEnv,
@@ -94,9 +94,7 @@ def test_nested_vmap_stats_count_and_shapes(b1, b2, dim):
 
 def test_jit_compatibility_smoke():
     base = VectorObsEnv(dim=3)
-    w = ObservationNormalizationWrapper(
-        env=VmapWrapper(env=base, batch_size=4)
-    )
+    w = ObservationNormalizationWrapper(env=VmapWrapper(env=base, batch_size=4))
     key = jax.random.PRNGKey(0)
     print(w)
 
@@ -116,9 +114,7 @@ def test_jit_compatibility_smoke():
 
 def test_pickle_running_mean_var_in_state():
     base = VectorObsEnv(dim=2)
-    w = ObservationNormalizationWrapper(
-        env=VmapWrapper(env=base, batch_size=3)
-    )
+    w = ObservationNormalizationWrapper(env=VmapWrapper(env=base, batch_size=3))
     state, info = w.reset(jax.random.PRNGKey(0))
     blob = pickle.dumps(state.rmv_state)
     rmv2: RunningMeanVar = pickle.loads(blob)

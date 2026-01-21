@@ -3,9 +3,9 @@ from dataclasses import field
 from functools import cached_property
 from typing import Protocol, runtime_checkable
 
-from jenv import spaces
-from jenv.struct import Container, FrozenPyTreeNode
-from jenv.typing import Key, PyTree
+from envelope import spaces
+from envelope.struct import Container, FrozenPyTreeNode
+from envelope.typing import Key, PyTree
 
 __all__ = ["Environment", "State", "Info", "InfoContainer"]
 

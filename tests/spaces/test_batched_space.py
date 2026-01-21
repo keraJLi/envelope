@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from jenv.spaces import BatchedSpace, Continuous, Discrete, PyTreeSpace, batch_space
+from envelope.spaces import BatchedSpace, Continuous, Discrete, PyTreeSpace, batch_space
 
 # ============================================================================
 # Tests: BatchedSpace - Basic Functionality

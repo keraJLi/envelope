@@ -6,12 +6,12 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from jenv.environment import Info
-from jenv.spaces import BatchedSpace
-from jenv.wrappers.observation_normalization_wrapper import (
+from envelope.environment import Info
+from envelope.spaces import BatchedSpace
+from envelope.wrappers.observation_normalization_wrapper import (
     ObservationNormalizationWrapper,
 )
-from jenv.wrappers.vmap_wrapper import VmapWrapper
+from envelope.wrappers.vmap_wrapper import VmapWrapper
 from tests.wrappers.helpers import FlagDoneEnv, ScalarToyEnv, VectorToyEnv
 
 # -----------------------------------------------------------------------------
