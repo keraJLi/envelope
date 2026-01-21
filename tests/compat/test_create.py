@@ -15,8 +15,6 @@ import pytest
 import envelope.compat as compat
 from envelope.compat import create
 
-pytestmark = pytest.mark.compat
-
 
 def _install_dummy_suite(
     monkeypatch: pytest.MonkeyPatch,

@@ -6,6 +6,8 @@ import jax
 import jax.numpy as jnp
 import pytest
 
+pytestmark = pytest.mark.compat
+
 pytest.importorskip("craftax")
 
 from envelope.spaces import Continuous, Discrete
@@ -13,8 +15,6 @@ from tests.compat.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )
-
-pytestmark = pytest.mark.compat
 
 
 @pytest.fixture(

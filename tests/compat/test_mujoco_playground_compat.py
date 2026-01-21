@@ -1,8 +1,14 @@
 """Tests for envelope.compat.mujoco_playground_envelope module."""
 
+# ruff: noqa: E402
+
 import jax
 import jax.numpy as jnp
 import pytest
+
+pytestmark = pytest.mark.compat
+
+pytest.importorskip("mujoco_playground")
 
 from envelope.compat.mujoco_playground_envelope import MujocoPlaygroundEnvelope
 from envelope.environment import Info
@@ -11,8 +17,6 @@ from tests.compat.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )
-
-pytestmark = pytest.mark.compat
 
 
 def _create_mujoco_playground_env(env_name: str = "CartpoleBalance", **kwargs):

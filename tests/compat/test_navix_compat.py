@@ -1,9 +1,16 @@
 """Tests for envelope.compat.navix_envelope module."""
 
+# ruff: noqa: E402
+
 import jax
 import jax.numpy as jnp
-import navix
 import pytest
+
+pytestmark = pytest.mark.compat
+
+pytest.importorskip("navix")
+
+import navix
 
 from envelope.compat.navix_envelope import NavixEnvelope
 from envelope.spaces import Continuous, Discrete
@@ -11,8 +18,6 @@ from tests.compat.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )
-
-pytestmark = pytest.mark.compat
 
 
 def _create_navix_env(env_name: str = "Navix-Empty-5x5-v0", **kwargs):

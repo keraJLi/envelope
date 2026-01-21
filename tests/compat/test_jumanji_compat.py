@@ -1,5 +1,7 @@
 """Tests for envelope.compat.jumanji_envelope module."""
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -8,6 +10,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+pytestmark = pytest.mark.compat
+
+pytest.importorskip("jumanji")
+
 from jumanji import specs
 
 import envelope.compat.jumanji_envelope as jumanji_envelope
@@ -20,8 +27,6 @@ from tests.compat.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )
-
-pytestmark = pytest.mark.compat
 
 
 def _create_jumanji_env(env_name: str = "Snake-v1", **env_kwargs) -> JumanjiEnvelope:

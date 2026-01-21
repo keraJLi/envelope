@@ -2,34 +2,6 @@ import pytest
 
 pytestmark = pytest.mark.compat
 
-_COMPAT_IMPORTS: tuple[str, ...] = (
-    "brax",
-    "gymnax",
-    "craftax",
-    "navix",
-    "jumanji",
-    "kinetix",
-    "mujoco_playground",
-)
-
-
-def pytest_configure(config: pytest.Config) -> None:
-    import importlib
-
-    missing: list[str] = []
-    for mod in _COMPAT_IMPORTS:
-        try:
-            importlib.import_module(mod)
-        except Exception:  # ImportError + any transitive import failures
-            missing.append(mod)
-
-    if missing:
-        raise pytest.UsageError(
-            "Requested compat tests, but some optional compat dependencies "
-            f"are missing/broken: {missing}. Install the compat dependency group "
-            "(e.g. `uv sync --group compat`)."
-        )
-
 
 @pytest.fixture(scope="module")
 def prng_key():

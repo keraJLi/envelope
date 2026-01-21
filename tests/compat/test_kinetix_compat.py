@@ -10,9 +10,9 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-kinetix = pytest.importorskip("kinetix")
-
 pytestmark = pytest.mark.compat
+
+pytest.importorskip("kinetix")
 
 from kinetix.environment import (
     EnvParams,

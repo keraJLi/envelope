@@ -1,8 +1,15 @@
 """Tests for envelope.compat.gymnax_envelope module."""
 
+# ruff: noqa: E402
+
 import jax
 import jax.numpy as jnp
 import pytest
+
+pytestmark = pytest.mark.compat
+
+pytest.importorskip("gymnax")
+
 from gymnax.environments import spaces as gymnax_spaces
 
 from envelope.compat.gymnax_envelope import GymnaxEnvelope, _convert_space
@@ -11,8 +18,6 @@ from tests.compat.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )
-
-pytestmark = pytest.mark.compat
 
 
 def _create_gymnax_env(env_name: str = "CartPole-v1", **kwargs):
