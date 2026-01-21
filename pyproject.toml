@@ -1,6 +1,6 @@
 [project]
 name = "jax-envelope"
-version = "0.1.0"
+version = "0.1.1"
 description = "A JAX-native environment interface with powerful wrappers and adapters for popular RL environment suites"
 readme = "README.md"
 requires-python = ">=3.12"
