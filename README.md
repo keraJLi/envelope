@@ -1,46 +1,56 @@
-# 🌍 Rejax gets it's own environment API!
-
-## Rationale
-
-Currently, the `rejax.compat` module is built around the popular `gymnax` API, and defines several wrappers that transform other environments to `gymnax` ones. While `gymnax` served as a great stepping stone, it comes with some limitations; both in terms of scope and usability.
-
-- **Scope**: `gymnax` implements popular gym environments, and it's API is sufficient to interact with them. However, RL training often requires more sophisticated environment transformations, such as wrappers that keep state across episodes or rollouts with agent state.
-- **Usability**: the `gymnax` API is very verbose. For example, all evironment functions take environment parameters as an argument, even though they should never change during an episode. 
-
-My main goal is to simplify the environment API, by improving on wrapping, typing, baking in parameters, and returning compact objects when stepping.
-
-## Usage example
+# 🌍 Jenv: a JAX-native environment interface
 ```python
-import jenv
+# Create environments from JAX-native suites you have installed, ...
+env = jenv.create("gymnax::CartPole-v1")
 
-env = jenv.create("gymnax/CartPole-v1")
-state, step_info = env.reset(key)
-action = env.action_space.sample(key)
-state, step_info = env.step(state, action)
-print(step_info.obs, step_info.reward)
+# ... interact with the environments using a simple interface, ...
+state, info = env.reset(key)
+states, infos = jax.lax.scan(env.step, state, actions)
+plt.plot(infos.reward.cumsum())
 
-states, step_infos = jax.lax.scan(env.step, state, actions)
-plt.plot(step_infos.reward.cumsum())  # plot cumulative reward
+# ... and enjoy a powerful ecosystem of wrappers.
+env = jenv.wrappers.AutoResetWrapper(env)
+env = jenv.wrappers.VmapWrapper(env)
+env = jenv.wrappers.ObservationNormalizationWrapper(env)
 ```
 
-## Good wrapper support
-Wrappers around gymnax environments can be hacky. Jenv promises to provide explicit support for wrappers that is easy to extend and comprehend. Wrapping semantics can quickly become complicated; let me outline the basic ones here. Consider wrappers
-- `AutoResetWrapper` (A): Resets environments on termination and truncation
-- `ObservationNormalizationWrapper` (O): normalizes observations, has state that persists across episodes
-- `VmapWrapper` (V): Vectorizes an environment using `jax.vmap(step)`
+## 🌍 A simple, expressive, jax-native interface!
+* **Environments are pytrees**. Squish them through JAX transformations and trace their parameters.
+* **Idiomatic jax-y interface** of `reset(key: Key) -> State, Info` and `step(state: State, action: PyTree) -> State, Info`. You can directly `jax.scan` over a `step(...)`!
+* **Spaces are super simple**. No `Tuple`, `Dict` nonsense! There are two spaces: `Continuous` and `Discrete`, which you can compose into a `PyTreeSpace`.
+* **Explicit episode truncation** supports correctly handling bootstrapping for value-function targets.
+* **No auto-reset** by default. Resetting every step can be expensive!
 
-By applying them in different orders, we get different semantics.
+## 💪 Powerful, composable wrappers!
+* **Carry state across episodes** to track running statistics, for example to normalize observations.
+* **Composable wrappers** can be stacked in any order. For example, `ObservationNormalizationWrapper` before vs. after `VmapWrapper` gives per-env vs. global normalization.
+<!-- TODO: Add auto-reset behavior (including state injection) and optimistic resets once I implement them. -->
 
-## State and reset semantics
-- `State` is an opaque PyTree defined by each environment. Wrappers expose the wrapped env state as `inner_state` and may add their own fields.
-- `reset(key, state=None, **kwargs)` accepts an optional prior state for cross-episode persistence and arbitrary kwargs for env/wrapper-specific needs. `step(state, action, **kwargs)` mirrors this.
-- When using `jit`/`vmap`/`pmap`, pass a concrete state pytree (not `None`) to keep shapes/static structure stable; normalize `None` to a sentinel outside the traced function if needed.
-- Wrapper ordering still matters (e.g., `ObservationNormalizationWrapper` before vs. after `VmapWrapper` gives per-env vs. global normalization), but kwargs and optional state are forwarded through the stack.
+## 🔌 Adapters for existing suites
+| 📦 | # 🤖 | # 🌍 |
+|------|------|------|
+| [gymnax](https://github.com/RobertTLange/gymnax) | 🕺 | 24 |
+| [brax](https://github.com/google/brax) | 🕺 | 12 |
+| [jumanji](https://github.com/instadeepai/jumanji) | 🕺 / 👯 | 25 / 1 |
+| [kinetix](https://github.com/flairox/kinetix) | 🕺 | 74 |
+| [craftax](https://github.com/MichaelTMatthews/craftax) | 🕺 | 4 |
+| [mujoco_playground](https://github.com/google-deepmind/mujoco_playground) | 🕺 | 54 |
+| | |
+| Total | 🕺 / 👯 | 193 / 1 |
 
-## Testing
-- **Default (no optional compat deps required)**:
-  - `uv run pytest`
+```python
+jenv.create("📦::🌍")
+```
+let's you create environments from any of the above!
+
+## 📝 Testing
+- **Default (no optional compat deps required)**: `uv run pytest -m "not compat"`
 - **Compat suite (requires full compat dependency group)**:
   - `uv sync --group compat`
-  - `uv run pytest -m compat` (or `uv run pytest tests/compat`)
+  - `uv run pytest -m compat`
   - If any compat dependency is missing/broken, the run will fail fast with an error telling you what to install.
+
+## 💞 Related projects
+* [stoax](https://github.com/EdanToledo/Stoa) is a very similar project that provides adapters and wrappers for the jumanji-like interface.
+* Check out all the great suites we have adapters for! [gymnax](https://github.com/RobertTLange/gymnax), [brax](https://github.com/google/brax), [jumanji](https://github.com/instadeepai/jumanji), [kinetix](https://github.com/flairox/kinetix), [craftax](https://github.com/MichaelTMatthews/craftax), [mujoco_playground](https://github.com/google-deepmind/mujoco_playground).
+* We will be adding support for [jaxmarl](https://github.com/flairox/jaxmarl) and [pgx](https://github.com/sotetsuk/pgx) in the future, as soon as we figured out the best ever MARL interface for JAX!
