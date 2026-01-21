@@ -26,7 +26,7 @@ env = envelope.wrappers.ObservationNormalizationWrapper(env)
 * **Composable wrappers** can be stacked in any order. For example, `ObservationNormalizationWrapper` before vs. after `VmapWrapper` gives per-env vs. global normalization.
 <!-- TODO: Add auto-reset behavior (including state injection) and optimistic resets once I implement them. -->
 
-## 🔌 Adapters for existing suites
+## 🔌 Adapters for existing suites
 | 📦 | # 🤖 | # 🌍 |
 |------|------|------|
 | [gymnax](https://github.com/RobertTLange/gymnax) | 🕺 | 24 |
