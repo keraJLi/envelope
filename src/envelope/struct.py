@@ -104,6 +104,13 @@ class Container:
         for k, v in self._extras.items():
             yield (k, v)
 
+    def __str__(self) -> str:
+        core_str = super().__str__()
+        if not self._extras:
+            return core_str
+        extras_str = f", {', '.join(f'{k}={v!r}' for k, v in self._extras.items())}"
+        return f"{core_str[:-1]}{extras_str})"  # remove closing parenthesis from core
+
     def update(self, **changes: PyTree) -> Self:
         core_names = {f.name for f in dataclasses.fields(self) if f.name != "_extras"}
         core_updates: dict[str, PyTree] = {}
