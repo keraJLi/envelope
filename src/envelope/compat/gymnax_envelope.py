@@ -43,13 +43,25 @@ class GymnaxEnvelope(Environment):
     def default_max_steps(self) -> int:
         return int(self.gymnax_env.default_params.max_steps_in_episode)
 
+    @cached_property
+    def _gymnax_info_placeholder(self) -> PyTree:
+        key = jax.random.PRNGKey(0)
+        _, state = self.gymnax_env.reset(key, self.env_params)
+        _, _, _, _, info = self.gymnax_env.step(
+            key,
+            state,
+            self.gymnax_env.action_space(self.env_params).sample(key),
+            self.env_params,
+        )
+        return jax.tree.map(lambda x: jnp.full_like(x, jnp.nan), info)
+
     @override
     def reset(self, key: Key) -> tuple[State, Info]:
         key, subkey = jax.random.split(key)
         obs, env_state = self.gymnax_env.reset(subkey, self.env_params)
         state = Container().update(key=key, env_state=env_state)
         info = InfoContainer(obs=obs, reward=0.0, terminated=False)
-        info = info.update(info=None)
+        info = info.update(info=self._gymnax_info_placeholder)
         return state, info
 
     @override

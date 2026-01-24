@@ -2,25 +2,33 @@ from functools import cached_property
 from typing import override
 
 import jax
+import jax.numpy as jnp
 
 from envelope import spaces
 from envelope.environment import Info
-from envelope.struct import field
+from envelope.struct import static_field
 from envelope.typing import Key, PyTree
 from envelope.wrappers.wrapper import WrappedState, Wrapper
+
+
+def is_single_key(key):
+    # New-style typed keys have dtype like key<fry>
+    if jnp.issubdtype(key.dtype, jax.dtypes.prng_key):
+        return key.ndim == 0
+    return key.shape == (2,)
 
 
 class VmapWrapper(Wrapper):
     """Does not forward kwargs to the underlying env. Does not wrap the state."""
 
-    batch_size: int = field(kw_only=True)
+    batch_size: int = static_field(kw_only=True)
 
     @override
     def reset(
         self, key: Key, state: PyTree | None = None, **kwargs
     ) -> tuple[WrappedState, Info]:
         # Accept single key or batched keys
-        if key.shape == (2,):
+        if is_single_key(key):
             keys = jax.random.split(key, self.batch_size)
         else:
             if key.shape[0] != self.batch_size:

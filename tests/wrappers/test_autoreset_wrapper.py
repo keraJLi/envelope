@@ -114,10 +114,10 @@ class TestAutoResetCoreFunctionality:
         # After reset, state should be fresh (steps=0, env_state=0.0)
         assert next_state.unwrapped.steps == 0
         assert jnp.allclose(next_state.unwrapped.env_state, jnp.array(0.0))
-        assert bool(jnp.asarray(next_info.terminated)) is False
-        assert bool(jnp.asarray(next_info.truncated)) is False
-        # Reset returns reward 0
-        assert jnp.allclose(next_info.reward, 0.0)
+        # Flags and reward preserved from terminal step
+        assert bool(jnp.asarray(next_info.terminated)) is True
+        assert bool(jnp.asarray(next_info.truncated)) is True
+        assert jnp.allclose(next_info.reward, 0.5)
 
     def test_reset_key_usage(self):
         """Verify that the stored reset_key is used for auto-reset."""
@@ -160,36 +160,43 @@ class TestAutoResetStateInfoPropagation:
         assert state.unwrapped.steps == 0
         assert jnp.allclose(state.unwrapped.env_state, jnp.array(0.0))
 
-    def test_info_after_auto_reset_is_from_reset(self):
-        """Verify that info from the reset call is returned (not the done step's info)."""
+    def test_info_after_auto_reset_preserves_terminal_info(self):
+        """Verify that terminal step info (flags, reward) is preserved after auto-reset."""
         env = StepCounterEnv(terminate_after=1)
         w = AutoResetWrapper(env=env)
         key = jax.random.PRNGKey(0)
 
         state, _ = w.reset(key)
         # Step to trigger termination - this will auto-reset immediately since done=True
-        state, reset_info = w.step(state, jnp.array(0.1))
+        state, info = w.step(state, jnp.array(0.1))
 
-        # Info should be from reset (not the terminated step)
-        assert bool(jnp.asarray(reset_info.terminated)) is False
-        assert bool(jnp.asarray(reset_info.truncated)) is False
-        # Reset returns reward 0
-        assert jnp.allclose(reset_info.reward, 0.0)
+        # Flags and reward should be from terminal step (not reset)
+        assert bool(jnp.asarray(info.terminated)) is True
+        assert bool(jnp.asarray(info.truncated)) is False
+        # Reward from terminal step
+        assert jnp.allclose(info.reward, 0.1)
 
-    def test_reset_key_preservation(self):
-        """Verify that reset_key is properly stored and updated on state."""
+    def test_reset_key_advances_each_step(self):
+        """Verify that reset_key advances deterministically each step.
+
+        The reset_key advances every step (not just on done) to maintain
+        a non-batched key shape when used with vmapped environments.
+        """
         env = StepCounterEnv()
         w = AutoResetWrapper(env=env)
         key = jax.random.PRNGKey(0)
 
         state, _ = w.reset(key)
-        initial_key = state.reset_key
+        keys_seen = [state.reset_key]
 
         # Take several steps
         for _ in range(5):
             state, _ = w.step(state, jnp.array(0.1))
+            keys_seen.append(state.reset_key)
 
-        assert jnp.array_equal(state.reset_key, initial_key)
+        # Each step should produce a different key
+        for i in range(len(keys_seen) - 1):
+            assert not jnp.array_equal(keys_seen[i], keys_seen[i + 1])
 
     def test_multiple_consecutive_done_steps(self):
         """Verify behavior when environment is done for multiple consecutive steps."""
@@ -200,16 +207,17 @@ class TestAutoResetStateInfoPropagation:
         state, _ = w.reset(key)
         # Every step will be done, so should auto-reset each time
         for i in range(3):
-            state, info = w.step(state, jnp.array(0.1 * (i + 1)))
+            action = jnp.array(0.1 * (i + 1))
+            state, info = w.step(state, action)
 
-            # After auto-reset, info should not be done
-            assert bool(jnp.asarray(info.terminated)) is False
+            # Flags preserved from terminal step
+            assert bool(jnp.asarray(info.terminated)) is True
             assert bool(jnp.asarray(info.truncated)) is False
             # State should reflect the reset (steps=0, env_state=0.0)
             assert state.unwrapped.steps == 0
             assert jnp.allclose(state.unwrapped.env_state, jnp.array(0.0))
-            # Reset returns reward 0
-            assert jnp.allclose(info.reward, 0.0)
+            # Reward from terminal step
+            assert jnp.allclose(info.reward, action)
 
 
 # ============================================================================
@@ -230,11 +238,11 @@ class TestAutoResetEdgeCases:
         # First step should terminate
         next_state, next_info = w.step(state, jnp.array(0.1))
 
-        # Should auto-reset
+        # Should auto-reset, but preserve terminal step info
         assert next_state.unwrapped.steps == 0
         assert jnp.allclose(next_state.unwrapped.env_state, jnp.array(0.0))
-        assert bool(jnp.asarray(next_info.terminated)) is False
-        assert jnp.allclose(next_info.reward, 0.0)
+        assert bool(jnp.asarray(next_info.terminated)) is True
+        assert jnp.allclose(next_info.reward, 0.1)
 
     def test_never_done_long_sequence(self):
         """Test long sequence of steps where environment never terminates."""
@@ -265,11 +273,14 @@ class TestAutoResetEdgeCases:
 
         state, _ = w.reset(key)
         # Take several steps
+        # AlternatingTerminationEnv terminates on odd steps (1, 3, 5...)
+        # After auto-reset, steps go back to 0, so next step is 1 (terminated=True)
+        # So every step shows terminated=True (the preserved flag from terminal step)
         for i in range(5):
             state, info = w.step(state, jnp.array(0.1))
 
-            # After auto-reset, should not be done
-            assert bool(jnp.asarray(info.terminated)) is False
+            # terminated flag preserved from terminal step
+            assert bool(jnp.asarray(info.terminated)) is True
 
     def test_reset_key_regeneration(self):
         """Verify that each reset generates a new reset_key."""
@@ -385,8 +396,8 @@ class TestAutoResetComposability:
         assert jnp.allclose(info2.obs[0], 0.0, atol=0.01)
         assert jnp.allclose(info2.obs[1], 0.2, atol=0.01)
         assert jnp.allclose(info2.obs[2], 0.2, atol=0.01)
-        # First env should not be terminated (was reset), others not terminated yet
-        assert bool(jnp.asarray(info2.terminated[0])) is False
+        # First env terminated (flag preserved), others not terminated yet
+        assert bool(jnp.asarray(info2.terminated[0])) is True
         assert bool(jnp.asarray(info2.terminated[1])) is False
         assert bool(jnp.asarray(info2.terminated[2])) is False
 
@@ -395,7 +406,7 @@ class TestAutoResetComposability:
         # After auto-reset, second env should be reset
         # First env: 0.0 + 0.1 = 0.1 (reset state + action), Second: reset to 0.0, Third: 0.2 + 0.1 = 0.3
         assert jnp.allclose(info3.obs[1], 0.0, atol=0.01)
-        assert bool(jnp.asarray(info3.terminated[1])) is False  # Was reset
+        assert bool(jnp.asarray(info3.terminated[1])) is True  # Terminated (flag preserved)
 
     def test_with_vmap_envs_wrapper(self):
         """Test autoreset with VmapEnvsWrapper (batched environment instances)."""
@@ -420,7 +431,7 @@ class TestAutoResetComposability:
         # First env should be reset (obs ~0.0 from reset state), others continue (obs ~0.2)
         assert jnp.allclose(info2.obs[0], 0.0, atol=0.01)
         assert jnp.allclose(info2.obs[1], 0.2, atol=0.01)
-        assert bool(jnp.asarray(info2.terminated[0])) is False
+        assert bool(jnp.asarray(info2.terminated[0])) is True  # Terminated (flag preserved)
 
     def test_nested_wrappers(self):
         """Test autoreset with multiple wrapper layers."""
@@ -497,10 +508,9 @@ class TestAutoResetJITCompatibility:
 
         rewards = episode_fn(key)
         assert rewards.shape == (10,)
-        # Should have collected rewards from multiple episodes due to auto-reset
-        # With max_steps=3: step1 (0.1), step2 (0.1), step3 (done, reset=0), step4 (0.1), step5 (0.1), step6 (done, reset=0), etc.
-        # Pattern: [0.1, 0.1, 0.0, 0.1, 0.1, 0.0, 0.1, 0.1, 0.0, 0.1]
-        expected_rewards = jnp.array([0.1, 0.1, 0.0, 0.1, 0.1, 0.0, 0.1, 0.1, 0.0, 0.1])
+        # With terminate_after=3: steps 1,2 (0.1), step 3 (terminated, reward=0.1 preserved), reset...
+        # Reward is now preserved from terminal step, so all rewards are 0.1
+        expected_rewards = jnp.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
         assert jnp.allclose(rewards, expected_rewards)
 
 
@@ -547,3 +557,80 @@ def test_auto_reset_passes_state_to_inner_wrapper():
 
     # After auto-reset: inner wrapper should have received state
     assert bool(state.inner_state.received_state_on_reset) is True
+
+
+def test_obs_true_preserved_after_auto_reset():
+    """Verify that obs_true contains the observation from the final step, not reset.
+
+    This is a regression test: when an episode terminates and auto-resets,
+    obs_true should contain the observation from the terminated step (before reset),
+    not the observation from the new episode (after reset).
+    """
+    env = StepCounterEnv(terminate_after=2)
+    w = AutoResetWrapper(env=env)
+    key = jax.random.PRNGKey(0)
+
+    state, _ = w.reset(key)
+
+    # Step 1: env_state becomes 0.1, steps=1, not done yet
+    state, info1 = w.step(state, jnp.array(0.1))
+    # When not done, obs_true should equal obs
+    assert jnp.allclose(info1.obs_true, info1.obs)
+    assert jnp.allclose(info1.obs_true, jnp.array(0.1))
+
+    # Step 2: env_state becomes 0.3 (0.1 + 0.2), steps=2, terminates and auto-resets
+    state, info2 = w.step(state, jnp.array(0.2))
+
+    # After auto-reset, obs should be from reset (0.0)
+    assert jnp.allclose(info2.obs, jnp.array(0.0))
+    # But obs_true should be from the terminated step (0.1 + 0.2 = 0.3)
+    assert jnp.allclose(info2.obs_true, jnp.array(0.3))
+
+
+def test_terminated_flag_preserved_after_auto_reset():
+    """Verify that terminated/truncated flags are preserved after auto-reset.
+
+    This is a regression test: when an episode terminates and auto-resets,
+    the terminated flag should still be True (from the terminal step),
+    not False (from the reset). Same for truncated and reward.
+    """
+    env = StepCounterEnv(terminate_after=2)
+    w = AutoResetWrapper(env=env)
+    key = jax.random.PRNGKey(0)
+
+    state, info0 = w.reset(key)
+    # After reset, terminated should be False
+    assert bool(jnp.asarray(info0.terminated)) is False
+
+    # Step 1: not done yet
+    state, info1 = w.step(state, jnp.array(0.1))
+    assert bool(jnp.asarray(info1.terminated)) is False
+
+    # Step 2: terminates and auto-resets
+    state, info2 = w.step(state, jnp.array(0.2))
+
+    # terminated should be True (from the terminal step, not reset)
+    assert bool(jnp.asarray(info2.terminated)) is True
+    # reward should be from terminal step (0.2), not reset (0.0)
+    assert jnp.allclose(info2.reward, jnp.array(0.2))
+
+
+def test_truncated_flag_preserved_after_auto_reset():
+    """Verify that truncated flag is preserved after auto-reset."""
+    env = StepCounterEnv(truncate_after=2)
+    w = AutoResetWrapper(env=env)
+    key = jax.random.PRNGKey(0)
+
+    state, _ = w.reset(key)
+
+    # Step 1: not done yet
+    state, info1 = w.step(state, jnp.array(0.1))
+    assert bool(jnp.asarray(info1.truncated)) is False
+
+    # Step 2: truncates and auto-resets
+    state, info2 = w.step(state, jnp.array(0.2))
+
+    # truncated should be True (from the truncated step, not reset)
+    assert bool(jnp.asarray(info2.truncated)) is True
+    # reward should be from truncated step (0.2), not reset (0.0)
+    assert jnp.allclose(info2.reward, jnp.array(0.2))

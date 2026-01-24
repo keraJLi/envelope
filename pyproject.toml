@@ -51,18 +51,15 @@ allow-direct-references = true
 [tool.hatch.build.targets.wheel]
 packages = ["src/envelope"]
 
-[tool.uv.sources]
-gymnax = { git = "https://github.com/RobertTLange/gymnax" }
-
 [dependency-groups]
 compat = [
-    "gymnax @ git+https://github.com/RobertTLange/gymnax@main",
     "brax>=0.13.0",
     "craftax>=1.4.3",
     "navix>=0.7.0",
     "jumanji>=1.0.1",
-    "kinetix-env>=2.0.0",
     "playground>=0.1.0",
+    "gymnax",
+    "kinetix-env",
 ]
 dev = [
     "hypothesis>=6.148.1",
@@ -70,8 +67,19 @@ dev = [
     "pytest-cov>=7.0.0",
     "ruff>=0.14.2",
 ]
+ppo = [
+    "distrax>=0.1.5",
+    "flax>=0.10",
+    "nnx>=0.0.8",
+    "optax>=0.2.6",
+    "tensorflow-probability>=0.25.0",
+]
 
 [tool.pytest.ini_options]
 markers = [
   "compat: tests requiring optional compat dependencies",
 ]
+
+[tool.uv.sources]
+gymnax = { git = "https://github.com/RobertTLange/gymnax.git" }
+kinetix-env = { git = "https://github.com/FLAIROx/Kinetix.git" }
