@@ -59,7 +59,7 @@ compat = [
     "jumanji>=1.0.1",
     "playground>=0.1.0",
     "gymnax",
-    "kinetix-env",
+    # "kinetix-env",
 ]
 dev = [
     "hypothesis>=6.148.1",
@@ -69,10 +69,10 @@ dev = [
 ]
 ppo = [
     "distrax>=0.1.5",
-    "flax>=0.10",
+    "flax>=0.12",
     "nnx>=0.0.8",
     "optax>=0.2.6",
-    "tensorflow-probability>=0.25.0",
+    "tfp-nightly",  # current stable build only supports JAX 0.4.35
 ]
 
 [tool.pytest.ini_options]

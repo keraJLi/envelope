@@ -246,32 +246,34 @@ class DiscretePolicy(nnx.Module):
         return distrax.Categorical(logits=action_logits)
 
 
-def collect_trajectories(env, policy, value_fn, state_info, rngs: nnx.Rngs):
+def collect_trajectories(train_state):
     @nnx.scan(
-        in_axes=(nnx.Carry, 0),
+        in_axes=(nnx.Carry),
         out_axes=(nnx.Carry, 0),
+        length=train_state.args.num_steps,
     )
-    def step_env(state_info, rngs: nnx.Rngs):
-        env_state, env_info = state_info
-        obs = env_info.obs  # s_t: observation BEFORE action
-        value = value_fn(obs)  # V(s_t)
-        pi = policy(obs)
-        action = pi.sample(seed=rngs())
-        env_state, env_info = env.step(env_state, action)
+    def step_env(train_state):
+        obs = train_state.env_info.obs  # s_t: observation BEFORE action
+        value = train_state.value_fn(obs)  # V(s_t)
+        pi = train_state.policy(obs)
+        action = pi.sample(seed=train_state.rngs())
+        env_state, env_info = train_state.vecenv.step(train_state.env_state, action)
+        train_state.env_state = env_state
+        train_state.env_info = env_info
+
         out_info = env_info.update(
             obs=obs,  # Store obs BEFORE step (for value function training)
             action=action,
             log_prob=pi.log_prob(action),
             value=value,  # V(s_t): for TD error
-            value_next=value_fn(
+            value_next=train_state.value_fn(
                 env_info.obs_true
             ),  # V(s_{t+1}^true): for bootstrapping on truncation
         )
-        return (env_state, env_info), out_info
+        return train_state, out_info
 
-    with nnx.split_rngs(rngs, splits=100):
-        state_info, out_info = step_env(state_info, rngs)
-    return state_info, out_info
+    train_state, out_info = step_env(train_state)
+    return out_info
 
 
 def shuffle_and_split(data: PyTree, num_minibatches: int, rngs: nnx.Rngs):
@@ -326,115 +328,77 @@ def normalize(x: jax.Array) -> jax.Array:
     return (x - x.mean()) / (x.std() + 1e-8)
 
 
-def update_policy(policy, policy_optimizer, batch, epsilon):
+def update_policy(train_state, batch):
     @nnx.value_and_grad
     def loss_fn(policy):
         # Optional todo: add entropy bonus
         pi = policy(batch.obs)
         log_prob = pi.log_prob(batch.action)
 
+        eps = train_state.args.epsilon
         ratio = jnp.exp(log_prob - batch.log_prob)
-        clip_ratio = jnp.clip(ratio, 1 - epsilon, 1 + epsilon)
+        clip_ratio = jnp.clip(ratio, 1 - eps, 1 + eps)
         advantages = normalize(batch.advantages)
 
         surrogate1 = ratio * advantages
         surrogate2 = clip_ratio * advantages
         return -jnp.mean(jnp.minimum(surrogate1, surrogate2))
 
-    loss, grads = loss_fn(policy)
-    policy_optimizer.update(grads)
+    loss, grads = loss_fn(train_state.policy)
+    train_state.policy_optimizer.update(train_state.policy, grads)
     return loss
 
 
-def update_value_fn(value_fn, value_fn_optimizer, batch):
+def update_value_fn(train_state, batch):
     @nnx.value_and_grad
     def loss_fn(value_fn):
         targets = batch.value + batch.advantages
         values = value_fn(batch.obs)
         return 0.5 * jnp.mean((values - targets) ** 2)
 
-    loss, grads = loss_fn(value_fn)
-    value_fn_optimizer.update(grads)
+    loss, grads = loss_fn(train_state.value_fn)
+    train_state.value_fn_optimizer.update(train_state.value_fn, grads)
     return loss
 
 
-def get_params(model):
-    return nnx.state(model, nnx.Param)
+def update(train_state, batch):
+    policy_loss = update_policy(train_state, batch)
+    value_fn_loss = update_value_fn(train_state, batch)
+    return policy_loss + value_fn_loss
 
 
-def param_delta_norm(before, after) -> jax.Array:
-    diff = jax.tree.map(lambda a, b: a - b, after, before)
-    return jnp.sqrt(sum(jnp.sum(d**2) for d in jax.tree.leaves(diff)))
-
-
-def update(policy, policy_optimizer, value_fn, value_fn_optimizer, batch, epsilon):
-    policy_params_before = get_params(policy)
-    value_params_before = get_params(value_fn)
-
-    policy_loss = update_policy(policy, policy_optimizer, batch, epsilon)
-    value_fn_loss = update_value_fn(value_fn, value_fn_optimizer, batch)
-
-    policy_delta = param_delta_norm(policy_params_before, get_params(policy))
-    value_delta = param_delta_norm(value_params_before, get_params(value_fn))
-
-    return policy_loss + value_fn_loss, (
-        policy_loss,
-        value_fn_loss,
-        policy_delta,
-        value_delta,
-    )
-
-
-def train(
-    env,
-    policy,
-    value_fn,
-    policy_optimizer,
-    value_fn_optimizer,
-    state_info,
-    rngs: nnx.Rngs,
-):
-    state_info, out_info = collect_trajectories(env, policy, value_fn, state_info, rngs)
-    _, final_info = state_info
-    last_value = value_fn(final_info.obs_true)
+def train(train_state):
+    out_info = collect_trajectories(train_state)
+    last_value = train_state.value_fn(train_state.env_info.obs_true)
     advantages = calculate_gae(out_info, last_value, gamma=0.99, gae_lambda=0.95)
     out_info = out_info.update(advantages=advantages)
-    minibatches = shuffle_and_split(out_info, num_minibatches=5, rngs=rngs)
+    minibatches = shuffle_and_split(out_info, num_minibatches=5, rngs=train_state.rngs)
 
     for i in range(5):
         batch = jax.tree.map(lambda x: x[i], minibatches)
-        loss, (policy_loss, value_fn_loss, policy_delta, value_delta) = update(
-            policy, policy_optimizer, value_fn, value_fn_optimizer, batch, epsilon=0.2
-        )
+        update(train_state, batch)
 
-    return state_info, out_info
+    return out_info
 
 
 @dataclass
 class Args:
-    env_name: str
-    policy_lr: float = 1e-3
-    value_fn_lr: float = 1e-3
+    env_name: str = "gymnax::CartPole-v1"
+    policy_lr: float = 0.001
+    value_fn_lr: float = 0.001
     epsilon: float = 0.2
-    num_envs: int
-    num_minibatches: int
-    num_updates: int
-    num_steps: int
+    num_envs: int = 10
+    num_minibatches: int = 5
+    num_updates: int = 5
+    num_steps: int = 100
     normalize_observations: bool = False
     seed: int = 0
 
 
-class TrainState(nnx.PyTree):
-    def __init__(
-        self,
-        args: Args,
-        policy,
-        value_fn,
-        policy_optimizer,
-        value_fn_optimizer,
-        env_state,
-        env_info,
-    ):
+class TrainState(nnx.Pytree):
+    def __init__(self, args: Args):
+        self.args = nnx.static(args)
+
         # Initialize environment
         env = envelope.create(args.env_name)
         env = FlattenObservationWrapper(env=env)
@@ -446,65 +410,46 @@ class TrainState(nnx.PyTree):
             vecenv = envelope.ObservationNormalizationWrapper(env=vecenv)
         vecenv = envelope.AutoResetWrapper(env=vecenv)
 
-        self.vecenv = vecenv
+        self.vecenv = nnx.data(vecenv)
 
         # Initialize policy and value function
-        rngs = nnx.Rngs(args.seed)
+        self.rngs = nnx.Rngs(args.seed)
         discrete = isinstance(env.action_space, envelope.Discrete)
         if discrete:
             self.policy = DiscretePolicy(
-                env.observation_space, env.action_space, rngs=rngs
+                env.observation_space, env.action_space, rngs=self.rngs
             )
         else:
             self.policy = GaussianPolicy(
-                env.observation_space, env.action_space, rngs=rngs
+                env.observation_space, env.action_space, rngs=self.rngs
             )
-        self.value_fn = ValueFunction(env.observation_space, rngs=rngs)
+        self.value_fn = ValueFunction(env.observation_space, rngs=self.rngs)
 
         # Initialize optimizers
-        self.policy_optimizer = nnx.Optimizer(self.policy, optax.adam(args.policy_lr))
+        self.policy_optimizer = nnx.Optimizer(
+            self.policy, optax.adam(args.policy_lr), wrt=nnx.Param
+        )
         self.value_fn_optimizer = nnx.Optimizer(
-            self.value_fn, optax.adam(args.value_fn_lr)
+            self.value_fn, optax.adam(args.value_fn_lr), wrt=nnx.Param
         )
 
         # Initialize environment state and info
-        self.env_state, self.env_info = self.vecenv.reset(rngs())
+        env_state, env_info = self.vecenv.reset(self.rngs())
+        self.env_state = nnx.data(env_state)
+        self.env_info = nnx.data(env_info)
 
 
 if __name__ == "__main__":
-    env = envelope.create("gymnax::Acrobot-v1")
-    env = FlattenObservationWrapper(env=env)
-    env = FlattenActionWrapper(env=env)
-    env = ClipActionWrapper(env=env)
-    env = EpisodeStatisticsWrapper(env=env)
+    import tyro
 
-    vecenv = envelope.VmapWrapper(env=env, batch_size=10)
-    # vecenv = envelope.ObservationNormalizationWrapper(env=vecenv)
-    vecenv = envelope.AutoResetWrapper(env=vecenv)
-
-    rngs = nnx.Rngs(0)
-    value_fn = ValueFunction(env.observation_space, rngs=rngs)
-    # policy = GaussianPolicy(env.observation_space, env.action_space, rngs=rngs)
-    policy = DiscretePolicy(env.observation_space, env.action_space, rngs=rngs)
-
-    policy_optimizer = nnx.Optimizer(policy, optax.adam(0.001))
-    value_fn_optimizer = nnx.Optimizer(value_fn, optax.adam(0.001))
-
-    state_info = vecenv.reset(rngs())
-    last_returns = []
+    args = tyro.cli(Args)
+    train_state = TrainState(args)
 
     train = nnx.jit(train)
 
+    last_returns = []
     for i in range(10000):
-        state_info, out_info = train(
-            vecenv,
-            policy,
-            value_fn,
-            policy_optimizer,
-            value_fn_optimizer,
-            state_info,
-            rngs,
-        )
+        out_info = train(train_state)
         mean_return = out_info.last_return.mean()
         last_returns.append(mean_return)
         print(
