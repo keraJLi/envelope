@@ -1,5 +1,6 @@
+import dataclasses
 from dataclasses import dataclass
-from functools import cached_property
+from functools import cached_property, partial
 from typing import override
 
 import distrax
@@ -167,10 +168,7 @@ class EpisodeStatisticsWrapper(envelope.Wrapper):
             episode_return=state.current_stats.episode_return + info.reward,
             episode_length=state.current_stats.episode_length + 1,
         )
-        state = state.replace(
-            inner_state=inner_state,
-            current_stats=current_stats,
-        )
+        state = state.replace(inner_state=inner_state, current_stats=current_stats)
         info = self._update_info(state, info)
         return state, info
 
@@ -246,12 +244,8 @@ class DiscretePolicy(nnx.Module):
         return distrax.Categorical(logits=action_logits)
 
 
-def collect_trajectories(train_state):
-    @nnx.scan(
-        in_axes=(nnx.Carry),
-        out_axes=(nnx.Carry, 0),
-        length=train_state.args.num_steps,
-    )
+def collect_trajectories(train_state, args):
+    @nnx.scan(in_axes=(nnx.Carry), out_axes=(nnx.Carry, 0), length=args.num_steps)
     def step_env(train_state):
         obs = train_state.env_info.obs  # s_t: observation BEFORE action
         value = train_state.value_fn(obs)  # V(s_t)
@@ -265,10 +259,10 @@ def collect_trajectories(train_state):
             obs=obs,  # Store obs BEFORE step (for value function training)
             action=action,
             log_prob=pi.log_prob(action),
-            value=value,  # V(s_t): for TD error
-            value_next=train_state.value_fn(
-                env_info.obs_true
-            ),  # V(s_{t+1}^true): for bootstrapping on truncation
+            # V(s_t): for TD error
+            value=value,
+            # V(s_{t+1}^true): for bootstrapping on truncation
+            value_next=train_state.value_fn(env_info.obs_true),
         )
         return train_state, out_info
 
@@ -295,13 +289,13 @@ def shuffle_and_split(data: PyTree, num_minibatches: int, rngs: nnx.Rngs):
     return jax.tree.map(_shuffle_and_split, data)
 
 
-def calculate_gae(info, last_value, gamma, gae_lambda):
+def calculate_gae(info, last_value, args):
     @nnx.scan(
-        in_axes=(nnx.Carry, 0, None, None),
+        in_axes=(nnx.Carry, 0),
         out_axes=(nnx.Carry, 0),
         reverse=True,
     )
-    def _gae_step(carry, transition, gamma, gae_lambda):
+    def _gae_step(carry, transition):
         gae, next_value = carry
         done = transition.terminated | transition.truncated
         # Bootstrap value for V(s_{t+1}):
@@ -314,13 +308,13 @@ def calculate_gae(info, last_value, gamma, gae_lambda):
             next_value * (1 - transition.terminated),
         )
         # TD error: δ_t = r_t + γ * V(s_{t+1}) - V(s_t)
-        delta = transition.reward + gamma * next_v - transition.value
+        delta = transition.reward + args.gamma * next_v - transition.value
         # Reset GAE on both termination and truncation (new episode starts after either)
-        gae = delta + gamma * gae_lambda * (1 - done) * gae
+        gae = delta + args.gamma * args.gae_lambda * (1 - done) * gae
         return (gae, transition.value), gae
 
     init_carry = (jnp.zeros_like(last_value), last_value)
-    _, advantages = _gae_step(init_carry, info, gamma, gae_lambda)
+    _, advantages = _gae_step(init_carry, info)
     return advantages
 
 
@@ -328,16 +322,15 @@ def normalize(x: jax.Array) -> jax.Array:
     return (x - x.mean()) / (x.std() + 1e-8)
 
 
-def update_policy(train_state, batch):
+def update_policy(train_state, args, batch):
     @nnx.value_and_grad
     def loss_fn(policy):
         # Optional todo: add entropy bonus
         pi = policy(batch.obs)
         log_prob = pi.log_prob(batch.action)
 
-        eps = train_state.args.epsilon
         ratio = jnp.exp(log_prob - batch.log_prob)
-        clip_ratio = jnp.clip(ratio, 1 - eps, 1 + eps)
+        clip_ratio = jnp.clip(ratio, 1 - args.epsilon, 1 + args.epsilon)
         advantages = normalize(batch.advantages)
 
         surrogate1 = ratio * advantages
@@ -349,7 +342,7 @@ def update_policy(train_state, batch):
     return loss
 
 
-def update_value_fn(train_state, batch):
+def update_value_fn(train_state, args, batch):
     @nnx.value_and_grad
     def loss_fn(value_fn):
         targets = batch.value + batch.advantages
@@ -361,27 +354,27 @@ def update_value_fn(train_state, batch):
     return loss
 
 
-def update(train_state, batch):
-    policy_loss = update_policy(train_state, batch)
-    value_fn_loss = update_value_fn(train_state, batch)
-    return policy_loss + value_fn_loss
+def update(train_state, args, minibatches):
+    @nnx.scan
+    def update_on_batch(train_state, batch):
+        policy_loss = update_policy(train_state, args, batch)
+        value_fn_loss = update_value_fn(train_state, args, batch)
+        return train_state, policy_loss + value_fn_loss
+
+    return update_on_batch(train_state, minibatches)
 
 
-def train(train_state):
-    out_info = collect_trajectories(train_state)
+def train(train_state, args):
+    out_info = collect_trajectories(train_state, args)
     last_value = train_state.value_fn(train_state.env_info.obs_true)
-    advantages = calculate_gae(out_info, last_value, gamma=0.99, gae_lambda=0.95)
+    advantages = calculate_gae(out_info, last_value, args)
     out_info = out_info.update(advantages=advantages)
-    minibatches = shuffle_and_split(out_info, num_minibatches=5, rngs=train_state.rngs)
-
-    for i in range(5):
-        batch = jax.tree.map(lambda x: x[i], minibatches)
-        update(train_state, batch)
-
+    minibatches = shuffle_and_split(out_info, args.num_minibatches, train_state.rngs)
+    update(train_state, args, minibatches)
     return out_info
 
 
-@dataclass
+@dataclass(frozen=True)
 class Args:
     env_name: str = "gymnax::CartPole-v1"
     policy_lr: float = 0.001
@@ -391,14 +384,14 @@ class Args:
     num_minibatches: int = 5
     num_updates: int = 5
     num_steps: int = 100
+    gamma: float = 0.99
+    gae_lambda: float = 0.95
     normalize_observations: bool = False
     seed: int = 0
 
 
 class TrainState(nnx.Pytree):
     def __init__(self, args: Args):
-        self.args = nnx.static(args)
-
         # Initialize environment
         env = envelope.create(args.env_name)
         env = FlattenObservationWrapper(env=env)
@@ -445,11 +438,11 @@ if __name__ == "__main__":
     args = tyro.cli(Args)
     train_state = TrainState(args)
 
-    train = nnx.jit(train)
+    train = nnx.jit(train, static_argnames=("args",))
 
     last_returns = []
     for i in range(10000):
-        out_info = train(train_state)
+        out_info = train(train_state, args)
         mean_return = out_info.last_return.mean()
         last_returns.append(mean_return)
         print(
