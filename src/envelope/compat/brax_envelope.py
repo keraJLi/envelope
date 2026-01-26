@@ -67,7 +67,9 @@ class BraxEnvelope(Environment):
     def step(self, state: State, action: PyTree) -> tuple[State, Info]:
         brax_state = self.brax_env.step(state, action)
         info = InfoContainer(
-            obs=brax_state.obs, reward=brax_state.reward, terminated=brax_state.done
+            obs=brax_state.obs,
+            reward=brax_state.reward,
+            terminated=brax_state.done.astype(bool),
         )
         info = info.update(**dataclasses.asdict(brax_state))
         return brax_state, info
