@@ -1,10 +1,11 @@
+from functools import cached_property
 from typing import override
 
 import jax
 from jax import numpy as jnp
 
 from envelope.environment import Info
-from envelope.spaces import BatchedSpace, PyTreeSpace, Space
+from envelope.spaces import BatchedSpace, Continuous, Discrete, PyTreeSpace, Space
 from envelope.struct import field, static_field
 from envelope.typing import Key, PyTree
 from envelope.wrappers.normalization import RunningMeanVar, update_rmv
@@ -36,7 +37,7 @@ class ObservationNormalizationWrapper(Wrapper):
         mean = jax.tree.map(zeros, self.stats_spec)
         var = jax.tree.map(ones, self.stats_spec)
 
-        return RunningMeanVar(mean=mean, var=var, count=0)
+        return RunningMeanVar(mean=mean, var=var, count=jnp.array(0))
 
     def _normalize_obs(self, obs: PyTree, rmv: RunningMeanVar) -> PyTree:
         def norm_leaf(x, mean, std, spec):
@@ -88,6 +89,17 @@ class ObservationNormalizationWrapper(Wrapper):
         inner_state, info = self.env.step(state.inner_state, action, **kwargs)
         state = state.replace(inner_state=inner_state)
         return self._normalize_and_update(state, info)
+
+    @override
+    @cached_property
+    def observation_space(self) -> Space:
+        def to_continuous(space: Space) -> Continuous:
+            return Continuous.from_shape(low=-jnp.inf, high=jnp.inf, shape=space.shape)
+
+        def is_leaf(space: Space) -> bool:
+            return isinstance(space, (Discrete, Continuous))
+
+        return jax.tree.map(to_continuous, self.env.observation_space, is_leaf=is_leaf)
 
 
 def _infer_stats_spec(space: Space) -> PyTree:
