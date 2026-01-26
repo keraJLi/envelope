@@ -19,24 +19,28 @@ from ppo.wrappers import (
 def collect_trajectories(train_state, args):
     @nnx.scan(in_axes=nnx.Carry, length=args.num_steps)
     def step_env(train_state):
-        obs = train_state.env_info.obs  # s_t: observation BEFORE action
+        # Store current observation and value
+        obs = train_state.env_info.obs
+        value = train_state.value_fn(obs)
 
-        value = train_state.value_fn(obs)  # V(s_t)
+        # Sample action from policy
         pi = train_state.policy(obs)
-
         action = pi.sample(seed=train_state.rngs())
+
+        # Step environment
         env_state, env_info = train_state.vecenv.step(train_state.env_state, action)
         train_state.env_state = env_state
         train_state.env_info = env_info
+        value_next = train_state.value_fn(env_info.obs_true)
 
+        # return updated state and information about this environment step
+        # env_info already contains reward, terminated, truncated, we just add more info
         out_info = env_info.update(
-            obs=obs,  # Store obs BEFORE step (for value function training)
+            obs=obs,
+            value=value,
             action=action,
             log_prob=pi.log_prob(action),
-            # V(s_t): for TD error
-            value=value,
-            # V(s_{t+1}^true): for bootstrapping on truncation
-            value_next=train_state.value_fn(env_info.obs_true),
+            value_next=value_next,  # for bootstrapping on truncation
         )
         return train_state, out_info
 
@@ -44,21 +48,14 @@ def collect_trajectories(train_state, args):
     return out_info
 
 
-def shuffle_and_split(data: PyTree, num_minibatches: int, rngs: nnx.Rngs):
-    def is_numeric(x):
-        return hasattr(x, "dtype") and not jnp.issubdtype(x.dtype, jax.dtypes.prng_key)
-
-    first_leaf = next(x for x in jax.tree.leaves(data) if is_numeric(x))
-    num_steps, num_envs = first_leaf.shape[:2]
-    iteration_size = num_steps * num_envs
+def shuffle_and_split(args, data: PyTree, rngs: nnx.Rngs):
+    iteration_size = args.num_steps * args.num_envs
     permutation = jax.random.permutation(rngs(), iteration_size)
 
     def _shuffle_and_split(x):
-        if not is_numeric(x):
-            return x
         x = x.reshape((iteration_size, *x.shape[2:]))
         x = jnp.take(x, permutation, axis=0)
-        return x.reshape(num_minibatches, -1, *x.shape[1:])
+        return x.reshape(args.num_minibatches, -1, *x.shape[1:])
 
     return jax.tree.map(_shuffle_and_split, data)
 
@@ -72,13 +69,12 @@ def calculate_gae(info, last_value, args):
         # - Termination: 0 (episode truly ended)
         # - Truncation: value_next (bootstrap from true next state)
         # - Otherwise: next_value from carry (V of next transition's state)
-        next_v = jnp.where(
-            transition.truncated,
-            transition.value_next,
-            next_value * (1 - transition.terminated),
-        )
+        next_value = jnp.where(transition.truncated, transition.value_next, next_value)
+        next_value = jnp.where(transition.terminated, 0, next_value)
+
         # TD error: δ_t = r_t + γ * V(s_{t+1}) - V(s_t)
-        delta = transition.reward + args.gamma * next_v - transition.value
+        delta = transition.reward + args.gamma * next_value - transition.value
+
         # Reset GAE on both termination and truncation (new episode starts after either)
         gae = delta + args.gamma * args.gae_lambda * (1 - done) * gae
         return (gae, transition.value), gae
@@ -88,11 +84,10 @@ def calculate_gae(info, last_value, args):
     return advantages
 
 
-def normalize(x: jax.Array) -> jax.Array:
-    return (x - x.mean()) / (x.std() + 1e-8)
-
-
 def update_policy(train_state, args, batch):
+    def normalize(x: jax.Array) -> jax.Array:
+        return (x - x.mean()) / (x.std() + 1e-8)
+
     @nnx.value_and_grad
     def loss_fn(policy):
         # Optional todo: add entropy bonus
@@ -140,7 +135,7 @@ def train(train_state, args):
     last_value = train_state.value_fn(train_state.env_info.obs_true)
     advantages = calculate_gae(out_info, last_value, args)
     out_info = out_info.update(advantages=advantages)
-    minibatches = shuffle_and_split(out_info, args.num_minibatches, train_state.rngs)
+    minibatches = shuffle_and_split(args, out_info, train_state.rngs)
     update(train_state, args, minibatches)
     return out_info
 
@@ -163,27 +158,16 @@ class Args:
 
 class TrainState(nnx.Pytree):
     def __init__(self, args: Args):
-        # Initialize environment
-        env = envelope.create(args.env_name)
-        env = FlattenObservationWrapper(env=env)
-        env = FlattenActionWrapper(env=env)
-        env = ClipActionWrapper(env=env)
-        env = EpisodeStatisticsWrapper(env=env)
-        vecenv = envelope.VmapWrapper(env=env, batch_size=args.num_envs)
-        if args.normalize_observations:
-            vecenv = envelope.ObservationNormalizationWrapper(env=vecenv)
-        vecenv = envelope.AutoResetWrapper(env=vecenv)
-
+        # Initialize environment and rngs
+        env, vecenv = make_env(args)
         self.vecenv = nnx.data(vecenv)
+        self.rngs = nnx.Rngs(args.seed)
 
         # Initialize policy and value function
-        self.rngs = nnx.Rngs(args.seed)
         discrete = isinstance(env.action_space, envelope.Discrete)
         policy_cls = DiscretePolicy if discrete else GaussianPolicy
-        self.policy = policy_cls(
-            env.observation_space, env.action_space, rngs=self.rngs
-        )
-        self.value_fn = ValueFunction(env.observation_space, rngs=self.rngs)
+        self.policy = policy_cls(env.observation_space, env.action_space, self.rngs)
+        self.value_fn = ValueFunction(env.observation_space, self.rngs)
 
         # Initialize optimizers
         self.policy_optimizer = nnx.Optimizer(
