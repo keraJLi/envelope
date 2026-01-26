@@ -16,139 +16,17 @@ from ppo.wrappers import (
 )
 
 
-def collect_trajectories(train_state, args):
-    @nnx.scan(in_axes=nnx.Carry, length=args.num_steps)
-    def step_env(train_state):
-        # Store current observation and value
-        obs = train_state.env_info.obs
-        value = train_state.value_fn(obs)
-
-        # Sample action from policy
-        pi = train_state.policy(obs)
-        action = pi.sample(seed=train_state.rngs())
-
-        # Step environment
-        env_state, env_info = train_state.vecenv.step(train_state.env_state, action)
-        train_state.env_state = env_state
-        train_state.env_info = env_info
-        value_next = train_state.value_fn(env_info.obs_true)
-
-        # return updated state and information about this environment step
-        # env_info already contains reward, terminated, truncated, we just add more info
-        out_info = env_info.update(
-            obs=obs,
-            value=value,
-            action=action,
-            log_prob=pi.log_prob(action),
-            value_next=value_next,  # for bootstrapping on truncation
-        )
-        return train_state, out_info
-
-    train_state, out_info = step_env(train_state)
-    return out_info
-
-
-def shuffle_and_split(args, data: PyTree, rngs: nnx.Rngs):
-    iteration_size = args.num_steps * args.num_envs
-    permutation = jax.random.permutation(rngs(), iteration_size)
-
-    def _shuffle_and_split(x):
-        x = x.reshape((iteration_size, *x.shape[2:]))
-        x = jnp.take(x, permutation, axis=0)
-        return x.reshape(args.num_minibatches, -1, *x.shape[1:])
-
-    return jax.tree.map(_shuffle_and_split, data)
-
-
-def calculate_gae(info, last_value, args):
-    @nnx.scan(reverse=True)
-    def _gae_step(carry, transition):
-        gae, next_value = carry
-        done = transition.terminated | transition.truncated
-        # Bootstrap value for V(s_{t+1}):
-        # - Termination: 0 (episode truly ended)
-        # - Truncation: value_next (bootstrap from true next state)
-        # - Otherwise: next_value from carry (V of next transition's state)
-        next_value = jnp.where(transition.truncated, transition.value_next, next_value)
-        next_value = jnp.where(transition.terminated, 0, next_value)
-
-        # TD error: δ_t = r_t + γ * V(s_{t+1}) - V(s_t)
-        delta = transition.reward + args.gamma * next_value - transition.value
-
-        # Reset GAE on both termination and truncation (new episode starts after either)
-        gae = delta + args.gamma * args.gae_lambda * (1 - done) * gae
-        return (gae, transition.value), gae
-
-    init_carry = (jnp.zeros_like(last_value), last_value)
-    _, advantages = _gae_step(init_carry, info)
-    return advantages
-
-
-def update_policy(train_state, args, batch):
-    def normalize(x: jax.Array) -> jax.Array:
-        return (x - x.mean()) / (x.std() + 1e-8)
-
-    @nnx.value_and_grad
-    def loss_fn(policy):
-        # Optional todo: add entropy bonus
-        pi = policy(batch.obs)
-        log_prob = pi.log_prob(batch.action)
-
-        ratio = jnp.exp(log_prob - batch.log_prob)
-        clip_ratio = jnp.clip(ratio, 1 - args.epsilon, 1 + args.epsilon)
-        advantages = normalize(batch.advantages)
-
-        surrogate1 = ratio * advantages
-        surrogate2 = clip_ratio * advantages
-        return -jnp.mean(jnp.minimum(surrogate1, surrogate2))
-
-    loss, grads = loss_fn(train_state.policy)
-    train_state.policy_optimizer.update(train_state.policy, grads)
-    return loss
-
-
-def update_value_fn(train_state, args, batch):
-    @nnx.value_and_grad
-    def loss_fn(value_fn):
-        # Optional todo: value function clipping
-        targets = batch.value + batch.advantages
-        values = value_fn(batch.obs)
-        return 0.5 * jnp.mean((values - targets) ** 2)
-
-    loss, grads = loss_fn(train_state.value_fn)
-    train_state.value_fn_optimizer.update(train_state.value_fn, grads)
-    return loss
-
-
-def update(train_state, args, minibatches):
-    @nnx.scan
-    def update_on_batch(train_state, batch):
-        policy_loss = update_policy(train_state, args, batch)
-        value_fn_loss = update_value_fn(train_state, args, batch)
-        return train_state, policy_loss + value_fn_loss
-
-    return update_on_batch(train_state, minibatches)
-
-
-def train(train_state, args):
-    out_info = collect_trajectories(train_state, args)
-    last_value = train_state.value_fn(train_state.env_info.obs_true)
-    advantages = calculate_gae(out_info, last_value, args)
-    out_info = out_info.update(advantages=advantages)
-    minibatches = shuffle_and_split(args, out_info, train_state.rngs)
-    update(train_state, args, minibatches)
-    return out_info
-
-
 @dataclasses.dataclass(frozen=True)
 class Args:
     env_name: str = "gymnax::CartPole-v1"
+    total_timesteps: int = 1000000
     policy_lr: float = 0.001
     value_fn_lr: float = 0.001
     epsilon: float = 0.2
+    entropy_coef: float = 0.01
     num_envs: int = 10
     num_minibatches: int = 5
-    num_updates: int = 5
+    num_epochs: int = 4
     num_steps: int = 100
     gamma: float = 0.99
     gae_lambda: float = 0.95
@@ -156,8 +34,23 @@ class Args:
     seed: int = 0
 
 
+def make_env(args: Args):
+    env = envelope.create(args.env_name)
+    env = FlattenObservationWrapper(env=env)
+    env = FlattenActionWrapper(env=env)
+    env = ClipActionWrapper(env=env)
+    env = EpisodeStatisticsWrapper(env=env)
+    vecenv = envelope.VmapWrapper(env=env, batch_size=args.num_envs)
+    if args.normalize_observations:
+        vecenv = envelope.ObservationNormalizationWrapper(env=vecenv)
+    vecenv = envelope.AutoResetWrapper(env=vecenv)
+    return env, vecenv
+
+
 class TrainState(nnx.Pytree):
     def __init__(self, args: Args):
+        self.args = nnx.static(args)
+
         # Initialize environment and rngs
         env, vecenv = make_env(args)
         self.vecenv = nnx.data(vecenv)
@@ -183,18 +76,141 @@ class TrainState(nnx.Pytree):
         self.env_info = nnx.data(env_info)
 
 
-def make_env(args: Args) -> TrainState:
-    env = envelope.create(args.env_name)
-    env = FlattenObservationWrapper(env=env)
-    env = FlattenActionWrapper(env=env)
-    env = ClipActionWrapper(env=env)
-    env = EpisodeStatisticsWrapper(env=env)
-    vecenv = envelope.VmapWrapper(env=env, batch_size=args.num_envs)
-    if args.normalize_observations:
-        vecenv = envelope.ObservationNormalizationWrapper(env=vecenv)
-    vecenv = envelope.AutoResetWrapper(env=vecenv)
+def shuffle_and_split(data: PyTree, num_minibatches: int, key: jax.Array):
+    first_leaf = jax.tree.leaves(data)[0]
+    num_steps, num_envs = first_leaf.shape[:2]
+    batch_size = num_steps * num_envs
+    permutation = jax.random.permutation(key, batch_size)
 
-    return env, vecenv
+    def _shuffle_and_split(x):
+        x = x.reshape((batch_size, *x.shape[2:]))
+        x = jnp.take(x, permutation, axis=0)
+        return x.reshape(num_minibatches, -1, *x.shape[1:])
+
+    return jax.tree.map(_shuffle_and_split, data)
+
+
+def collect_trajectories(ts: TrainState):
+    @nnx.scan(in_axes=nnx.Carry, length=ts.args.num_steps)
+    def step_env(ts: TrainState):
+        obs = ts.env_info.obs
+        value = ts.value_fn(obs)
+
+        pi = ts.policy(obs)
+        action = pi.sample(seed=ts.rngs())
+
+        env_state, env_info = ts.vecenv.step(ts.env_state, action)
+        ts.env_state = env_state
+        ts.env_info = env_info
+
+        out_info = env_info.update(
+            obs=obs,
+            value=value,
+            action=action,
+            log_prob=pi.log_prob(action),
+            value_next=ts.value_fn(env_info.obs_true),
+        )
+        return ts, out_info
+
+    ts, out_info = step_env(ts)
+    return out_info
+
+
+def calculate_gae(ts: TrainState, info, last_value):
+    @nnx.scan(reverse=True)
+    def gae_step(carry, transition):
+        gae, next_value = carry
+        done = transition.terminated | transition.truncated
+
+        next_value = jnp.where(transition.truncated, transition.value_next, next_value)
+        next_value = jnp.where(transition.terminated, 0, next_value)
+
+        delta = transition.reward + ts.args.gamma * next_value - transition.value
+        gae = delta + ts.args.gamma * ts.args.gae_lambda * (1 - done) * gae
+        return (gae, transition.value), gae
+
+    init_carry = (jnp.zeros_like(last_value), last_value)
+    _, advantages = gae_step(init_carry, info)
+    return advantages
+
+
+def update_policy(ts: TrainState, batch):
+    def normalize(x: jax.Array) -> jax.Array:
+        return (x - x.mean()) / (x.std() + 1e-8)
+
+    @nnx.value_and_grad(has_aux=True)
+    def loss_fn(policy):
+        pi = policy(batch.obs)
+        log_prob = pi.log_prob(batch.action)
+        entropy = pi.entropy().mean()
+
+        ratio = jnp.exp(log_prob - batch.log_prob)
+        clip_ratio = jnp.clip(ratio, 1 - ts.args.epsilon, 1 + ts.args.epsilon)
+        advantages = normalize(batch.advantages)
+
+        surrogate1 = ratio * advantages
+        surrogate2 = clip_ratio * advantages
+        policy_loss = -jnp.mean(jnp.minimum(surrogate1, surrogate2))
+
+        loss = policy_loss - ts.args.entropy_coef * entropy
+        return loss, (policy_loss, entropy)
+
+    (loss, (policy_loss, entropy)), grads = loss_fn(ts.policy)
+    ts.policy_optimizer.update(ts.policy, grads)
+    grad_norm = optax.global_norm(grads)
+    return {
+        "policy_loss": loss,
+        "policy_clipped_surrogate_loss": policy_loss,
+        "policy_entropy": entropy,
+        "policy_grad_norm": grad_norm,
+    }
+
+
+def update_value_fn(ts: TrainState, batch):
+    @nnx.value_and_grad
+    def loss_fn(value_fn):
+        targets = batch.value + batch.advantages
+        values = value_fn(batch.obs)
+        return 0.5 * jnp.mean((values - targets) ** 2)
+
+    loss, grads = loss_fn(ts.value_fn)
+    ts.value_fn_optimizer.update(ts.value_fn, grads)
+    grad_norm = optax.global_norm(grads)
+    return {"value_loss": loss, "value_grad_norm": grad_norm}
+
+
+def update_epoch(ts: TrainState, minibatches):
+    @nnx.scan
+    def update_minibatch(ts: TrainState, batch):
+        policy_info = update_policy(ts, batch)
+        value_info = update_value_fn(ts, batch)
+        return ts, {**policy_info, **value_info}
+
+    _, loss_info = update_minibatch(ts, minibatches)
+    return loss_info
+
+
+def train_step(ts: TrainState):
+    # Collect trajectories
+    info = collect_trajectories(ts)
+
+    # Compute advantages
+    last_value = ts.value_fn(ts.env_info.obs_true)
+    advantages = calculate_gae(ts, info, last_value)
+    info = info.update(advantages=advantages)
+
+    # Multiple epochs of updates (unrolled since num_epochs is small/static)
+    loss_infos = []
+    for _ in range(ts.args.num_epochs):
+        minibatches = shuffle_and_split(info, ts.args.num_minibatches, ts.rngs())
+        loss_info = update_epoch(ts, minibatches)
+        loss_infos.append(loss_info)
+
+    # Stack across epochs and compute mean over all updates
+    loss_info_stacked = jax.tree.map(lambda *xs: jnp.stack(xs), *loss_infos)
+    loss_info_mean = jax.tree.map(jnp.mean, loss_info_stacked)
+
+    return info.update(**loss_info_mean)
 
 
 if __name__ == "__main__":
@@ -203,19 +219,21 @@ if __name__ == "__main__":
     args = tyro.cli(Args)
     train_state = TrainState(args)
 
-    train = nnx.jit(train, static_argnames=("args",))
+    jit_train_step = nnx.jit(train_step)
 
-    last_returns = []
-    for i in range(10000):
-        out_info = train(train_state, args)
+    steps_per_update = args.num_steps * args.num_envs
+    num_updates = args.total_timesteps // steps_per_update
+    for i in range(num_updates):
+        out_info = jit_train_step(train_state)
         mean_return = out_info.last_return.mean()
-        last_returns.append(mean_return)
         print(
-            f"mean_return={mean_return.mean():.4f}, "
-            f"mean_value={out_info.value.mean():.4f}"
+            f"timestep={i * steps_per_update}, "
+            f"mean_return={mean_return:.4f}, "
+            f"mean_value={out_info.value.mean():.4f}, "
+            f"policy_loss={out_info.policy_loss:.4f}, "
+            f"policy_clipped_surrogate_loss={out_info.policy_clipped_surrogate_loss:.4f}, "
+            f"policy_entropy={out_info.policy_entropy:.4f}, "
+            f"policy_grad_norm={out_info.policy_grad_norm:.4f}, "
+            f"value_loss={out_info.value_loss:.4f}, "
+            f"value_grad_norm={out_info.value_grad_norm:.4f}",
         )
-
-    import matplotlib.pyplot as plt
-
-    plt.plot(last_returns)
-    plt.show()
