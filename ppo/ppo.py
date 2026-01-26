@@ -214,6 +214,8 @@ def train_step(ts: TrainState):
 
 
 if __name__ == "__main__":
+    import time
+
     import tyro
 
     args = tyro.cli(Args)
@@ -223,11 +225,20 @@ if __name__ == "__main__":
 
     steps_per_update = args.num_steps * args.num_envs
     num_updates = args.total_timesteps // steps_per_update
+    start_time = time.time()
     for i in range(num_updates):
         out_info = jit_train_step(train_state)
         mean_return = out_info.last_return.mean()
+
+        # Block for accurate timing, then compute SPS
+        jax.block_until_ready(mean_return)
+        elapsed = time.time() - start_time
+        total_steps = (i + 1) * steps_per_update
+        sps = total_steps / elapsed
+
         print(
-            f"timestep={i * steps_per_update}, "
+            f"timestep={total_steps}, "
+            f"sps={sps:.0f}, "
             f"mean_return={mean_return:.4f}, "
             f"mean_value={out_info.value.mean():.4f}, "
             f"policy_loss={out_info.policy_loss:.4f}, "
