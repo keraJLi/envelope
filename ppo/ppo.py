@@ -200,17 +200,15 @@ def train_step(ts: TrainState):
     info = info.update(advantages=advantages)
 
     # Multiple epochs of updates (unrolled since num_epochs is small/static)
-    loss_infos = []
-    for _ in range(ts.args.num_epochs):
+    @nnx.scan(in_axes=nnx.Carry, length=ts.args.num_epochs)
+    def update_epoch_scan(ts):
         minibatches = shuffle_and_split(info, ts.args.num_minibatches, ts.rngs())
         loss_info = update_epoch(ts, minibatches)
-        loss_infos.append(loss_info)
+        return ts, loss_info
 
-    # Stack across epochs and compute mean over all updates
-    loss_info_stacked = jax.tree.map(lambda *xs: jnp.stack(xs), *loss_infos)
-    loss_info_mean = jax.tree.map(jnp.mean, loss_info_stacked)
-
-    return info.update(**loss_info_mean)
+    ts, loss_infos = update_epoch_scan(ts)
+    loss_infos = jax.tree.map(jnp.mean, loss_infos)
+    return info.update(**loss_infos)
 
 
 if __name__ == "__main__":
@@ -226,25 +224,50 @@ if __name__ == "__main__":
     steps_per_update = args.num_steps * args.num_envs
     num_updates = args.total_timesteps // steps_per_update
     start_time = time.time()
-    for i in range(num_updates):
+
+    @nnx.jit
+    @nnx.scan(in_axes=nnx.Carry, length=num_updates)
+    def train_loop(carry):
+        train_state = carry
         out_info = jit_train_step(train_state)
         mean_return = out_info.last_return.mean()
+        return train_state, mean_return
 
-        # Block for accurate timing, then compute SPS
-        jax.block_until_ready(mean_return)
-        elapsed = time.time() - start_time
-        total_steps = (i + 1) * steps_per_update
-        sps = total_steps / elapsed
+    train_state, mean_returns = train_loop(train_state)
+    mean_returns = mean_returns.block_until_ready()
 
-        print(
-            f"timestep={total_steps}, "
-            f"sps={sps:.0f}, "
-            f"mean_return={mean_return:.4f}, "
-            f"mean_value={out_info.value.mean():.4f}, "
-            f"policy_loss={out_info.policy_loss:.4f}, "
-            f"policy_clipped_surrogate_loss={out_info.policy_clipped_surrogate_loss:.4f}, "
-            f"policy_entropy={out_info.policy_entropy:.4f}, "
-            f"policy_grad_norm={out_info.policy_grad_norm:.4f}, "
-            f"value_loss={out_info.value_loss:.4f}, "
-            f"value_grad_norm={out_info.value_grad_norm:.4f}",
-        )
+    print("Fitting 3 times.")
+
+    start = time.time()
+    train_state, mean_returns = train_loop(train_state)
+    mean_returns = mean_returns.block_until_ready()
+    train_state, mean_returns = train_loop(train_state)
+    mean_returns = mean_returns.block_until_ready()
+    train_state, mean_returns = train_loop(train_state)
+    mean_returns = mean_returns.block_until_ready()
+    print(f"Total time: {(time.time() - start) / 3:.2f} seconds")
+
+    # for i in range(num_updates):
+    #     out_info = jit_train_step(train_state)
+    #     mean_return = out_info.last_return.mean()
+
+    #     # Block for accurate timing, then compute SPS
+    #     jax.block_until_ready(mean_return)
+    #     elapsed = time.time() - start_time
+    #     total_steps = (i + 1) * steps_per_update
+    #     sps = total_steps / elapsed
+
+    #     print(
+    #         f"timestep={total_steps}, "
+    #         f"sps={sps:.0f}, "
+    #         f"mean_return={mean_return:.4f}, "
+    #         f"mean_value={out_info.value.mean():.4f}, "
+    #         f"policy_loss={out_info.policy_loss:.4f}, "
+    #         f"policy_clipped_surrogate_loss={out_info.policy_clipped_surrogate_loss:.4f}, "
+    #         f"policy_entropy={out_info.policy_entropy:.4f}, "
+    #         f"policy_grad_norm={out_info.policy_grad_norm:.4f}, "
+    #         f"value_loss={out_info.value_loss:.4f}, "
+    #         f"value_grad_norm={out_info.value_grad_norm:.4f}",
+    #     )
+
+    # print(f"Total time: {time.time() - start_time:.2f} seconds")

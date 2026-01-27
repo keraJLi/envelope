@@ -16,15 +16,11 @@ class ValueFunction(nnx.Module):
     def __init__(self, obs_space: envelope.Space, rngs: nnx.Rngs):
         in_dim = jnp.prod(jnp.array(obs_space.shape))
         self.layers = nnx.Sequential(
-            ortho_linear(in_dim, 256, rngs),
+            ortho_linear(in_dim, 64, rngs),
             nnx.swish,
-            ortho_linear(256, 256, rngs),
+            ortho_linear(64, 64, rngs),
             nnx.swish,
-            ortho_linear(256, 256, rngs),
-            nnx.swish,
-            ortho_linear(256, 256, rngs),
-            nnx.swish,
-            ortho_linear(256, 1, rngs, scale=1.0),
+            ortho_linear(64, 1, rngs, scale=1.0),
         )
 
     def __call__(self, obs: jax.Array) -> jax.Array:
@@ -39,13 +35,13 @@ class GaussianPolicy(nnx.Module):
         out_dim = jnp.prod(jnp.array(action_space.shape))
         self.action_low, self.action_high = action_space.low, action_space.high
         self.layers = nnx.Sequential(
-            ortho_linear(in_dim, 256, rngs),
+            ortho_linear(in_dim, 64, rngs),
             nnx.swish,
-            ortho_linear(256, 256, rngs),
+            ortho_linear(64, 64, rngs),
             nnx.swish,
         )
-        self.action_mean = ortho_linear(256, out_dim, rngs, scale=0.01)
-        self.action_log_std = ortho_linear(256, out_dim, rngs, scale=0.01)
+        self.action_mean = ortho_linear(64, out_dim, rngs, scale=0.01)
+        self.action_log_std = ortho_linear(64, out_dim, rngs, scale=0.01)
 
     def __call__(self, obs: jax.Array) -> distrax.Distribution:
         features = self.layers(obs)
