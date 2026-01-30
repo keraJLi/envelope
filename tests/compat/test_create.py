@@ -181,3 +181,15 @@ def test_create_imports_only_the_requested_suite(monkeypatch):
 
     assert create("a::Env") == "A"
     assert import_calls == ["a_mod"]
+
+
+def test_create_wraps_with_truncation_when_default_max_steps_set(monkeypatch):
+    sentinel = types.SimpleNamespace(default_max_steps=500)
+    _install_dummy_suite(monkeypatch, return_value=sentinel)
+
+    env = create("dummy::Env")
+
+    from envelope.wrappers.truncation_wrapper import TruncationWrapper
+
+    assert isinstance(env, TruncationWrapper)
+    assert env.max_steps == 500
