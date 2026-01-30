@@ -52,6 +52,9 @@ allow-direct-references = true
 packages = ["src/envelope"]
 
 [dependency-groups]
+benchmark = [
+    "rejax",
+]
 compat = [
     "brax>=0.13.0",
     "craftax>=1.4.3",
