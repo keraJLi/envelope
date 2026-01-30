@@ -2,6 +2,7 @@ from envelope.wrappers.autoreset_wrapper import AutoResetWrapper
 from envelope.wrappers.observation_normalization_wrapper import (
     ObservationNormalizationWrapper,
 )
+from envelope.wrappers.optimistic_reset_wrapper import OptimisticResetWrapper
 from envelope.wrappers.state_injection_wrapper import StateInjectionWrapper
 from envelope.wrappers.truncation_wrapper import TruncationWrapper
 from envelope.wrappers.vmap_wrapper import VmapWrapper
@@ -13,6 +14,7 @@ __all__ = [
     "WrappedState",
     "AutoResetWrapper",
     "ObservationNormalizationWrapper",
+    "OptimisticResetWrapper",
     "StateInjectionWrapper",
     "TruncationWrapper",
     "VmapWrapper",
