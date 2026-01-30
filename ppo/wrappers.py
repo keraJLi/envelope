@@ -163,7 +163,18 @@ class EpisodeStatisticsWrapper(envelope.Wrapper):
             episode_return=state.current_stats.episode_return + info.reward,
             episode_length=state.current_stats.episode_length + 1,
         )
-        state = state.replace(inner_state=inner_state, current_stats=current_stats)
+        # Update last_stats when episode ends (done detected in step)
+        done = info.terminated | info.truncated
+        last_stats = EpisodeStatistics(
+            episode_return=jnp.where(done, current_stats.episode_return, state.last_stats.episode_return),
+            episode_length=jnp.where(done, current_stats.episode_length, state.last_stats.episode_length),
+        )
+        # Reset current stats on done
+        current_stats = EpisodeStatistics(
+            episode_return=jnp.where(done, 0.0, current_stats.episode_return),
+            episode_length=jnp.where(done, 0, current_stats.episode_length),
+        )
+        state = state.replace(inner_state=inner_state, current_stats=current_stats, last_stats=last_stats)
         info = self._update_info(state, info)
         return state, info
 
