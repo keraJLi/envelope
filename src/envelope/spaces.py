@@ -106,16 +106,24 @@ class PyTreeSpace(Space):
     """A Space defined by a PyTree structure of other Spaces.
 
     Args:
-        tree: A PyTree with Space objects leaves.
+        tree: A PyTree with Discrete or Continuous leaves.
 
     Usage:
         space = PyTreeSpace({
-            "action": Discrete(n=4, dtype=jnp.int32),
-            "obs": Continuous(low=0.0, high=1.0, shape=(2,), dtype=jnp.float32)
+            "action": Discrete(n=4),
+            "obs": Continuous(low=0.0, high=1.0, shape=(2,))
         })
     """
 
     tree: PyTree
+
+    def __post_init__(self):
+        leaves = jax.tree.leaves(self.tree, is_leaf=lambda x: isinstance(x, Space))
+        for leaf in leaves:
+            if not isinstance(leaf, (Discrete, Continuous)):
+                raise TypeError(
+                    f"PyTreeSpace leaves must be Discrete or Continuous, got {type(leaf).__name__}"
+                )
 
     @override
     def sample(self, key: Key) -> PyTree:
@@ -149,16 +157,23 @@ class PyTreeSpace(Space):
             is_leaf=lambda node: isinstance(node, Space),
         )
 
-
-def batch_space(space: Space, batch_size: int) -> Space:
-    if isinstance(space, PyTreeSpace):
-        batched_tree = jax.tree.map(
-            lambda sp: batch_space(sp, batch_size),
-            space.tree,
+    @property
+    def dtype(self) -> PyTree:
+        return jax.tree.map(
+            lambda space: space.dtype,
+            self.tree,
             is_leaf=lambda node: isinstance(node, Space),
         )
-        return PyTreeSpace(batched_tree)
-    return BatchedSpace(space=space, batch_size=batch_size)
+
+
+def _peel_batched(space: "BatchedSpace") -> tuple[tuple[int, ...], Space]:
+    """Collect batch dimensions and return (batch_dims_tuple, base_space)."""
+    dims: list[int] = []
+    s: Space = space
+    while isinstance(s, BatchedSpace):
+        dims.append(s.batch_size)
+        s = s.space
+    return tuple(dims), s
 
 
 class BatchedSpace(Space):
@@ -190,16 +205,19 @@ class BatchedSpace(Space):
 
     @cached_property
     def shape(self) -> PyTree:
-        inner_shape = self.space.shape
-        # For tuple shapes (leaf spaces), prepend batch dimension.
-        # PyTree shapes are handled by wrapping leaves with BatchedSpace via batch_space.
-        if isinstance(inner_shape, tuple):
-            return (self.batch_size,) + inner_shape
-        return inner_shape
+        batch_dims, base = _peel_batched(self)
+        if isinstance(base, PyTreeSpace):
+            return jax.tree.map(
+                lambda space: batch_dims + space.shape,
+                base.tree,
+                is_leaf=lambda node: isinstance(node, Space),
+            )
+        return batch_dims + base.shape
 
     @property
-    def dtype(self):
-        return getattr(self.space, "dtype", None)
+    def dtype(self) -> PyTree:
+        _, base = _peel_batched(self)
+        return base.dtype
 
     def __repr__(self) -> str:
         return f"BatchedSpace(space={self.space!r}, batch_size={self.batch_size})"

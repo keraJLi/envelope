@@ -1,10 +1,10 @@
-"""Tests for BatchedSpace and batch_space function."""
+"""Tests for BatchedSpace."""
 
 import jax
 import jax.numpy as jnp
 import pytest
 
-from envelope.spaces import BatchedSpace, Continuous, Discrete, PyTreeSpace, batch_space
+from envelope.spaces import BatchedSpace, Continuous, Discrete, PyTreeSpace
 
 # ============================================================================
 # Tests: BatchedSpace - Basic Functionality
@@ -66,12 +66,17 @@ def test_batched_space_pytree():
     batch_size = 3
     batched = BatchedSpace(space=base_space, batch_size=batch_size)
 
-    # Test shape property (should return PyTree of shapes)
+    # Test shape property (should return PyTree of shapes with batch dim prepended)
     shape = batched.shape
     assert isinstance(shape, dict)
-    # PyTree shapes are returned as-is (not wrapped in BatchedSpace)
-    assert shape["discrete"] == ()  # scalar discrete space shape
-    assert shape["continuous"] == (2,)  # continuous space shape
+    assert shape["discrete"] == (batch_size,)
+    assert shape["continuous"] == (batch_size, 2)
+
+    # Test dtype property (should return PyTree of dtypes)
+    dtype = batched.dtype
+    assert isinstance(dtype, dict)
+    assert dtype["discrete"] == jnp.int32
+    assert dtype["continuous"] == jnp.float32
 
     # Test sampling
     key = jax.random.PRNGKey(0)
@@ -131,35 +136,12 @@ def test_batched_space_repr():
 
 
 # ============================================================================
-# Tests: batch_space function
+# Tests: BatchedSpace with PyTreeSpace
 # ============================================================================
 
 
-def test_batch_space_discrete():
-    """Test batch_space function with Discrete space."""
-    base_space = Discrete(n=jnp.array(10, dtype=jnp.int32))
-    batch_size = 4
-    batched = batch_space(base_space, batch_size)
-
-    assert isinstance(batched, BatchedSpace)
-    assert batched.batch_size == batch_size
-    assert batched.space == base_space
-    assert batched.shape == (batch_size,)
-
-
-def test_batch_space_continuous():
-    """Test batch_space function with Continuous space."""
-    base_space = Continuous.from_shape(low=0.0, high=1.0, shape=(2,))
-    batch_size = 3
-    batched = batch_space(base_space, batch_size)
-
-    assert isinstance(batched, BatchedSpace)
-    assert batched.batch_size == batch_size
-    assert batched.shape == (batch_size, 2)
-
-
-def test_batch_space_pytree():
-    """Test batch_space function with PyTreeSpace."""
+def test_batched_pytree_space():
+    """Test BatchedSpace wrapping a PyTreeSpace."""
     base_space = PyTreeSpace(
         {
             "discrete": Discrete(n=jnp.array(5, dtype=jnp.int32)),
@@ -167,14 +149,11 @@ def test_batch_space_pytree():
         }
     )
     batch_size = 4
-    batched = batch_space(base_space, batch_size)
+    batched = BatchedSpace(space=base_space, batch_size=batch_size)
 
-    # Should return PyTreeSpace with BatchedSpace leaves
-    assert isinstance(batched, PyTreeSpace)
-    assert isinstance(batched.tree["discrete"], BatchedSpace)
-    assert isinstance(batched.tree["continuous"], BatchedSpace)
-    assert batched.tree["discrete"].batch_size == batch_size
-    assert batched.tree["continuous"].batch_size == batch_size
+    assert isinstance(batched, BatchedSpace)
+    assert isinstance(batched.space, PyTreeSpace)
+    assert batched.batch_size == batch_size
 
     # Test sampling
     key = jax.random.PRNGKey(0)
@@ -184,8 +163,8 @@ def test_batch_space_pytree():
     assert batched.contains(sample)
 
 
-def test_batch_space_nested_pytree():
-    """Test batch_space function with nested PyTreeSpace."""
+def test_batched_nested_pytree_space():
+    """Test BatchedSpace wrapping a nested PyTreeSpace."""
     base_space = PyTreeSpace(
         {
             "obs": {
@@ -196,12 +175,10 @@ def test_batch_space_nested_pytree():
         }
     )
     batch_size = 3
-    batched = batch_space(base_space, batch_size)
+    batched = BatchedSpace(space=base_space, batch_size=batch_size)
 
-    assert isinstance(batched, PyTreeSpace)
-    assert isinstance(batched.tree["obs"]["position"], BatchedSpace)
-    assert isinstance(batched.tree["obs"]["velocity"], BatchedSpace)
-    assert isinstance(batched.tree["action"], BatchedSpace)
+    assert isinstance(batched, BatchedSpace)
+    assert isinstance(batched.space, PyTreeSpace)
 
     # Test sampling
     key = jax.random.PRNGKey(0)
@@ -212,11 +189,34 @@ def test_batch_space_nested_pytree():
     assert batched.contains(sample)
 
 
-def test_batch_space_multiple_calls():
-    """Test that batch_space can be called multiple times."""
+def test_batched_tuple_pytree_space():
+    """Test BatchedSpace wrapping a PyTreeSpace with a tuple tree."""
+    base_space = PyTreeSpace(
+        (
+            Discrete(n=jnp.array(5, dtype=jnp.int32)),
+            Continuous.from_shape(low=0.0, high=1.0, shape=(2,)),
+        )
+    )
+    batch_size = 4
+    batched = BatchedSpace(space=base_space, batch_size=batch_size)
+
+    shape = batched.shape
+    assert isinstance(shape, tuple)
+    assert shape[0] == (batch_size,)
+    assert shape[1] == (batch_size, 2)
+
+    key = jax.random.PRNGKey(0)
+    sample = batched.sample(key)
+    assert sample[0].shape == (batch_size,)
+    assert sample[1].shape == (batch_size, 2)
+    assert batched.contains(sample)
+
+
+def test_batched_space_multiple_calls():
+    """Test that BatchedSpace can be nested (double batching)."""
     base_space = Discrete(n=jnp.array(10, dtype=jnp.int32))
-    batched1 = batch_space(base_space, 3)
-    batched2 = batch_space(batched1, 2)
+    batched1 = BatchedSpace(space=base_space, batch_size=3)
+    batched2 = BatchedSpace(space=batched1, batch_size=2)
 
     # Should create nested BatchedSpace
     assert isinstance(batched2, BatchedSpace)
@@ -228,6 +228,30 @@ def test_batch_space_multiple_calls():
     key = jax.random.PRNGKey(0)
     sample = batched2.sample(key)
     assert sample.shape == (2, 3)
+
+
+def test_double_batched_pytree_space():
+    """Test nested BatchedSpace wrapping a PyTreeSpace."""
+    base_space = PyTreeSpace(
+        {
+            "discrete": Discrete(n=jnp.array(5, dtype=jnp.int32)),
+            "continuous": Continuous.from_shape(low=0.0, high=1.0, shape=(2,)),
+        }
+    )
+    inner = BatchedSpace(space=base_space, batch_size=3)
+    outer = BatchedSpace(space=inner, batch_size=2)
+
+    shape = outer.shape
+    assert shape["discrete"] == (2, 3)
+    assert shape["continuous"] == (2, 3, 2)
+
+    assert outer.dtype == base_space.dtype
+
+    key = jax.random.PRNGKey(0)
+    sample = outer.sample(key)
+    assert sample["discrete"].shape == (2, 3)
+    assert sample["continuous"].shape == (2, 3, 2)
+    assert outer.contains(sample)
 
 
 # ============================================================================

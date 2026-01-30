@@ -1,5 +1,7 @@
 """Tests for envelope.compat.craftax_envelope module."""
 
+# ruff: noqa: E402
+
 import math
 
 import jax

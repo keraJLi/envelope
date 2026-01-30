@@ -53,13 +53,13 @@ class VmapEnvsWrapper(Wrapper):
     @property
     def observation_space(self) -> spaces.Space:
         env0 = _index_env(self.env, 0, self.batch_size)
-        return spaces.batch_space(env0.observation_space, self.batch_size)
+        return spaces.BatchedSpace(space=env0.observation_space, batch_size=self.batch_size)
 
     @override
     @cached_property
     def action_space(self) -> spaces.Space:
         env0 = _index_env(self.env, 0, self.batch_size)
-        return spaces.batch_space(env0.action_space, self.batch_size)
+        return spaces.BatchedSpace(space=env0.action_space, batch_size=self.batch_size)
 
     @override
     @property

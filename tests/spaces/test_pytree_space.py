@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from envelope.spaces import Continuous, Discrete, PyTreeSpace
+from envelope.spaces import BatchedSpace, Continuous, Discrete, PyTreeSpace
 
 # ============================================================================
 # Tests: PyTreeSpace - Basic Functionality
@@ -475,3 +475,23 @@ def test_pytree_space_from_vmapped_function():
 
     # Test contains
     assert spaces.contains(sample)
+
+
+# ============================================================================
+# Tests: PyTreeSpace - Leaf Validation
+# ============================================================================
+
+
+def test_pytree_space_rejects_batched_space_leaf():
+    """Test that PyTreeSpace rejects BatchedSpace as a leaf."""
+    with pytest.raises(TypeError, match="Discrete or Continuous"):
+        PyTreeSpace(
+            {"bad": BatchedSpace(space=Discrete(n=5), batch_size=3)}
+        )
+
+
+def test_pytree_space_rejects_nested_pytree_space_leaf():
+    """Test that PyTreeSpace rejects a nested PyTreeSpace as a leaf."""
+    inner = PyTreeSpace({"a": Discrete(n=5)})
+    with pytest.raises(TypeError, match="Discrete or Continuous"):
+        PyTreeSpace({"nested": inner})
