@@ -8,6 +8,9 @@ resolution-markers = [
     "python_full_version < '3.13' and sys_platform != 'linux'",
 ]
 
+[manifest]
+overrides = [{ name = "tensorflow-probability", specifier = ">=0.26.0.dev20260116" }]
+
 [[package]]
 name = "absl-py"
 version = "2.3.1"
@@ -447,7 +450,7 @@ wheels = [
 
 [[package]]
 name = "distrax"
-version = "0.1.5"
+version = "0.1.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "absl-py" },
@@ -455,12 +458,11 @@ dependencies = [
     { name = "jax" },
     { name = "jaxlib" },
     { name = "numpy" },
-    { name = "setuptools" },
-    { name = "tensorflow-probability" },
+    { name = "tfp-nightly" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/81/a7/d87f5c5caf2ae9e28a9f506274870c25eb7e38c1ce0a1b7b3696afc73ac9/distrax-0.1.5.tar.gz", hash = "sha256:ec41522d389af69efedc8d475a7e6d8f229429c00f2140dcd641feacf7e21948", size = 190162, upload-time = "2023-11-22T12:53:44.836Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/21/a1/eb2086d2fc27ddf627f47af392d67e7e023a153d1b00087d3d12eab0465a/distrax-0.1.7.tar.gz", hash = "sha256:78deec181894e811d416b34e6b500f5e8f6d39bc850bd6f3152ee9e2164c9bef", size = 183672, upload-time = "2025-09-01T23:06:00.108Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d8/42/efa7985eefd516f273bc5557550539ebd687cc6a3a2a176d5e1f5b0398ca/distrax-0.1.5-py3-none-any.whl", hash = "sha256:5020f4b53a9a480d019c12e44292fbacb7de857cce478bc594dacf29519c61b7", size = 319716, upload-time = "2023-11-22T12:53:42.449Z" },
+    { url = "https://files.pythonhosted.org/packages/a2/3e/e67008a232c37f98f1563469e206b1f2820f01c9cce1118c02215f1bf361/distrax-0.1.7-py3-none-any.whl", hash = "sha256:cf502d64022c7a682882ae6f07aea35206c6a3d8ddfb1e3beb006723baf283fd", size = 312680, upload-time = "2025-09-01T23:05:58.175Z" },
 ]
 
 [[package]]
@@ -1063,11 +1065,16 @@ dev = [
     { name = "ruff" },
 ]
 ppo = [
+    { name = "craftax" },
     { name = "distrax" },
     { name = "flax" },
     { name = "nnx" },
     { name = "optax" },
     { name = "tfp-nightly" },
+    { name = "rejax" },
+    { name = "tfp-nightly" },
+    { name = "tyro" },
+    { name = "wandb" },
 ]
 
 [package.metadata]
@@ -1090,11 +1097,16 @@ dev = [
     { name = "ruff", specifier = ">=0.14.2" },
 ]
 ppo = [
+    { name = "craftax" },
     { name = "distrax", specifier = ">=0.1.5" },
     { name = "flax", specifier = ">=0.12" },
     { name = "nnx", specifier = ">=0.0.8" },
     { name = "optax", specifier = ">=0.2.6" },
     { name = "tfp-nightly" },
+    { name = "rejax" },
+    { name = "tfp-nightly", specifier = "==0.26.0.dev20260116" },
+    { name = "tyro" },
+    { name = "wandb" },
 ]
 
 [[package]]
@@ -2664,24 +2676,6 @@ wheels = [
 ]
 
 [[package]]
-name = "tensorflow-probability"
-version = "0.25.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "absl-py" },
-    { name = "cloudpickle" },
-    { name = "decorator" },
-    { name = "dm-tree", version = "0.1.8", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.13'" },
-    { name = "dm-tree", version = "0.1.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13'" },
-    { name = "gast" },
-    { name = "numpy" },
-    { name = "six" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/fe/b6/e116761ceeb880b7ad4c6a7e1203538754dd7dda42538f08d6daaf8dfa4d/tensorflow_probability-0.25.0-py2.py3-none-any.whl", hash = "sha256:f3f4d6431656c0122906888afe1b67b4400e82bd7f254b45b92e6c5b84ea8e3e", size = 6979403, upload-time = "2024-11-08T16:25:57.238Z" },
-]
-
-[[package]]
 name = "tensorstore"
 version = "0.1.74"
 source = { registry = "https://pypi.org/simple" }
@@ -2734,8 +2728,15 @@ wheels = [
 ]
 
 [[package]]
+<<<<<<< Updated upstream
 name = "tfp-nightly"
 version = "0.26.0.dev20260124"
+=======
+<<<<<<< Updated upstream
+=======
+name = "tfp-nightly"
+version = "0.26.0.dev20260116"
+>>>>>>> Stashed changes
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "absl-py" },
@@ -2748,10 +2749,18 @@ dependencies = [
     { name = "six" },
 ]
 wheels = [
+<<<<<<< Updated upstream
     { url = "https://files.pythonhosted.org/packages/88/fa/03429d00d5e0dbb7b945576df851a3b76bd4a27c1f9d101d49c5a0c5fd46/tfp_nightly-0.26.0.dev20260124-py2.py3-none-any.whl", hash = "sha256:1592bb6f072f0a8b126b659daa24d7f9b6cbd26983db05d58eb07efbca74dedf", size = 6975585, upload-time = "2026-01-24T09:47:08.536Z" },
 ]
 
 [[package]]
+=======
+    { url = "https://files.pythonhosted.org/packages/7c/fb/01503dfc2010f51049fecfa3b863dd83f6a68936a2f655a15b134efc8271/tfp_nightly-0.26.0.dev20260116-py2.py3-none-any.whl", hash = "sha256:bf7a57ca779d38c1bde6f1fbd629088658d3d4c432f5a170921801fd8de38a94", size = 6975585, upload-time = "2026-01-16T09:52:20.611Z" },
+]
+
+[[package]]
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 name = "tomlkit"
 version = "0.13.3"
 source = { registry = "https://pypi.org/simple" }

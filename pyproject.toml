@@ -71,16 +71,26 @@ dev = [
     "ruff>=0.14.2",
 ]
 ppo = [
+    "jax[cuda]",
     "distrax>=0.1.5",
     "flax>=0.12",
     "nnx>=0.0.8",
     "optax>=0.2.6",
-    "tfp-nightly",  # current stable build only supports JAX 0.4.35
+    "tfp-nightly==0.26.0.dev20260116",  # current stable build only supports JAX 0.4.35
+    "tyro",
+    "craftax",
+    "rejax",
+    "wandb",
 ]
 
 [tool.pytest.ini_options]
 markers = [
   "compat: tests requiring optional compat dependencies",
+]
+
+[tool.uv]
+override-dependencies = [
+    "tensorflow-probability>=0.26.0.dev20260116",
 ]
 
 [tool.uv.sources]
