@@ -62,7 +62,7 @@ compat = [
     "jumanji>=1.0.1",
     "playground>=0.1.0",
     "gymnax",
-    # "kinetix-env",
+    "kinetix-env",
 ]
 dev = [
     "hypothesis>=6.148.1",
@@ -71,21 +71,16 @@ dev = [
     "ruff>=0.14.2",
 ]
 ppo = [
-    "jax[cuda]",
+    "jax[cuda]; platform_system == 'Linux'",
     "distrax>=0.1.5",
     "flax>=0.12",
     "nnx>=0.0.8",
     "optax>=0.2.6",
-    "tfp-nightly==0.26.0.dev20260116",  # current stable build only supports JAX 0.4.35
+    "tfp-nightly",  # current stable build only supports JAX 0.4.35
     "tyro",
     "craftax",
     "rejax",
     "wandb",
-]
-
-[tool.pytest.ini_options]
-markers = [
-  "compat: tests requiring optional compat dependencies",
 ]
 
 [tool.uv]
@@ -96,3 +91,8 @@ override-dependencies = [
 [tool.uv.sources]
 gymnax = { git = "https://github.com/RobertTLange/gymnax.git" }
 kinetix-env = { git = "https://github.com/FLAIROx/Kinetix.git" }
+
+[tool.pytest.ini_options]
+markers = [
+  "compat: tests requiring optional compat dependencies",
+]
