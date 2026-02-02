@@ -15,7 +15,10 @@ class TruncationWrapper(Wrapper):
     def reset(
         self, key: Key, state: PyTree | None = None, **kwargs
     ) -> tuple[WrappedState, Info]:
-        inner_state, info = self.env.reset(key)
+        if state is None:
+            inner_state, info = self.env.reset(key, **kwargs)
+        else:
+            inner_state, info = self.env.reset(key, state.inner_state, **kwargs)
         state = self.TruncationState(inner_state=inner_state, steps=0)
         return state, info.update(truncated=self.max_steps <= 0)
 

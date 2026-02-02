@@ -14,9 +14,14 @@ class AutoResetWrapper(Wrapper):
         self, key: Key, state: PyTree | None = None, **kwargs
     ) -> tuple[WrappedState, Info]:
         key, subkey = jax.random.split(key)
-        inner_state = state.inner_state if state else None
-        inner_state, info = self.env.reset(key, inner_state, **kwargs)
-        state = self.AutoResetState(inner_state=inner_state, reset_key=subkey)
+
+        if state is None:
+            inner_state, info = self.env.reset(key, **kwargs)
+            state = self.AutoResetState(inner_state=inner_state, reset_key=subkey)
+        else:
+            inner_state, info = self.env.reset(key, state.inner_state, **kwargs)
+            state = state.replace(inner_state=inner_state, reset_key=subkey)
+
         return state, info.update(next_obs=info.obs)
 
     def step(
