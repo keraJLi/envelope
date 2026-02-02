@@ -18,6 +18,17 @@ def is_single_key(key):
     return key.shape == (2,)
 
 
+def _split_or_keep_key(key: Key, batch_size: int) -> Key:
+    if is_single_key(key):
+        return jax.random.split(key, batch_size)
+    elif key.shape[0] == batch_size:
+        return key
+    raise ValueError(
+        f"reset key's leading dimension ({key.shape[0]}) must match "
+        f"batch_size ({batch_size})."
+    )
+
+
 class VmapWrapper(Wrapper):
     """Does not forward kwargs to the underlying env. Does not wrap the state."""
 
@@ -27,17 +38,7 @@ class VmapWrapper(Wrapper):
     def reset(
         self, key: Key, state: PyTree | None = None, **kwargs
     ) -> tuple[WrappedState, Info]:
-        # Accept single key or batched keys
-        if is_single_key(key):
-            keys = jax.random.split(key, self.batch_size)
-        else:
-            if key.shape[0] != self.batch_size:
-                raise ValueError(
-                    f"reset key's leading dimension ({key.shape[0]}) must match "
-                    f"batch_size ({self.batch_size})."
-                )
-            keys = key
-
+        keys = _split_or_keep_key(key, self.batch_size)
         state, info = jax.vmap(self.env.reset)(keys, state)
         return state, info
 
@@ -51,9 +52,13 @@ class VmapWrapper(Wrapper):
     @override
     @cached_property
     def observation_space(self) -> spaces.Space:
-        return spaces.BatchedSpace(space=self.env.observation_space, batch_size=self.batch_size)
+        return spaces.BatchedSpace(
+            space=self.env.observation_space, batch_size=self.batch_size
+        )
 
     @override
     @cached_property
     def action_space(self) -> spaces.Space:
-        return spaces.BatchedSpace(space=self.env.action_space, batch_size=self.batch_size)
+        return spaces.BatchedSpace(
+            space=self.env.action_space, batch_size=self.batch_size
+        )

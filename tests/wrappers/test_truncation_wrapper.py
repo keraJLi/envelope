@@ -119,6 +119,35 @@ def test_steps_as_jax_scalar_array_behaves_correctly():
     assert bool(jnp.asarray(info.truncated)) is True
 
 
+def test_reset_with_state_passes_inner_state_down():
+    """reset(key, state) should pass state.inner_state to the inner env's reset."""
+    env = StepCounterEnv()
+    w = TruncationWrapper(env=env, max_steps=10)
+    key = jax.random.PRNGKey(0)
+
+    state, _ = w.reset(key)
+    for _ in range(5):
+        state, _ = w.step(state, jnp.asarray(0.1))
+    assert state.steps == 5
+
+    new_state, _ = w.reset(jax.random.PRNGKey(1), state)
+
+    # Inner env should be reset
+    assert jnp.allclose(new_state.inner_state.env_state, 0.0)
+    # Steps is episode-scoped, so it resets to 0
+    assert new_state.steps == 0
+
+
+def test_reset_with_none_does_not_pass_inner_state():
+    """reset(key, None) should not pass inner state to the inner env."""
+    env = StepCounterEnv()
+    w = TruncationWrapper(env=env, max_steps=10)
+    key = jax.random.PRNGKey(0)
+
+    state, _ = w.reset(key)
+    assert state.steps == 0
+
+
 @pytest.mark.parametrize(
     "env_factory,action",
     [

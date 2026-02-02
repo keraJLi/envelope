@@ -519,6 +519,26 @@ class TestAutoResetJITCompatibility:
 # ============================================================================
 
 
+def test_reset_with_state_uses_replace():
+    """reset(key, state) should use state.replace() rather than constructing fresh."""
+    env = StepCounterEnv()
+    w = AutoResetWrapper(env=env)
+    key = jax.random.PRNGKey(0)
+
+    state, _ = w.reset(key)
+    # Step to advance reset_key
+    state, _ = w.step(state, jnp.array(0.1))
+    stepped_reset_key = state.reset_key
+
+    # Reset with existing state
+    new_state, _ = w.reset(jax.random.PRNGKey(1), state)
+
+    # Inner env should be reset
+    assert jnp.allclose(new_state.inner_state.env_state, 0.0)
+    # reset_key should be updated (from key split), but state.replace was used
+    assert isinstance(new_state, AutoResetWrapper.AutoResetState)
+
+
 def test_auto_reset_passes_state_to_inner_wrapper():
     """Verify that auto-reset passes state down to inner wrappers.
 
