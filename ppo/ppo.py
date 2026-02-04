@@ -33,6 +33,12 @@ class Args:
     normalize_observations: bool = False
     seed: int = 0
 
+    # wandb
+    use_wandb: bool = False
+    wandb_entity: str | None = None
+    wandb_project: str | None = "envelope-ppo"
+    wandb_log_every: int = 10
+
 
 def make_env(args: Args):
     env = envelope.create(args.env_name)
@@ -50,6 +56,7 @@ def make_env(args: Args):
 class TrainState(nnx.Pytree):
     def __init__(self, args: Args):
         self.args = nnx.static(args)
+        self.global_steps = jnp.array(0)
 
         # Initialize environment and rngs
         env, vecenv = make_env(args)
@@ -100,6 +107,7 @@ def collect_trajectories(ts: TrainState):
         action = pi.sample(seed=ts.rngs())
 
         env_state, env_info = ts.vecenv.step(ts.env_state, action)
+        ts.global_steps += ts.args.num_envs
         ts.env_state = env_state
         ts.env_info = env_info
 
@@ -108,7 +116,7 @@ def collect_trajectories(ts: TrainState):
             value=value,
             action=action,
             log_prob=pi.log_prob(action),
-            value_next=ts.value_fn(env_info.obs_true),
+            value_next=ts.value_fn(env_info.final.obs),
         )
         return ts, out_info
 
@@ -195,7 +203,7 @@ def train_step(ts: TrainState):
     info = collect_trajectories(ts)
 
     # Compute advantages
-    last_value = ts.value_fn(ts.env_info.obs_true)
+    last_value = ts.value_fn(ts.env_info.final.obs)
     advantages = calculate_gae(ts, info, last_value)
     info = info.update(advantages=advantages)
 
@@ -215,59 +223,74 @@ if __name__ == "__main__":
     import time
 
     import tyro
+    import wandb
 
     args = tyro.cli(Args)
-    train_state = TrainState(args)
 
-    jit_train_step = nnx.jit(train_step)
+    if args.use_wandb:
+        wandb.init(
+            project=args.wandb_project,
+            entity=args.wandb_entity,
+            config=dataclasses.asdict(args),
+        )
+
+    train_state = TrainState(args)
 
     steps_per_update = args.num_steps * args.num_envs
     num_updates = args.total_timesteps // steps_per_update
-    start_time = time.time()
+
+    start = None
+    update_count = 0
+
+    def callback(
+        mean_return,
+        global_steps,
+        policy_loss,
+        value_loss,
+        policy_entropy,
+    ):
+        global start, update_count
+        update_count += 1
+
+        time_elapsed = time.time() - start
+        sps = global_steps / time_elapsed
+        print(
+            f"global_steps: {global_steps}, mean_return: {mean_return:.4f}, "
+            f"sps: {sps:.0f}"
+        )
+
+        if args.use_wandb and update_count % args.wandb_log_every == 0:
+            wandb.log(
+                {
+                    "time/sps": sps,
+                    "time/iteration": update_count,
+                    "mean_return": float(mean_return),
+                    "policy_loss": float(policy_loss),
+                    "value_loss": float(value_loss),
+                    "policy_entropy": float(policy_entropy),
+                },
+                step=int(global_steps),
+            )
 
     @nnx.jit
     @nnx.scan(in_axes=nnx.Carry, length=num_updates)
-    def train_loop(carry):
-        train_state = carry
-        out_info = jit_train_step(train_state)
-        mean_return = out_info.last_return.mean()
+    def train_loop(train_state):
+        out_info = train_step(train_state)
+        mean_return = out_info.final.episode_return.mean()
+        jax.debug.callback(
+            callback,
+            mean_return,
+            train_state.global_steps,
+            out_info.policy_loss,
+            out_info.value_loss,
+            out_info.policy_entropy,
+        )
         return train_state, mean_return
-
-    train_state, mean_returns = train_loop(train_state)
-    mean_returns = mean_returns.block_until_ready()
-
-    print("Fitting 3 times.")
 
     start = time.time()
     train_state, mean_returns = train_loop(train_state)
     mean_returns = mean_returns.block_until_ready()
-    train_state, mean_returns = train_loop(train_state)
-    mean_returns = mean_returns.block_until_ready()
-    train_state, mean_returns = train_loop(train_state)
-    mean_returns = mean_returns.block_until_ready()
-    print(f"Total time: {(time.time() - start) / 3:.2f} seconds")
+    print(f"Total time: {(time.time() - start):.2f} seconds")
 
-    # for i in range(num_updates):
-    #     out_info = jit_train_step(train_state)
-    #     mean_return = out_info.last_return.mean()
-
-    #     # Block for accurate timing, then compute SPS
-    #     jax.block_until_ready(mean_return)
-    #     elapsed = time.time() - start_time
-    #     total_steps = (i + 1) * steps_per_update
-    #     sps = total_steps / elapsed
-
-    #     print(
-    #         f"timestep={total_steps}, "
-    #         f"sps={sps:.0f}, "
-    #         f"mean_return={mean_return:.4f}, "
-    #         f"mean_value={out_info.value.mean():.4f}, "
-    #         f"policy_loss={out_info.policy_loss:.4f}, "
-    #         f"policy_clipped_surrogate_loss={out_info.policy_clipped_surrogate_loss:.4f}, "
-    #         f"policy_entropy={out_info.policy_entropy:.4f}, "
-    #         f"policy_grad_norm={out_info.policy_grad_norm:.4f}, "
-    #         f"value_loss={out_info.value_loss:.4f}, "
-    #         f"value_grad_norm={out_info.value_grad_norm:.4f}",
-    #     )
-
-    # print(f"Total time: {time.time() - start_time:.2f} seconds")
+    if args.use_wandb:
+        wandb.finish()
