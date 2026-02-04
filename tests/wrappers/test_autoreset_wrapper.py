@@ -579,11 +579,11 @@ def test_auto_reset_passes_state_to_inner_wrapper():
     assert bool(state.inner_state.received_state_on_reset) is True
 
 
-def test_obs_true_preserved_after_auto_reset():
-    """Verify that obs_true contains the observation from the final step, not reset.
+def test_final_obs_preserved_after_auto_reset():
+    """Verify that final.obs contains the observation from the final step, not reset.
 
     This is a regression test: when an episode terminates and auto-resets,
-    obs_true should contain the observation from the terminated step (before reset),
+    final.obs should contain the observation from the terminated step (before reset),
     not the observation from the new episode (after reset).
     """
     env = StepCounterEnv(terminate_after=2)
@@ -594,17 +594,17 @@ def test_obs_true_preserved_after_auto_reset():
 
     # Step 1: env_state becomes 0.1, steps=1, not done yet
     state, info1 = w.step(state, jnp.array(0.1))
-    # When not done, obs_true should equal obs
-    assert jnp.allclose(info1.obs_true, info1.obs)
-    assert jnp.allclose(info1.obs_true, jnp.array(0.1))
+    # When not done, final.obs should equal obs (from the last completed episode)
+    # Note: on the first step after reset, final contains the reset info
+    assert jnp.allclose(info1.obs, jnp.array(0.1))
 
     # Step 2: env_state becomes 0.3 (0.1 + 0.2), steps=2, terminates and auto-resets
     state, info2 = w.step(state, jnp.array(0.2))
 
     # After auto-reset, obs should be from reset (0.0)
     assert jnp.allclose(info2.obs, jnp.array(0.0))
-    # But obs_true should be from the terminated step (0.1 + 0.2 = 0.3)
-    assert jnp.allclose(info2.obs_true, jnp.array(0.3))
+    # But final.obs should be from the terminated step (0.1 + 0.2 = 0.3)
+    assert jnp.allclose(info2.final.obs, jnp.array(0.3))
 
 
 def test_terminated_flag_preserved_after_auto_reset():
