@@ -180,6 +180,6 @@ class EpisodeStatisticsWrapper(envelope.Wrapper):
 
     def _update_info(self, state: State, info: Info) -> Info:
         return info.update(
-            last_return=state.last_stats.episode_return,
-            last_length=state.last_stats.episode_length,
+            episode_return=state.last_stats.episode_return,
+            episode_length=state.last_stats.episode_length,
         )
