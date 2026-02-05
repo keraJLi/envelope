@@ -166,7 +166,7 @@ class PyTreeSpace(Space):
         )
 
 
-def _peel_batched(space: "BatchedSpace") -> tuple[tuple[int, ...], Space]:
+def peel_batched(space: Space) -> tuple[tuple[int, ...], Space]:
     """Collect batch dimensions and return (batch_dims_tuple, base_space)."""
     dims: list[int] = []
     s: Space = space
@@ -205,7 +205,7 @@ class BatchedSpace(Space):
 
     @cached_property
     def shape(self) -> PyTree:
-        batch_dims, base = _peel_batched(self)
+        batch_dims, base = peel_batched(self)
         if isinstance(base, PyTreeSpace):
             return jax.tree.map(
                 lambda space: batch_dims + space.shape,
@@ -216,7 +216,7 @@ class BatchedSpace(Space):
 
     @property
     def dtype(self) -> PyTree:
-        _, base = _peel_batched(self)
+        _, base = peel_batched(self)
         return base.dtype
 
     def __repr__(self) -> str:
