@@ -78,6 +78,7 @@ gymnax = { git = "https://github.com/RobertTLange/gymnax.git" }
 kinetix-env = { git = "https://github.com/FLAIROx/Kinetix.git" }
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 markers = [
   "compat: tests requiring optional compat dependencies",
 ]
