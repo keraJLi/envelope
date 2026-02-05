@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import Any, override
+from typing import Any, Callable, cast, override
 
 import jax
 import jax.numpy as jnp
@@ -10,15 +10,24 @@ from gymnax.environments.environment import EnvParams as GymnaxEnvParams
 
 from envelope import spaces as envelope_spaces
 from envelope.environment import Environment, Info, InfoContainer, State
-from envelope.struct import Container, static_field
+from envelope.struct import Container, field, static_field
 from envelope.typing import Key, PyTree
+
+_GymnaxReset = Callable[
+    [Key, GymnaxEnvParams],
+    tuple[PyTree, Any],
+]
+_GymnaxStep = Callable[
+    [Key, Any, PyTree, GymnaxEnvParams],
+    tuple[PyTree, Any, jnp.ndarray, jnp.ndarray, PyTree],
+]
 
 
 class GymnaxEnvelope(Environment):
     """Wrapper to convert a Gymnax environment to a envelope environment."""
 
     gymnax_env: GymnaxEnv = static_field()
-    env_params: PyTree
+    env_params: PyTree = field()
 
     @classmethod
     def from_name(
@@ -45,20 +54,25 @@ class GymnaxEnvelope(Environment):
 
     @cached_property
     def _gymnax_info_placeholder(self) -> PyTree:
+        reset_fn = cast(_GymnaxReset, self.gymnax_env.reset)
+        step_fn = cast(_GymnaxStep, self.gymnax_env.step)
+
         key = jax.random.PRNGKey(0)
-        _, state = self.gymnax_env.reset(key, self.env_params)
-        _, _, _, _, info = self.gymnax_env.step(
+        _, state = reset_fn(key, self.env_params)
+        _, _, _, _, info = step_fn(
             key,
             state,
             self.gymnax_env.action_space(self.env_params).sample(key),
             self.env_params,
         )
-        return jax.tree.map(lambda x: jnp.full_like(x, jnp.nan), info)
+        return jax.tree.map(lambda x: jnp.full_like(x, jnp.nan, dtype=float), info)
 
     @override
     def init(self, key: Key) -> tuple[State, Info]:
+        reset_fn = cast(_GymnaxReset, self.gymnax_env.reset)
+
         key, subkey = jax.random.split(key)
-        obs, env_state = self.gymnax_env.reset(subkey, self.env_params)
+        obs, env_state = reset_fn(subkey, self.env_params)
         state = Container().update(key=key, env_state=env_state)
         info = InfoContainer(obs=obs, reward=0.0, terminated=False)
         info = info.update(info=self._gymnax_info_placeholder)
@@ -67,7 +81,8 @@ class GymnaxEnvelope(Environment):
     @override
     def step(self, state: State, action: PyTree) -> tuple[State, Info]:
         key, subkey = jax.random.split(state.key)
-        obs, env_state, reward, done, env_info = self.gymnax_env.step(
+        step_fn = cast(_GymnaxStep, self.gymnax_env.step)
+        obs, env_state, reward, done, env_info = step_fn(
             subkey, state.env_state, action, self.env_params
         )
         state = state.update(key=key, env_state=env_state)

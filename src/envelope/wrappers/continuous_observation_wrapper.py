@@ -28,16 +28,19 @@ def to_continuous(space: Discrete | Continuous) -> Continuous:
 
 
 class ContinuousObservationWrapper(Wrapper):
+    @override
     def init(self, key: Key) -> tuple[State, Info]:
         state, info = self.env.init(key)
         info = info.update(obs=to_float(info.obs))
         return state, info
 
+    @override
     def reset(self, key: Key, state: State) -> tuple[State, Info]:
         state, info = self.env.reset(key, state)
         info = info.update(obs=to_float(info.obs))
         return state, info
 
+    @override
     def step(self, state: State, action: PyTree) -> tuple[State, Info]:
         state, info = self.env.step(state, action)
         info = info.update(obs=to_float(info.obs))

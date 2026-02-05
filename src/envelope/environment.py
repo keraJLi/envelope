@@ -5,7 +5,7 @@ from typing import Protocol, runtime_checkable
 
 from envelope import spaces
 from envelope.struct import Container, FrozenPyTreeNode
-from envelope.typing import Key, PyTree
+from envelope.typing import Array, Key, PyTree
 
 __all__ = ["Environment", "State", "Info", "InfoContainer"]
 
@@ -23,7 +23,7 @@ class Info(Protocol):
 
 class InfoContainer(Container):
     obs: PyTree
-    reward: float
+    reward: float | Array
     terminated: bool
     truncated: bool = field(default=False)
 

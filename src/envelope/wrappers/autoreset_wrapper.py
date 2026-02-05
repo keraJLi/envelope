@@ -1,3 +1,5 @@
+from typing import override
+
 import jax
 import jax.numpy as jnp
 
@@ -40,6 +42,7 @@ class AutoResetWrapper(Wrapper):
         reset_key: jax.Array = field()
         last_final: Info = field()
 
+    @override
     def init(self, key: Key) -> tuple[WrappedState, Info]:
         key, subkey = jax.random.split(key)
         inner_state, info = self.env.init(key)
@@ -50,9 +53,11 @@ class AutoResetWrapper(Wrapper):
         )
         return state, info.update(final=state.last_final)
 
+    @override
     def reset(self, key: Key, state: WrappedState) -> tuple[WrappedState, Info]:
         raise NotImplementedError("Reset is not implemented for AutoResetWrapper")
 
+    @override
     def step(self, state: WrappedState, action: PyTree) -> tuple[WrappedState, Info]:
         key, key_reset = jax.random.split(state.reset_key)
         state = state.replace(reset_key=key)

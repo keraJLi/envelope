@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from functools import cached_property
-from typing import override
+from typing import cast, override
 
 import jax
 from jax import numpy as jnp
@@ -65,7 +65,9 @@ class Continuous(Space):
     high: float | jax.Array
 
     @classmethod
-    def from_shape(cls, low: float, high: float, shape: tuple[int]) -> "Continuous":
+    def from_shape(
+        cls, low: float, high: float, shape: tuple[int, ...]
+    ) -> "Continuous":
         return cls(
             low=jnp.full(shape, low, dtype=jnp.asarray(low).dtype),
             high=jnp.full(shape, high, dtype=jnp.asarray(high).dtype),

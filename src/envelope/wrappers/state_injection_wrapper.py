@@ -1,3 +1,5 @@
+from typing import override
+
 from envelope.environment import Info, InfoContainer
 from envelope.struct import field
 from envelope.typing import Key, PyTree
@@ -60,11 +62,13 @@ class StateInjectionWrapper(Wrapper):
 
         return update_injected(state)
 
+    @override
     def init(self, key: Key) -> tuple[WrappedState, Info]:
         inner_state, info = self.env.init(key)
         state = self.InjectedState(inner_state=inner_state)
         return state, info
 
+    @override
     def reset(self, key: Key, state: WrappedState) -> tuple[WrappedState, Info]:
         # If reset state is set, use it instead of resetting inner env
         if state.reset_state is not None and state.reset_obs is not None:
@@ -77,6 +81,7 @@ class StateInjectionWrapper(Wrapper):
 
         return state.replace(inner_state=inner_state), info
 
+    @override
     def step(self, state: WrappedState, action: PyTree) -> tuple[WrappedState, Info]:
         inner_state, info = self.env.step(state.inner_state, action)
         return state.replace(inner_state=inner_state), info

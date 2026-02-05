@@ -48,7 +48,7 @@ class BraxEnvelope(Environment):
     def default_max_steps(self) -> int:
         return _BRAX_DEFAULT_EPISODE_LENGTH
 
-    def __post_init__(self) -> "BraxEnvelope":
+    def __post_init__(self):
         if isinstance(self.brax_env, BraxWrapper):
             warnings.warn(
                 "Environment wrapping should be handled by envelope. "
@@ -69,7 +69,7 @@ class BraxEnvelope(Environment):
         info = InfoContainer(
             obs=brax_state.obs,
             reward=brax_state.reward,
-            terminated=brax_state.done.astype(bool),
+            terminated=jnp.asarry(brax_state.done, dtype=bool).item(),
         )
         info = info.update(**dataclasses.asdict(brax_state))
         return brax_state, info

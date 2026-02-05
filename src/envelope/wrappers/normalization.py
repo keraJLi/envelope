@@ -16,7 +16,7 @@ class MeanVarPair(NamedTuple):
 class RunningMeanVar(FrozenPyTreeNode):
     mean: PyTree
     var: PyTree
-    count: int
+    count: int | Array
 
     @cached_property
     def std(self) -> PyTree:

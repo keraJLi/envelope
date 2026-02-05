@@ -5,12 +5,19 @@ import jax
 import jax.numpy as jnp
 
 from envelope.environment import Info, State
-from envelope.spaces import BatchedSpace, Continuous, Discrete, Space, peel_batched
+from envelope.spaces import (
+    BatchedSpace,
+    Continuous,
+    Discrete,
+    PyTreeSpace,
+    Space,
+    peel_batched,
+)
 from envelope.typing import PyTree
 from envelope.wrappers.wrapper import Wrapper
 
 
-def flatten_space(space: Space):
+def flatten_space(space: PyTreeSpace | Continuous | Discrete):
     def is_leaf(x):
         # Tuples containing only integers are shape tuples (leaves)
         # PyTreeSpace can only have tuples that contain at least a Space, so

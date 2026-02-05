@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import override
+from typing import cast, override
 
 import jax
 from jax import numpy as jnp
@@ -37,7 +37,7 @@ class ObservationNormalizationWrapper(Wrapper):
         mean = jax.tree.map(zeros, self.stats_spec)
         var = jax.tree.map(ones, self.stats_spec)
 
-        return RunningMeanVar(mean=mean, var=var, count=jnp.array(0))
+        return RunningMeanVar(mean=mean, var=var, count=jnp.asarray(0))
 
     def _normalize_obs(self, obs: PyTree, rmv: RunningMeanVar) -> PyTree:
         def norm_leaf(x, mean, std, spec):
@@ -93,7 +93,7 @@ class ObservationNormalizationWrapper(Wrapper):
     @override
     @cached_property
     def observation_space(self) -> Space:
-        def to_continuous(space: Space) -> Continuous:
+        def to_continuous(space: Continuous | Discrete) -> Continuous:
             return Continuous.from_shape(low=-jnp.inf, high=jnp.inf, shape=space.shape)
 
         def is_leaf(space: Space) -> bool:

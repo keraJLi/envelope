@@ -81,8 +81,9 @@ class JumanjiEnvelope(Environment):
 
 
 def convert_jumanji_to_envelope_info(timestep: JumanjiTimeStep) -> InfoContainer:
+    term = jnp.asarray(timestep.last(), dtype=bool).item()
     info = InfoContainer(
-        obs=timestep.observation, reward=timestep.reward, terminated=timestep.last()
+        obs=timestep.observation, reward=timestep.reward, terminated=term
     ).update(**timestep.extras)
     return info
 

@@ -28,6 +28,7 @@ from kinetix.environment import (
 from kinetix.environment.ued.ued import make_reset_fn_sample_kinetix_level
 from kinetix.util.saving import load_from_json_file
 
+from envelope import field
 from envelope import spaces as envelope_spaces
 from envelope.compat.gymnax_envelope import _convert_space as _convert_gymnax_space
 from envelope.environment import Environment, Info, InfoContainer, State
@@ -67,7 +68,7 @@ class KinetixEnvelope(Environment):
     """Wrapper to convert a Kinetix environment to a envelope environment."""
 
     kinetix_env: Any = static_field()
-    env_params: Any
+    env_params: Any = field()
 
     @property
     def default_max_steps(self) -> int:

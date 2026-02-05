@@ -1,6 +1,6 @@
 import dataclasses
 from dataclasses import KW_ONLY
-from typing import Any, Iterable, Iterator, Mapping, Self, Tuple
+from typing import Any, Iterable, Iterator, Mapping, Self, Tuple, dataclass_transform
 
 import jax
 
@@ -24,6 +24,7 @@ def static_field(**kwargs):
     return field(pytree_node=False, **kwargs)
 
 
+@dataclass_transform()
 class FrozenPyTreeNode:
     """
     Frozen dataclass base that is a JAX pytree node.
@@ -64,6 +65,7 @@ class FrozenPyTreeNode:
         return dataclasses.replace(self, **changes)
 
 
+@dataclass_transform()
 @jax.tree_util.register_pytree_node_class
 @dataclasses.dataclass(frozen=True, eq=True, repr=True, slots=False)
 class Container:

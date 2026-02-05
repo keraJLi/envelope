@@ -3,11 +3,7 @@ import jax.numpy as jnp
 import pytest
 
 from envelope.wrappers.truncation_wrapper import TruncationWrapper
-from tests.wrappers.helpers import (
-    DiscreteStepCounterEnv,
-    NoStepsEnv,
-    StepCounterEnv,
-)
+from tests.wrappers.helpers import DiscreteStepCounterEnv, StepCounterEnv
 
 
 def test_reset_sets_truncated_false():
