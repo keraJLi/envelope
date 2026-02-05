@@ -37,9 +37,10 @@ class FlattenObservationWrapper(Wrapper):
         return state, info
 
     @override
-    def reset(self, state: State, key: Key) -> tuple[State, Info]:
-        next_state, info = self.env.reset(state, key)
-        return next_state, info.update(obs=flatten_x(info.obs))
+    def reset(self, key: Key, state: State) -> tuple[State, Info]:
+        state, info = self.env.reset(key, state)
+        info = info.update(obs=flatten_x(info.obs))
+        return state, info
 
     @override
     def step(self, state: State, action: PyTree) -> tuple[State, Info]:
