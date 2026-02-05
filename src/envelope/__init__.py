@@ -1,17 +1,22 @@
 from envelope.compat import create
 from envelope.environment import Environment, Info, InfoContainer
 from envelope.spaces import BatchedSpace, Continuous, Discrete, PyTreeSpace, Space
-from envelope.struct import field, static_field, FrozenPyTreeNode, Container
+from envelope.struct import Container, FrozenPyTreeNode, field, static_field
 from envelope.wrappers import (
-    Wrapper,
-    WrappedState,
     AutoResetWrapper,
+    ClipActionWrapper,
+    ContinuousObservationWrapper,
+    EpisodeStatisticsWrapper,
+    FlattenActionWrapper,
+    FlattenObservationWrapper,
     ObservationNormalizationWrapper,
-    OptimisticResetWrapper,
+    PooledInitVmapWrapper,
     StateInjectionWrapper,
     TruncationWrapper,
-    VmapWrapper,
     VmapEnvsWrapper,
+    VmapWrapper,
+    WrappedState,
+    Wrapper,
 )
 
 __all__ = [
@@ -35,8 +40,13 @@ __all__ = [
     "Wrapper",
     "WrappedState",
     "AutoResetWrapper",
+    "ClipActionWrapper",
+    "ContinuousObservationWrapper",
+    "EpisodeStatisticsWrapper",
+    "FlattenActionWrapper",
+    "FlattenObservationWrapper",
     "ObservationNormalizationWrapper",
-    "OptimisticResetWrapper",
+    "PooledInitVmapWrapper",
     "StateInjectionWrapper",
     "TruncationWrapper",
     "VmapWrapper",

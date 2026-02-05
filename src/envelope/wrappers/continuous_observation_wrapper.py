@@ -1,0 +1,56 @@
+from functools import cached_property
+from typing import override
+
+import jax
+import jax.numpy as jnp
+
+from envelope.environment import Info, State
+from envelope.spaces import BatchedSpace, Continuous, Discrete, Space, peel_batched
+from envelope.typing import Key, PyTree
+from envelope.wrappers.wrapper import Wrapper
+
+
+def to_float(obs: PyTree) -> PyTree:
+    return jax.tree.map(lambda x: x.astype(jnp.float32), obs)
+
+
+def to_continuous(space: Discrete | Continuous) -> Continuous:
+    if isinstance(space, Continuous):
+        low = space.low.astype(jnp.float32)
+        high = space.high.astype(jnp.float32)
+        return Continuous(low=low, high=high)
+    elif isinstance(space, Discrete):
+        low = jnp.zeros_like(space.n, dtype=jnp.float32)
+        high = (space.n - 1).astype(jnp.float32)
+        return Continuous(low=low, high=high)
+
+
+class ContinuousObservationWrapper(Wrapper):
+    def init(self, key: Key) -> tuple[State, Info]:
+        state, info = self.env.init(key)
+        info = info.update(obs=to_float(info.obs))
+        return state, info
+
+    def reset(self, key: Key, state: State) -> tuple[State, Info]:
+        state, info = self.env.reset(key, state)
+        info = info.update(obs=to_float(info.obs))
+        return state, info
+
+    def step(self, state: State, action: PyTree) -> tuple[State, Info]:
+        state, info = self.env.step(state, action)
+        info = info.update(obs=to_float(info.obs))
+        return state, info
+
+    @override
+    @cached_property
+    def observation_space(self) -> Space:
+        batch_dims, base = peel_batched(self.env.observation_space)
+
+        def is_leaf(x):
+            return isinstance(x, (Discrete, Continuous))
+
+        space = jax.tree.map(to_continuous, base, is_leaf=is_leaf)
+
+        for batch_dim in batch_dims:
+            space = BatchedSpace(space, batch_dim)
+        return space

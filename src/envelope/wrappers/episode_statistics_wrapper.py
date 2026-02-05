@@ -1,45 +1,35 @@
-from dataclasses import field
-from envelope.wrappers import Wrapper
-from typing import override
+import jax
 
-from envelope.environment import Environment, Info, State
-from envelope.typing import Key, PyTree, Array
+from envelope.environment import Info, State
+from envelope.struct import FrozenPyTreeNode, field
+from envelope.typing import Key, PyTree
+from envelope.wrappers.wrapper import WrappedState, Wrapper
+
+
+class EpisodeStatistics(FrozenPyTreeNode):
+    reward: jax.Array = field(default=0)
+    length: jax.Array = field(default=0)
 
 
 class EpisodeStatisticsWrapper(Wrapper):
-    class StatisticsState(WappedState):
-        episode_reward: Array
-        episode_length: Array
-        _pointer: int = field(default=0)
+    class EpisodeStatisticsState(WrappedState):
+        stats: EpisodeStatistics = field(default=EpisodeStatistics())
 
-    def reset(
-        self, key: Key, state: State | None = None    ) -> tuple[State, Info]:
-        state, info = self.env.reset(key, state=state, )
-        info = 
-        return state, info
+    def init(self, key: Key) -> tuple[State, Info]:
+        inner_state, info = self.env.init(key)
+        state = self.EpisodeStatisticsState(inner_state=inner_state)
+        return state, info.update(stats=state.stats)
 
+    def reset(self, key: Key, state: State) -> tuple[State, Info]:
+        inner_state, info = self.env.reset(key, state.inner_state)
+        state = state.replace(inner_state=inner_state)
+        return state, info.update(stats=state.stats)
 
-    @override
-    def reset(
-        self, key: Key, state: State | None = None    ) -> tuple[State, Info]:
-        state, info = self.env.reset(key, state=state, )
-        info = 
-        return state, info
-
-    @override
-    def step(self, state: State, action: PyTree, ) -> tuple[State, Info]:
-        next_state, info = self.env.step(state, action, )
-        info = self._update_episode_statistics(info)
-        return next_state, info
-
-    def _update_episode_statistics(self, info: Info) -> Info:
-        """Update episode statistics in the info dictionary."""
-        if "episode_statistics" not in info:
-            info["episode_statistics"] = {
-                "reward": 0.0,
-                "length": 0,
-            }
-        info["episode_statistics"]["reward"] += info.get("reward", 0.0)
-        info["episode_statistics"]["length"] += 1
-        return info
-
+    def step(self, state: State, action: PyTree) -> tuple[State, Info]:
+        inner_state, info = self.env.step(state.inner_state, action)
+        stats = state.stats.replace(
+            reward=state.stats.reward + info.reward,
+            length=state.stats.length + 1,
+        )
+        state = state.replace(inner_state=inner_state, stats=stats)
+        return state, info.update(stats=stats)

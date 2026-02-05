@@ -42,36 +42,10 @@ class AutoResetWrapper(Wrapper):
 
     def init(self, key: Key) -> tuple[WrappedState, Info]:
         key, subkey = jax.random.split(key)
-<<<<<<< HEAD
-
-        if state is None:
-            inner_state, info = self.env.reset(key, **kwargs)
-            state = self.AutoResetState(inner_state=inner_state, reset_key=subkey)
-        else:
-            inner_state, info = self.env.reset(key, state.inner_state, **kwargs)
-            state = state.replace(inner_state=inner_state, reset_key=subkey)
-
-        return state, info.update(next_obs=info.obs)
-
-    def step(
-        self, state: WrappedState, action: PyTree, **kwargs
-    ) -> tuple[WrappedState, Info]:
-        inner_state, info_step = self.env.step(state.inner_state, action, **kwargs)
-        done = info_step.terminated | info_step.truncated
-
-        state = self.AutoResetState(inner_state=inner_state, reset_key=state.reset_key)
-        info = info_step.update(next_obs=info_step.obs)
-
-        state, info = jax.lax.cond(
-            done,
-            lambda: self.reset(state.reset_key, state),
-            lambda: (state, info),
-=======
         inner_state, info = self.env.init(key)
         # Initialize last_final with the reset info (no previous episode yet)
         state = self.AutoResetState(
             inner_state=inner_state, reset_key=subkey, last_final=info
->>>>>>> autoreset-final-info
         )
         return state, info.update(final=state.last_final)
 
