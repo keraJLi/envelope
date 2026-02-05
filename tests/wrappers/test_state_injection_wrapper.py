@@ -16,13 +16,13 @@ from tests.wrappers.helpers import StepCounterEnv, StepState
 class TestStateInjectionCoreFunctionality:
     """Test StateInjectionWrapper core functionality."""
 
-    def test_reset_without_state_delegates_to_inner_env(self):
-        """Verify that reset() without prior state calls inner env reset."""
+    def test_init_delegates_to_inner_env(self):
+        """Verify that init() calls inner env init."""
         env = StepCounterEnv()
         w = StateInjectionWrapper(env=env)
         key = jax.random.PRNGKey(0)
 
-        state, info = w.reset(key)
+        state, info = w.init(key)
 
         # Should get fresh state from inner env (StepCounterEnv starts at 0)
         assert state.inner_state is not None
@@ -39,7 +39,7 @@ class TestStateInjectionCoreFunctionality:
         key = jax.random.PRNGKey(0)
 
         # Get initial state
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
 
         # Set a custom reset state
         custom_state = StepState(env_state=jnp.array(42.0), steps=0)
@@ -59,7 +59,7 @@ class TestStateInjectionCoreFunctionality:
         key = jax.random.PRNGKey(0)
 
         # Get initial state and set custom reset state
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         custom_state = StepState(env_state=jnp.array(42.0), steps=0)
         custom_obs = jnp.array(42.0)
         state = w.set_reset_state(state, custom_state, custom_obs)
@@ -79,7 +79,7 @@ class TestStateInjectionCoreFunctionality:
         key = jax.random.PRNGKey(0)
 
         # Get initial state and set first custom state
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         state = w.set_reset_state(
             state,
             StepState(env_state=jnp.array(1.0), steps=0),
@@ -104,7 +104,7 @@ class TestStateInjectionCoreFunctionality:
         key = jax.random.PRNGKey(0)
 
         # Get initial state and set custom reset state
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         custom_state = StepState(env_state=jnp.array(0.0), steps=0)
         custom_obs = jnp.array(0.0)
         state = w.set_reset_state(state, custom_state, custom_obs)
@@ -126,7 +126,7 @@ class TestStateInjectionCoreFunctionality:
         key = jax.random.PRNGKey(0)
 
         # Get initial state and take a step so inner_state differs from fresh reset
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         state, _ = w.step(state, jnp.array(5.0))
         assert jnp.allclose(state.inner_state.env_state, jnp.array(5.0))
 
@@ -195,7 +195,7 @@ class TestStateInjectionWithAutoReset:
         key = jax.random.PRNGKey(0)
 
         # Reset and set a custom reset state
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         reset_state = StepState(env_state=jnp.array(42.0), steps=0)
         reset_obs = jnp.array(42.0)
         state = inner_w.set_reset_state(state, reset_state, reset_obs)
@@ -216,7 +216,7 @@ class TestStateInjectionWithAutoReset:
         key = jax.random.PRNGKey(0)
 
         # Get initial state
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
 
         # Set a custom reset state - just pass the outermost state
         custom_state = StepState(env_state=jnp.array(100.0), steps=0)
@@ -238,7 +238,7 @@ class TestStateInjectionWithAutoReset:
         key = jax.random.PRNGKey(0)
 
         # Get initial state and set custom reset state
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         custom_state = StepState(env_state=jnp.array(50.0), steps=0)
         custom_obs = jnp.array(50.0)
         state = inner_w.set_reset_state(state, custom_state, custom_obs)
@@ -260,7 +260,7 @@ class TestStateInjectionWithAutoReset:
         key = jax.random.PRNGKey(0)
 
         # Initial reset
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
 
         # Simulate UED outer loop
         for outer_iter in range(3):
@@ -299,7 +299,7 @@ class TestStateInjectionJITCompatibility:
 
         @jax.jit
         def run_episode(k):
-            s, _ = w.reset(k)
+            s, _ = w.init(k)
             for _ in range(5):  # More steps than terminate_after to trigger resets
                 s, info = w.step(s, jnp.array(0.1))
             return s, info
@@ -316,7 +316,7 @@ class TestStateInjectionJITCompatibility:
 
         @jax.jit
         def run_with_state(k, reset_state, reset_obs):
-            s, _ = w.reset(k)
+            s, _ = w.init(k)
             # Set the reset state - just pass the outermost state
             s = inner_w.set_reset_state(s, reset_state, reset_obs)
             for _ in range(3):
@@ -354,7 +354,7 @@ class TestStateInjectionJITCompatibility:
             return state, info
 
         key = jax.random.PRNGKey(0)
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
 
         # Run multiple outer iterations
         for i in range(3):

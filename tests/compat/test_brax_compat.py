@@ -30,7 +30,7 @@ def _brax_fast_env_warmup(brax_fast_env, prng_key):
     """Warm up reset/step once to amortize compilation."""
     env = brax_fast_env
     key_reset, key_step = jax.random.split(prng_key)
-    state, _info = env.reset(key_reset)
+    state, _info = env.init(key_reset)
     action = env.action_space.sample(key_step)
     env.step(state, action)
 
@@ -55,7 +55,7 @@ def test_brax_info_preserves_brax_fields_on_reset(brax_fast_env, prng_key):
     env = brax_fast_env
     key = prng_key
 
-    state, info = env.reset(key)
+    state, info = env.init(key)
 
     # Check extra Brax state fields are preserved
     # Brax state typically has: obs, reward, done, metrics, info
@@ -71,7 +71,7 @@ def test_brax_terminated_matches_done_on_step(brax_fast_env, prng_key):
     """Brax-specific: wrapper exposes underlying `done` and maps it to `terminated`."""
     env = brax_fast_env
     key_reset, key_action = jax.random.split(prng_key)
-    state, _info = env.reset(key_reset)
+    state, _info = env.init(key_reset)
     action = env.action_space.sample(key_action)
     _next_state, info = env.step(state, action)
     assert hasattr(info, "done")
@@ -127,5 +127,5 @@ def test_deepcopy_warning(brax_fast_env, prng_key):
 
     # Verify the copied environment is usable
     key = prng_key
-    state, info = copied_env.reset(key)
+    state, info = copied_env.init(key)
     assert state is not None

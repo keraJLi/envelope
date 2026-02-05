@@ -13,24 +13,22 @@ class EpisodeStatisticsWrapper(Wrapper):
         _pointer: int = field(default=0)
 
     def reset(
-        self, key: Key, state: State | None = None, **kwargs
-    ) -> tuple[State, Info]:
-        state, info = self.env.reset(key, state=state, **kwargs)
+        self, key: Key, state: State | None = None    ) -> tuple[State, Info]:
+        state, info = self.env.reset(key, state=state, )
         info = 
         return state, info
 
 
     @override
     def reset(
-        self, key: Key, state: State | None = None, **kwargs
-    ) -> tuple[State, Info]:
-        state, info = self.env.reset(key, state=state, **kwargs)
+        self, key: Key, state: State | None = None    ) -> tuple[State, Info]:
+        state, info = self.env.reset(key, state=state, )
         info = 
         return state, info
 
     @override
-    def step(self, state: State, action: PyTree, **kwargs) -> tuple[State, Info]:
-        next_state, info = self.env.step(state, action, **kwargs)
+    def step(self, state: State, action: PyTree, ) -> tuple[State, Info]:
+        next_state, info = self.env.step(state, action, )
         info = self._update_episode_statistics(info)
         return next_state, info
 

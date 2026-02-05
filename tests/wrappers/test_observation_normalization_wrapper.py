@@ -51,7 +51,7 @@ def test_normalization_matches_manual(batch_size, dim):
         env=VmapWrapper(env=base, batch_size=batch_size)
     )
     key = jax.random.PRNGKey(0)
-    state, info = w.reset(key)
+    state, info = w.init(key)
     # Manual rmv update on reshaped obs (-1, *spec.shape)
     reshaped = info.unnormalized_obs.reshape((-1,) + base.observation_space.shape)
     rmv = update_rmv(state.rmv_state, reshaped)
@@ -82,7 +82,7 @@ def test_nested_vmap_stats_count_and_shapes(b1, b2, dim):
     outer = VmapWrapper(env=inner, batch_size=b1)
     w = ObservationNormalizationWrapper(env=outer)
     key = jax.random.PRNGKey(123)
-    state, info = w.reset(key)
+    state, info = w.init(key)
     assert state.rmv_state.count == b1 * b2
     assert info.obs.shape == (b1, b2, dim)
 
@@ -100,7 +100,7 @@ def test_jit_compatibility_smoke():
 
     @jax.jit
     def run_once(k, a):
-        s, i = w.reset(k)
+        s, i = w.init(k)
         print(f"s: {s}, a: {a}")
         ns, ni = w.step(s, a)
         return ns.rmv_state.count, ni.obs.shape
@@ -115,7 +115,7 @@ def test_jit_compatibility_smoke():
 def test_pickle_running_mean_var_in_state():
     base = VectorObsEnv(dim=2)
     w = ObservationNormalizationWrapper(env=VmapWrapper(env=base, batch_size=3))
-    state, info = w.reset(jax.random.PRNGKey(0))
+    state, info = w.init(jax.random.PRNGKey(0))
     blob = pickle.dumps(state.rmv_state)
     rmv2: RunningMeanVar = pickle.loads(blob)
     assert jax.tree_util.tree_all(
@@ -159,7 +159,7 @@ def test_prop_normalization_consistency(batch_size, dim, seed):
         env=VmapWrapper(env=base, batch_size=batch_size)
     )
     key = jax.random.PRNGKey(seed)
-    state, info = w.reset(key)
+    state, info = w.init(key)
     reshaped = info.unnormalized_obs.reshape((-1,) + base.observation_space.shape)
     rmv = update_rmv(state.rmv_state, reshaped)
     mean = jnp.broadcast_to(rmv.mean, info.unnormalized_obs.shape)
@@ -180,7 +180,7 @@ def test_constant_observations_produce_finite_near_zero_outputs():
     env = ConstantObsEnv(value=7.0, shape=(5,), dtype=jnp.float32)
     w = ObservationNormalizationWrapper(env=env)
     key = jax.random.PRNGKey(0)
-    state, info = w.reset(key)
+    state, info = w.init(key)
     assert jnp.all(jnp.isfinite(info.obs))
     state, info = w.step(state, jnp.asarray(0.0))
     assert jnp.all(jnp.isfinite(info.obs))
@@ -195,7 +195,7 @@ def test_image_per_pixel_stats_spec_zero_mean_unit_std():
     spec = jax.ShapeDtypeStruct((H, W, C), jnp.float32)
     w = ObservationNormalizationWrapper(env=v, stats_spec=spec)
     key = jax.random.PRNGKey(0)
-    state, _ = w.reset(key)
+    state, _ = w.init(key)
 
     def scan_fn(s, _):
         s, info = w.step(s, jnp.zeros((B,)))
@@ -215,7 +215,7 @@ def test_image_channelwise_stats_spec_dtype_cast():
     spec = jax.ShapeDtypeStruct((1, 1, C), jnp.bfloat16)
     w = ObservationNormalizationWrapper(env=v, stats_spec=spec)
     key = jax.random.PRNGKey(0)
-    state, info = w.reset(key)
+    state, info = w.init(key)
     assert info.obs.dtype == jnp.bfloat16
     state, info = w.step(state, jnp.zeros((B,)))
     assert info.obs.dtype == jnp.bfloat16
@@ -228,7 +228,7 @@ def test_scalar_stats_spec_broadcast_to_vector_and_cast():
     spec = jax.ShapeDtypeStruct((), jnp.float16)
     w = ObservationNormalizationWrapper(env=v, stats_spec=spec)
     key = jax.random.PRNGKey(0)
-    state, info = w.reset(key)
+    state, info = w.init(key)
     assert jnp.asarray(info.obs).dtype == jnp.float16
     state, info = w.step(state, jnp.zeros((B, D), dtype=jnp.float32))
     assert jnp.asarray(info.obs).dtype == jnp.float16

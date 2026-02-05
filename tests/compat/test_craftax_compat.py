@@ -45,7 +45,7 @@ def _craftax_env_warmup(craftax_env, prng_key):
     """Warm up reset/step once per Craftax variant to amortize compilation."""
     env = craftax_env
     key_reset, key_step = jax.random.split(prng_key)
-    state, _info = env.reset(key_reset)
+    state, _info = env.init(key_reset)
     action = env.action_space.sample(key_step)
     env.step(state, action)
 
@@ -92,7 +92,7 @@ def test_time_limit_overridden_to_inf(craftax_env):
 def test_key_splitting_reset_and_step(craftax_env, prng_key):
     key = prng_key
 
-    state, _ = craftax_env.reset(key)
+    state, _ = craftax_env.init(key)
     assert not jnp.array_equal(state.key, key)
 
     _key_step = jax.random.fold_in(prng_key, 1)

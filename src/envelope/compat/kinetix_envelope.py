@@ -162,7 +162,7 @@ class KinetixEnvelope(Environment):
         return cls(kinetix_env=kinetix_env, env_params=env_params)
 
     @override
-    def reset(self, key: Key) -> tuple[State, Info]:
+    def init(self, key: Key) -> tuple[State, Info]:
         key, subkey = jax.random.split(key)
         obs, env_state = self.kinetix_env.reset(subkey, self.env_params)
         state_out = Container().update(key=key, env_state=env_state)

@@ -22,7 +22,7 @@ def rollout_scan(scan_num_steps: int):
 
     def _rollout(env, key):
         key, reset_key = jax.random.split(key)
-        state, _ = env.reset(reset_key)
+        state, _ = env.init(reset_key)
 
         action_keys = jax.random.split(key, scan_num_steps)
         actions = jax.vmap(env.action_space.sample)(action_keys)

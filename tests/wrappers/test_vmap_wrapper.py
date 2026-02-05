@@ -35,7 +35,7 @@ def test_protocol_conformance_reset_and_step():
     env = ScalarToyEnv()
     wrapped = VmapWrapper(env=env, batch_size=3)
     key = jax.random.PRNGKey(0)
-    state, info = wrapped.reset(key)
+    state, info = wrapped.init(key)
     assert isinstance(info, Info)
     assert state is not None
     # Action space contains batched action
@@ -58,8 +58,8 @@ def test_reset_equivalence_to_manual_vmap(batch_size):
     w = VmapWrapper(env=env, batch_size=batch_size)
     single_key = jax.random.PRNGKey(0)
     keys = jax.random.split(single_key, batch_size)
-    s_wrapped, i_wrapped = w.reset(single_key)
-    s_manual, i_manual = jax.vmap(env.reset)(keys)
+    s_wrapped, i_wrapped = w.init(single_key)
+    s_manual, i_manual = jax.vmap(env.init)(keys)
     assert jax.tree_util.tree_all(
         jax.tree.map(lambda a, b: jnp.allclose(a, b), s_wrapped, s_manual)
     )
@@ -73,12 +73,12 @@ def test_step_equivalence_to_manual_vmap(dim, batch_size):
     env = VectorToyEnv(dim)
     w = VmapWrapper(env=env, batch_size=batch_size)
     key = jax.random.PRNGKey(0)
-    s0, _ = w.reset(key)
+    s0, _ = w.init(key)
     action = w.action_space.sample(key)
     s1, info1 = w.step(s0, action)
     # Manual baseline
     keys = jax.random.split(key, batch_size)
-    s0_m, _ = jax.vmap(env.reset)(keys)
+    s0_m, _ = jax.vmap(env.init)(keys)
     s1_m, info1_m = jax.vmap(env.step)(s0_m, action)
     assert jax.tree_util.tree_all(
         jax.tree.map(lambda a, b: jnp.allclose(a, b), s1, s1_m)
@@ -97,14 +97,14 @@ def test_reset_raises_on_wrong_key_batch_dim():
     w = VmapWrapper(env=env, batch_size=4)
     bad_keys = jax.random.split(jax.random.PRNGKey(0), 3)  # mismatch batch
     with pytest.raises(ValueError):
-        _ = w.reset(bad_keys)
+        _ = w.init(bad_keys)
 
 
 def test_step_raises_on_action_shape_mismatch():
     env = VectorToyEnv(dim=3)
     w = VmapWrapper(env=env, batch_size=2)
     key = jax.random.PRNGKey(0)
-    state, _ = w.reset(key)
+    state, _ = w.init(key)
     bad_action = jnp.ones((3,), dtype=jnp.float32)  # missing batch dim
     with pytest.raises(Exception):
         _ = w.step(state, bad_action)
@@ -128,8 +128,8 @@ def test_normalize_then_vmap_equals_vmap_then_normalize(batch_size):
         env=VmapWrapper(env=base, batch_size=batch_size)
     )
     key = jax.random.PRNGKey(42)
-    s_a, i_a = a.reset(key)
-    s_b, i_b = b.reset(key)
+    s_a, i_a = a.init(key)
+    s_b, i_b = b.init(key)
     # Both produce batched observations with same shape/dtype; numerical values
     # may differ due to per-env vs aggregated RMV semantics
     assert i_a.obs.shape == i_b.obs.shape == (batch_size, 3)
@@ -152,14 +152,14 @@ def test_nested_vmaps_equivalence_reset_and_step():
     outer = VmapWrapper(env=VmapWrapper(env=base, batch_size=3), batch_size=2)  # (2,3)
     flat = VmapWrapper(env=base, batch_size=6)  # (6,)
     key = jax.random.PRNGKey(0)
-    s_outer, i_outer = outer.reset(key)
+    s_outer, i_outer = outer.init(key)
     keys = jax.random.split(key, 6)
-    s_flat_m, i_flat_m = jax.vmap(base.reset)(keys)
+    s_flat_m, i_flat_m = jax.vmap(base.init)(keys)
     # Reshape outer to flat
     i_outer_flat = i_outer.obs.reshape((6, 2))
     assert jnp.allclose(i_outer_flat, i_flat_m.obs)
     action = flat.action_space.sample(key)
-    s_flat, _ = flat.reset(key)
+    s_flat, _ = flat.init(key)
     s_flat2, i_flat2 = flat.step(s_flat, action)
     s_outer2, i_outer2 = outer.step(s_outer, action.reshape((2, 3, 2)))
     i_outer2_flat = i_outer2.obs.reshape((6, 2))
@@ -169,7 +169,7 @@ def test_nested_vmaps_equivalence_reset_and_step():
 def test_termination_truncation_propagation():
     flags = jnp.array([True, False, True], dtype=bool)
     w = VmapWrapper(env=FlagDoneEnv(flags=flags), batch_size=3)
-    s, _ = w.reset(jax.random.PRNGKey(0))
+    s, _ = w.init(jax.random.PRNGKey(0))
     _, info = w.step(s, jnp.array([0.1, 0.2, 0.3], dtype=jnp.float32))
     assert jnp.all(info.terminated == flags)
     assert jnp.all(info.truncated == ~flags)
@@ -179,11 +179,11 @@ def test_state_slicing_matches_single_env_run():
     base = VectorToyEnv(dim=3)
     w = VmapWrapper(env=base, batch_size=4)
     key = jax.random.PRNGKey(0)
-    s_b, i_b = w.reset(key)
+    s_b, i_b = w.init(key)
     idx = 2
     # Run single env with the same per-env key used by the wrapper for index idx
     keys = jax.random.split(key, 4)
-    s0, _ = base.reset(keys[idx])
+    s0, _ = base.init(keys[idx])
     a_single = base.action_space.sample(keys[idx])
     s1_single, i1_single = base.step(s0, a_single)
     # Run batched and slice
@@ -205,7 +205,7 @@ def test_jit_compatibility_smoke():
 
     @jax.jit
     def run_once(k, a):
-        s, _ = w.reset(k)
+        s, _ = w.init(k)
         ns, inf = w.step(s, a)
         return ns, inf.obs
 
@@ -220,7 +220,7 @@ def test_pickle_serialization_of_state_and_info():
     env = ScalarToyEnv()
     w = VmapWrapper(env=env, batch_size=2)
     key = jax.random.PRNGKey(0)
-    state, info = w.reset(key)
+    state, info = w.init(key)
     payload = (state, info)
     blob = pickle.dumps(payload)
     loaded_state, loaded_info = pickle.loads(blob)
@@ -244,7 +244,7 @@ def test_prop_shapes_and_contains(batch_size, dim, seed):
     env = VectorToyEnv(dim=dim)
     w = VmapWrapper(env=env, batch_size=batch_size)
     key = jax.random.PRNGKey(seed)
-    state, info = w.reset(key)
+    state, info = w.init(key)
     assert state is not None
     assert isinstance(info, Info)
     assert w.observation_space.contains(info.obs)

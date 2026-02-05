@@ -166,7 +166,8 @@ wandb/
 # ruff
 .ruff_cache/
 
-# Cursor
+# Vibecoding
 .cursor
 .cursorignore
 AGENTS.md
+CLAUDE.md

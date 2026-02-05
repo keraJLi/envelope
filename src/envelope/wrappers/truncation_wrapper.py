@@ -12,20 +12,18 @@ class TruncationWrapper(Wrapper):
     class TruncationState(WrappedState):
         steps: jnp.ndarray | int = field(default=0)
 
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs
-    ) -> tuple[WrappedState, Info]:
-        if state is None:
-            inner_state, info = self.env.reset(key, **kwargs)
-        else:
-            inner_state, info = self.env.reset(key, state.inner_state, **kwargs)
+    def init(self, key: Key) -> tuple[WrappedState, Info]:
+        inner_state, info = self.env.init(key)
         state = self.TruncationState(inner_state=inner_state, steps=0)
         return state, info.update(truncated=self.max_steps <= 0)
 
-    def step(
-        self, state: WrappedState, action: PyTree, **kwargs
-    ) -> tuple[WrappedState, Info]:
-        next_inner_state, info = self.env.step(state.inner_state, action, **kwargs)
+    def reset(self, key: Key, state: WrappedState) -> tuple[WrappedState, Info]:
+        inner_state, info = self.env.reset(key, state.inner_state)
+        state = state.replace(inner_state=inner_state)
+        return state, info.update(truncated=self.max_steps <= 0)
+
+    def step(self, state: WrappedState, action: PyTree) -> tuple[WrappedState, Info]:
+        next_inner_state, info = self.env.step(state.inner_state, action)
         next_steps = state.steps + 1
         next_state = self.TruncationState(
             inner_state=next_inner_state, steps=next_steps

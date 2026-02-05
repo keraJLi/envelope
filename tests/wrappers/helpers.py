@@ -7,7 +7,6 @@ deterministic, and easy to compose across wrapper unit tests.
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -83,9 +82,7 @@ class StepCounterEnv(Environment):
             return int(value)
         return jnp.array(value, dtype=self.steps_dtype)
 
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs: Any
-    ) -> tuple[StepState, InfoContainer]:
+    def init(self, key: Key) -> tuple[StepState, InfoContainer]:
         s = StepState(env_state=jnp.array(0.0), steps=self._make_steps(0))
         # `reset_truncated` may become a traced boolean when env instances are vmapped.
         # Avoid `bool(tracer)` conversions.
@@ -100,6 +97,9 @@ class StepCounterEnv(Environment):
             terminated=False,
             truncated=truncated,
         )
+
+    def reset(self, key: Key, state: State) -> tuple[StepState, InfoContainer]:
+        return self.init(key)
 
     def step(
         self, state: StepState, action: jax.Array
@@ -192,13 +192,16 @@ class NoStepsEnv(Environment):
     def action_space(self) -> Continuous:
         return Continuous(low=-1.0, high=1.0)
 
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs: Any
-    ) -> tuple[NoStepsState, InfoContainer]:
+    def init(self, key: Key) -> tuple[NoStepsState, InfoContainer]:
         s = NoStepsState(env_state=jnp.array(0.0))
         return s, InfoContainer(
             obs=s.env_state, reward=0.0, terminated=False, truncated=False
         )
+
+    def reset(
+        self, key: Key, state: State
+    ) -> tuple[NoStepsState, InfoContainer]:
+        return self.init(key)
 
     def step(
         self, state: NoStepsState, action: jax.Array
@@ -221,13 +224,16 @@ class AlternatingTerminationEnv(Environment):
     def action_space(self) -> Continuous:
         return Continuous(low=-1.0, high=1.0)
 
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs: Any
-    ) -> tuple[StepState, InfoContainer]:
+    def init(self, key: Key) -> tuple[StepState, InfoContainer]:
         s = StepState(env_state=jnp.array(0.0), steps=0)
         return s, InfoContainer(
             obs=s.env_state, reward=0.0, terminated=False, truncated=False
         )
+
+    def reset(
+        self, key: Key, state: State
+    ) -> tuple[StepState, InfoContainer]:
+        return self.init(key)
 
     def step(
         self, state: StepState, action: jax.Array
@@ -256,11 +262,12 @@ class ScalarToyEnv(Environment):
     def action_space(self) -> Continuous:
         return Continuous(low=-1.0, high=1.0)
 
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs: Any
-    ) -> tuple[State, Info]:
+    def init(self, key: Key) -> tuple[State, Info]:
         s = jnp.asarray(0.0, dtype=jnp.float32)
         return s, InfoContainer(obs=s, reward=0.0, terminated=False, truncated=False)
+
+    def reset(self, key: Key, state: State) -> tuple[State, Info]:
+        return self.init(key)
 
     def step(self, state: State, action: jax.Array) -> tuple[State, Info]:
         ns = state + action
@@ -289,11 +296,12 @@ class VectorToyEnv(Environment):
     def action_space(self) -> Continuous:
         return Continuous.from_shape(low=-1.0, high=1.0, shape=(self.dim,))
 
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs: Any
-    ) -> tuple[State, Info]:
+    def init(self, key: Key) -> tuple[State, Info]:
         s = jnp.zeros((self.dim,), dtype=jnp.float32)
         return s, InfoContainer(obs=s, reward=0.0, terminated=False, truncated=False)
+
+    def reset(self, key: Key, state: State) -> tuple[State, Info]:
+        return self.init(key)
 
     def step(self, state: State, action: jax.Array) -> tuple[State, Info]:
         ns = state + action
@@ -318,9 +326,12 @@ class FlagDoneEnv(Environment):
     def action_space(self) -> Continuous:
         return Continuous(low=-1.0, high=1.0)
 
-    def reset(self, key: Key, state: PyTree | None = None, **kwargs: Any):
+    def init(self, key: Key):
         z = jnp.array(0.0)
         return z, InfoContainer(obs=z, reward=0.0, terminated=False, truncated=False)
+
+    def reset(self, key: Key, state: State):
+        return self.init(key)
 
     def step(self, state: State, action: jax.Array):
         t = self.flags.astype(bool)
@@ -351,11 +362,12 @@ class ParamEnv(Environment):
     def action_space(self) -> Continuous:
         return Continuous.from_shape(low=-1.0, high=1.0, shape=(2,))
 
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs: Any
-    ) -> tuple[State, Info]:
+    def init(self, key: Key) -> tuple[State, Info]:
         s = jnp.asarray([self.offset, -self.offset], dtype=jnp.float32)
         return s, InfoContainer(obs=s, reward=0.0, terminated=False, truncated=False)
+
+    def reset(self, key: Key, state: State) -> tuple[State, Info]:
+        return self.init(key)
 
     def step(self, state: State, action: jax.Array) -> tuple[State, Info]:
         ns = state + action + jnp.asarray(self.offset, dtype=jnp.float32)
@@ -385,9 +397,12 @@ class VectorObsEnv(Environment):
     def action_space(self) -> Continuous:
         return Continuous.from_shape(low=-1.0, high=1.0, shape=(self.dim,))
 
-    def reset(self, key: Key, state: PyTree | None = None, **kwargs: Any):
+    def init(self, key: Key):
         s = jnp.linspace(0.0, 1.0, self.dim, dtype=jnp.float32)
         return s, InfoContainer(obs=s, reward=0.0, terminated=False, truncated=False)
+
+    def reset(self, key: Key, state: State):
+        return self.init(key)
 
     def step(self, state: State, action: jax.Array):
         ns = state + action
@@ -421,13 +436,16 @@ class PyTreeObsEnv(Environment):
     def action_space(self) -> Continuous:
         return Continuous(low=-1.0, high=1.0)
 
-    def reset(self, key: Key, state: PyTree | None = None, **kwargs: Any):
+    def init(self, key: Key):
         obs = {
             k: jnp.arange(jnp.prod(jnp.asarray(v)), dtype=jnp.float32).reshape(v)
             for k, v in self.shapes.items()
         }
         s = obs
         return s, InfoContainer(obs=obs, reward=0.0, terminated=False, truncated=False)
+
+    def reset(self, key: Key, state: State):
+        return self.init(key)
 
     def step(self, state: State, action: jax.Array):
         ns = state
@@ -454,9 +472,12 @@ class ConstantObsEnv(Environment):
     def action_space(self) -> Continuous:
         return Continuous(low=-1.0, high=1.0)
 
-    def reset(self, key: Key, state: PyTree | None = None, **kwargs: Any):
+    def init(self, key: Key):
         obs = jnp.asarray(self.value, self.dtype) * jnp.ones(self.shape, self.dtype)
         return 0, InfoContainer(obs=obs, reward=0.0, terminated=False, truncated=False)
+
+    def reset(self, key: Key, state: State):
+        return self.init(key)
 
     def step(self, state: State, action: jax.Array):
         obs = jnp.asarray(self.value, self.dtype) * jnp.ones(self.shape, self.dtype)
@@ -476,9 +497,12 @@ class IntObsEnv(Environment):
     def action_space(self) -> Discrete:
         return Discrete(n=2)
 
-    def reset(self, key: Key, state: PyTree | None = None, **kwargs: Any):
+    def init(self, key: Key):
         s = jnp.array(0, dtype=jnp.int32)
         return s, InfoContainer(obs=s, reward=0.0, terminated=False, truncated=False)
+
+    def reset(self, key: Key, state: State):
+        return self.init(key)
 
     def step(self, state: State, action: jax.Array):
         return state, InfoContainer(
@@ -506,12 +530,15 @@ class RandomImageEnv(Environment):
     def action_space(self) -> Continuous:
         return Continuous(low=-1.0, high=1.0)
 
-    def reset(self, key: Key, state: PyTree | None = None, **kwargs: Any):
+    def init(self, key: Key):
         k1, k2 = jax.random.split(key)
         obs = jax.random.normal(k1, self.shape, dtype=jnp.float32)
         return k2, InfoContainer(
             obs=obs.astype(self.dtype), reward=0.0, terminated=False, truncated=False
         )
+
+    def reset(self, key: Key, state: State):
+        return self.init(key)
 
     def step(self, state: State, action: jax.Array):
         k1, k2 = jax.random.split(state)
@@ -542,12 +569,15 @@ class TestInfo(FrozenPyTreeNode):
 class WrapperSimpleEnv(Environment):
     """Simple environment for testing Wrapper delegation."""
 
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs: Any
-    ) -> tuple[jax.Array, TestInfo]:
+    def init(self, key: Key) -> tuple[jax.Array, TestInfo]:
         state = jnp.array(0.0)
         info = TestInfo(obs=state, reward=0.0, terminated=False, truncated=False)
         return state, info
+
+    def reset(
+        self, key: Key, state: State
+    ) -> tuple[jax.Array, TestInfo]:
+        return self.init(key)
 
     def step(self, state: jax.Array, action: jax.Array) -> tuple[jax.Array, TestInfo]:
         next_state = state + action
@@ -571,12 +601,15 @@ class WrapperEnvWithFields(Environment):
     some_field: int = static_field(default=42)
     another_field: str = static_field(default="test")
 
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs: Any
-    ) -> tuple[jax.Array, TestInfo]:
+    def init(self, key: Key) -> tuple[jax.Array, TestInfo]:
         state = jnp.array(0.0)
         info = TestInfo(obs=state, reward=0.0, terminated=False, truncated=False)
         return state, info
+
+    def reset(
+        self, key: Key, state: State
+    ) -> tuple[jax.Array, TestInfo]:
+        return self.init(key)
 
     def step(self, state: jax.Array, action: jax.Array) -> tuple[jax.Array, TestInfo]:
         next_state = state + action
@@ -597,12 +630,15 @@ class WrapperEnvWithFields(Environment):
 class WrapperEnvWithMethods(Environment):
     """Environment with custom methods for testing."""
 
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs: Any
-    ) -> tuple[jax.Array, TestInfo]:
+    def init(self, key: Key) -> tuple[jax.Array, TestInfo]:
         state = jnp.array(0.0)
         info = TestInfo(obs=state, reward=0.0, terminated=False, truncated=False)
         return state, info
+
+    def reset(
+        self, key: Key, state: State
+    ) -> tuple[jax.Array, TestInfo]:
+        return self.init(key)
 
     def step(self, state: jax.Array, action: jax.Array) -> tuple[jax.Array, TestInfo]:
         next_state = state + action
@@ -642,10 +678,13 @@ def make_wrapper_discrete_env() -> Environment:
     """Factory for wrapper tests needing discrete spaces."""
 
     class DiscreteEnv(Environment):
-        def reset(self, key: Key, state: PyTree | None = None, **kwargs: Any):
+        def init(self, key: Key):
             state = jnp.array(0, dtype=jnp.int32)
             info = TestInfo(obs=state, reward=0.0, terminated=False, truncated=False)
             return state, info
+
+        def reset(self, key: Key, state: State):
+            return self.init(key)
 
         def step(self, state: jax.Array, action: jax.Array):
             next_state = state + 1
@@ -669,7 +708,7 @@ def make_wrapper_complex_state_env() -> Environment:
     """Factory for wrapper tests that use a dict-like state."""
 
     class ComplexStateEnv(Environment):
-        def reset(self, key: Key, state: PyTree | None = None, **kwargs: Any):
+        def init(self, key: Key):
             st = {
                 "position": jnp.array([0.0, 0.0]),
                 "velocity": jnp.array([1.0, 1.0]),
@@ -678,6 +717,9 @@ def make_wrapper_complex_state_env() -> Environment:
                 obs=st["position"], reward=0.0, terminated=False, truncated=False
             )
             return st, info
+
+        def reset(self, key: Key, state: State):
+            return self.init(key)
 
         def step(self, state: dict, action: jax.Array):
             next_state = {
