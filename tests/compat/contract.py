@@ -7,6 +7,9 @@ These functions enforce a consistent baseline across all compat wrappers:
 - observation is validated via a provided callback (since some suites have known quirks)
 """
 
+# TODO: This is super useful to the wrapper tests as well. We should move it to tests
+# toplevel and use it everywhere.
+
 from __future__ import annotations
 
 from collections.abc import Callable
