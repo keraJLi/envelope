@@ -124,7 +124,7 @@ def collect_trajectories(ts: TrainState):
     return out_info
 
 
-def calculate_gae(ts: TrainState, info, last_value):
+def calculate_gae(ts: TrainState, info):
     @nnx.scan(reverse=True)
     def gae_step(carry, transition):
         gae, next_value = carry
@@ -137,6 +137,10 @@ def calculate_gae(ts: TrainState, info, last_value):
         gae = delta + ts.args.gamma * ts.args.gae_lambda * (1 - done) * gae
         return (gae, transition.value), gae
 
+    # Get last value for bootstrapping. We can unsqueeze exactly once since obs is flat.
+    done = ts.env_info.terminated | ts.env_info.truncated
+    last_obs = jnp.where(done[:, None], ts.env_info.final.obs, ts.env_info.obs)
+    last_value = ts.value_fn(last_obs)
     init_carry = (jnp.zeros_like(last_value), last_value)
     _, advantages = gae_step(init_carry, info)
     return advantages
@@ -203,8 +207,7 @@ def train_step(ts: TrainState):
     info = collect_trajectories(ts)
 
     # Compute advantages
-    last_value = ts.value_fn(ts.env_info.final.obs)
-    advantages = calculate_gae(ts, info, last_value)
+    advantages = calculate_gae(ts, info)
     info = info.update(advantages=advantages)
 
     # Multiple epochs of updates (unrolled since num_epochs is small/static)
@@ -251,8 +254,11 @@ if __name__ == "__main__":
         time_elapsed = time.time() - start
         sps = global_steps / time_elapsed
         print(
-            f"global_steps: {global_steps}, mean_return: {mean_return:.4f}, "
-            f"sps: {sps:.0f}"
+            f"global_steps: {global_steps}, "
+            f"mean_return: {mean_return:.4f}, "
+            f"sps: {sps:.0f}, "
+            f"policy_loss: {policy_loss:.4f}, "
+            f"value_loss: {value_loss:.4f}, "
         )
 
         if args.use_wandb and update_count % args.wandb_log_every == 0:
