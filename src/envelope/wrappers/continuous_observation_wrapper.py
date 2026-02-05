@@ -16,13 +16,15 @@ def to_float(obs: PyTree) -> PyTree:
 
 def to_continuous(space: Discrete | Continuous) -> Continuous:
     if isinstance(space, Continuous):
-        low = space.low.astype(jnp.float32)
-        high = space.high.astype(jnp.float32)
+        low = jnp.asarray(space.low, dtype=jnp.float32)
+        high = jnp.asarray(space.high, dtype=jnp.float32)
         return Continuous(low=low, high=high)
     elif isinstance(space, Discrete):
-        low = jnp.zeros_like(space.n, dtype=jnp.float32)
-        high = (space.n - 1).astype(jnp.float32)
+        n = jnp.asarray(space.n)
+        low = jnp.zeros_like(n, dtype=jnp.float32)
+        high = jnp.asarray(n - 1, dtype=jnp.float32)
         return Continuous(low=low, high=high)
+    raise TypeError(f"Expected Discrete or Continuous, got {type(space)}")
 
 
 class ContinuousObservationWrapper(Wrapper):
