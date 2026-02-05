@@ -16,31 +16,26 @@ def to_float(obs: PyTree) -> PyTree:
 
 def to_continuous(space: Discrete | Continuous) -> Continuous:
     if isinstance(space, Continuous):
-        low = jnp.asarray(space.low, dtype=jnp.float32)
-        high = jnp.asarray(space.high, dtype=jnp.float32)
+        low = space.low.astype(jnp.float32)
+        high = space.high.astype(jnp.float32)
         return Continuous(low=low, high=high)
     elif isinstance(space, Discrete):
-        n = jnp.asarray(space.n)
-        low = jnp.zeros_like(n, dtype=jnp.float32)
-        high = jnp.asarray(n - 1, dtype=jnp.float32)
+        low = jnp.zeros_like(space.n, dtype=jnp.float32)
+        high = (space.n - 1).astype(jnp.float32)
         return Continuous(low=low, high=high)
-    raise TypeError(f"Expected Discrete or Continuous, got {type(space)}")
 
 
 class ContinuousObservationWrapper(Wrapper):
-    @override
     def init(self, key: Key) -> tuple[State, Info]:
         state, info = self.env.init(key)
         info = info.update(obs=to_float(info.obs))
         return state, info
 
-    @override
-    def reset(self, state: State, key: Key) -> tuple[State, Info]:
-        state, info = self.env.reset(state, key)
+    def reset(self, key: Key, state: State) -> tuple[State, Info]:
+        state, info = self.env.reset(key, state)
         info = info.update(obs=to_float(info.obs))
         return state, info
 
-    @override
     def step(self, state: State, action: PyTree) -> tuple[State, Info]:
         state, info = self.env.step(state, action)
         info = info.update(obs=to_float(info.obs))
