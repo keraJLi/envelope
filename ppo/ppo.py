@@ -78,7 +78,7 @@ class TrainState(nnx.Pytree):
         )
 
         # Initialize environment state and info
-        env_state, env_info = self.vecenv.reset(self.rngs())
+        env_state, env_info = self.vecenv.init(self.rngs())
         self.env_state = nnx.data(env_state)
         self.env_info = nnx.data(env_info)
 

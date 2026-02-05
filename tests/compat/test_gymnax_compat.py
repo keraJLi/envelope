@@ -34,7 +34,7 @@ def gymnax_env():
 def _gymnax_env_warmup(gymnax_env, prng_key):
     env = gymnax_env
     key_reset, key_step = jax.random.split(prng_key)
-    state, _info = env.reset(key_reset)
+    state, _info = env.init(key_reset)
     action = env.action_space.sample(key_step)
     env.step(state, action)
 
@@ -47,7 +47,7 @@ def test_from_name_with_env_kwargs(prng_key):
 
     # Test reset and step work
     key = prng_key
-    state, info = env.reset(key)
+    state, info = env.init(key)
     assert state is not None
 
     # Verify max_steps_in_episode is set to infinity if present in env_params
@@ -192,7 +192,7 @@ def test_key_splitting(gymnax_env, prng_key):
     key = prng_key
 
     # Reset splits the key
-    state, info = env.reset(key)
+    state, info = env.init(key)
 
     # Verify state has a key (different from input key due to splitting)
     assert hasattr(state, "key")

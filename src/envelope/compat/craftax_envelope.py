@@ -67,7 +67,7 @@ class CraftaxEnvelope(Environment):
         return jax.tree.map(lambda x: jnp.full_like(x, jnp.nan), info)
 
     @override
-    def reset(self, key: Key) -> tuple[State, Info]:
+    def init(self, key: Key) -> tuple[State, Info]:
         # TODO: this function does not add env_info (or comparable) to the info
         # container. We should add tests for this (and all other envelopes) and fix it.
         key, subkey = jax.random.split(key)

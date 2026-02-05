@@ -48,7 +48,7 @@ class JumanjiEnvelope(Environment):
         return self._default_time_limit
 
     @override
-    def reset(self, key: Key) -> tuple[State, Info]:
+    def init(self, key: Key) -> tuple[State, Info]:
         env_state, timestep = self.jumanji_env.reset(key)
         info = convert_jumanji_to_envelope_info(timestep)
         return env_state, info

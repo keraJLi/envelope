@@ -43,7 +43,7 @@ def jumanji_env():
 def _jumanji_env_warmup(jumanji_env, prng_key):
     env = jumanji_env
     key_reset, key_step = jax.random.split(prng_key)
-    state, _info = env.reset(key_reset)
+    state, _info = env.init(key_reset)
     action = env.action_space.sample(key_step)
     env.step(state, action)
 

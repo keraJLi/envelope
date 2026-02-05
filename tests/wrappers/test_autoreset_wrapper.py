@@ -26,13 +26,13 @@ from tests.wrappers.helpers import (
 class TestAutoResetCoreFunctionality:
     """Test AutoResetWrapper core functionality."""
 
-    def test_reset_splits_key_and_stores_reset_key(self):
-        """Verify that reset() splits the key and stores reset_key on the state."""
+    def test_init_splits_key_and_stores_reset_key(self):
+        """Verify that init() splits the key and stores reset_key on the state."""
         env = StepCounterEnv()
         w = AutoResetWrapper(env=env)
         key = jax.random.PRNGKey(42)
 
-        state, info = w.reset(key)
+        state, info = w.init(key)
 
         assert state.reset_key is not None
         assert state.reset_key.shape == (2,)
@@ -45,7 +45,7 @@ class TestAutoResetCoreFunctionality:
         w = AutoResetWrapper(env=env)
         key = jax.random.PRNGKey(0)
 
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         # Take a step - should not reset since never done
         next_state, next_info = w.step(state, jnp.array(0.5))
 
@@ -64,7 +64,7 @@ class TestAutoResetCoreFunctionality:
         w = AutoResetWrapper(env=env)
         key = jax.random.PRNGKey(0)
 
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         # Step until termination
         state, _ = w.step(state, jnp.array(0.1))
         state, _ = w.step(state, jnp.array(0.2))  # This should trigger termination
@@ -86,7 +86,7 @@ class TestAutoResetCoreFunctionality:
         w = AutoResetWrapper(env=env)
         key = jax.random.PRNGKey(0)
 
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         # Step until truncation
         state, _ = w.step(state, jnp.array(0.1))
         state, _ = w.step(state, jnp.array(0.2))  # This should trigger truncation
@@ -106,7 +106,7 @@ class TestAutoResetCoreFunctionality:
         w = AutoResetWrapper(env=env)
         key = jax.random.PRNGKey(0)
 
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         # First step will be done (both flags True)
         next_state, next_info = w.step(state, jnp.array(0.5))
 
@@ -125,7 +125,7 @@ class TestAutoResetCoreFunctionality:
         w = AutoResetWrapper(env=env)
         key = jax.random.PRNGKey(42)
 
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         stored_key = state.reset_key.copy()
 
         # Step to trigger termination
@@ -151,7 +151,7 @@ class TestAutoResetStateInfoPropagation:
         w = AutoResetWrapper(env=env)
         key = jax.random.PRNGKey(0)
 
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         # Step to trigger termination
         state, _ = w.step(state, jnp.array(0.1))
 
@@ -166,7 +166,7 @@ class TestAutoResetStateInfoPropagation:
         w = AutoResetWrapper(env=env)
         key = jax.random.PRNGKey(0)
 
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         # Step to trigger termination - this will auto-reset immediately since done=True
         state, info = w.step(state, jnp.array(0.1))
 
@@ -186,7 +186,7 @@ class TestAutoResetStateInfoPropagation:
         w = AutoResetWrapper(env=env)
         key = jax.random.PRNGKey(0)
 
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         keys_seen = [state.reset_key]
 
         # Take several steps
@@ -204,7 +204,7 @@ class TestAutoResetStateInfoPropagation:
         w = AutoResetWrapper(env=env)
         key = jax.random.PRNGKey(0)
 
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         # Every step will be done, so should auto-reset each time
         for i in range(3):
             action = jnp.array(0.1 * (i + 1))
@@ -234,7 +234,7 @@ class TestAutoResetEdgeCases:
         w = AutoResetWrapper(env=env)
         key = jax.random.PRNGKey(0)
 
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         # First step should terminate
         next_state, next_info = w.step(state, jnp.array(0.1))
 
@@ -250,7 +250,7 @@ class TestAutoResetEdgeCases:
         w = AutoResetWrapper(env=env)
         key = jax.random.PRNGKey(0)
 
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         initial_env_state = state.unwrapped.env_state
 
         # Take many steps
@@ -271,7 +271,7 @@ class TestAutoResetEdgeCases:
         w = AutoResetWrapper(env=env)
         key = jax.random.PRNGKey(0)
 
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         # Take several steps
         # AlternatingTerminationEnv terminates on odd steps (1, 3, 5...)
         # After auto-reset, steps go back to 0, so next step is 1 (terminated=True)
@@ -288,7 +288,7 @@ class TestAutoResetEdgeCases:
         w = AutoResetWrapper(env=env)
         key = jax.random.PRNGKey(0)
 
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         key1 = state.reset_key
 
         # Trigger auto-reset
@@ -321,7 +321,7 @@ class TestAutoResetComposability:
         w = AutoResetWrapper(env=env)
         key = jax.random.PRNGKey(0)
 
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         assert state.inner_state is not None
         assert state.reset_key is not None
 
@@ -340,7 +340,7 @@ class TestAutoResetComposability:
         w = AutoResetWrapper(env=TruncationWrapper(env=env, max_steps=3))
         key = jax.random.PRNGKey(0)
 
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         # Step until truncation
         for _ in range(3):
             state, info = w.step(state, jnp.array(0.1))
@@ -356,7 +356,7 @@ class TestAutoResetComposability:
         w = VmapWrapper(env=AutoResetWrapper(env=env), batch_size=3)
         key = jax.random.PRNGKey(0)
 
-        state, info = w.reset(key)
+        state, info = w.init(key)
         assert info.obs.shape == (3,)
 
         # Step until some episodes terminate
@@ -382,7 +382,7 @@ class TestAutoResetComposability:
         w = VmapEnvsWrapper(env=env, batch_size=3)
         key = jax.random.PRNGKey(0)
 
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
 
         # Step 1: none should terminate
         state, info1 = w.step(state, jnp.ones(3) * 0.1)
@@ -420,7 +420,7 @@ class TestAutoResetComposability:
         w = VmapEnvsWrapper(env=AutoResetWrapper(env=envs), batch_size=3)
         key = jax.random.PRNGKey(0)
 
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
 
         # Step 1: none terminate
         state, info1 = w.step(state, jnp.ones(3) * 0.1)
@@ -439,7 +439,7 @@ class TestAutoResetComposability:
         w = AutoResetWrapper(env=TruncationWrapper(env=env, max_steps=10))
         key = jax.random.PRNGKey(0)
 
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
         # Step until termination
         state, _ = w.step(state, jnp.array(0.1))
         state, _ = w.step(state, jnp.array(0.2))
@@ -457,17 +457,17 @@ class TestAutoResetComposability:
 class TestAutoResetJITCompatibility:
     """Test AutoResetWrapper JIT compatibility."""
 
-    def test_jit_reset(self):
-        """Verify that reset can be JIT compiled."""
+    def test_jit_init(self):
+        """Verify that init can be JIT compiled."""
         env = StepCounterEnv()
         w = AutoResetWrapper(env=env)
         key = jax.random.PRNGKey(0)
 
         @jax.jit
-        def reset_fn(k):
-            return w.reset(k)
+        def init_fn(k):
+            return w.init(k)
 
-        state, info = reset_fn(key)
+        state, info = init_fn(key)
         assert state is not None
         assert info is not None
 
@@ -477,7 +477,7 @@ class TestAutoResetJITCompatibility:
         w = AutoResetWrapper(env=env)
         key = jax.random.PRNGKey(0)
 
-        state, _ = w.reset(key)
+        state, _ = w.init(key)
 
         @jax.jit
         def step_fn(s, a):
@@ -499,7 +499,7 @@ class TestAutoResetJITCompatibility:
 
         @jax.jit
         def episode_fn(k):
-            s, _ = w.reset(k)
+            s, _ = w.init(k)
             rewards = []
             for _ in range(10):  # More steps than max_steps to trigger resets
                 s, info = w.step(s, jnp.array(0.1))
@@ -525,7 +525,7 @@ def test_reset_with_state_uses_replace():
     w = AutoResetWrapper(env=env)
     key = jax.random.PRNGKey(0)
 
-    state, _ = w.reset(key)
+    state, _ = w.init(key)
     # Step to advance reset_key
     state, _ = w.step(state, jnp.array(0.1))
     stepped_reset_key = state.reset_key
@@ -552,24 +552,30 @@ def test_auto_reset_passes_state_to_inner_wrapper():
         class TrackingState(WrappedState):
             received_state_on_reset: bool = field(default=False)
 
-        def reset(self, key, state=None, **kwargs):
-            inner_state, info = self.env.reset(key, state, **kwargs)
-            received = state is not None
+        def init(self, key):
+            inner_state, info = self.env.init(key)
             return self.TrackingState(
                 inner_state=inner_state,
-                received_state_on_reset=received,
+                received_state_on_reset=False,
             ), info
 
-        def step(self, state, action, **kwargs):
-            inner_state, info = self.env.step(state.inner_state, action, **kwargs)
+        def reset(self, key, state):
+            inner_state, info = self.env.reset(key, state.inner_state)
+            return self.TrackingState(
+                inner_state=inner_state,
+                received_state_on_reset=True,
+            ), info
+
+        def step(self, state, action):
+            inner_state, info = self.env.step(state.inner_state, action)
             return state.replace(inner_state=inner_state), info
 
     env = StepCounterEnv(terminate_after=1)  # Terminates after 1 step
     w = AutoResetWrapper(env=StateTrackingWrapper(env=env))
     key = jax.random.PRNGKey(0)
 
-    state, _ = w.reset(key)
-    # First reset: state=None (expected)
+    state, _ = w.init(key)
+    # First init: no state (expected)
     assert state.inner_state.received_state_on_reset is False
 
     # Step to trigger termination → auto-reset
@@ -590,7 +596,7 @@ def test_final_obs_preserved_after_auto_reset():
     w = AutoResetWrapper(env=env)
     key = jax.random.PRNGKey(0)
 
-    state, _ = w.reset(key)
+    state, _ = w.init(key)
 
     # Step 1: env_state becomes 0.1, steps=1, not done yet
     state, info1 = w.step(state, jnp.array(0.1))
@@ -618,7 +624,7 @@ def test_terminated_flag_preserved_after_auto_reset():
     w = AutoResetWrapper(env=env)
     key = jax.random.PRNGKey(0)
 
-    state, info0 = w.reset(key)
+    state, info0 = w.init(key)
     # After reset, terminated should be False
     assert bool(jnp.asarray(info0.terminated)) is False
 
@@ -641,7 +647,7 @@ def test_truncated_flag_preserved_after_auto_reset():
     w = AutoResetWrapper(env=env)
     key = jax.random.PRNGKey(0)
 
-    state, _ = w.reset(key)
+    state, _ = w.init(key)
 
     # Step 1: not done yet
     state, info1 = w.step(state, jnp.array(0.1))

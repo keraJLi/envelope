@@ -35,7 +35,7 @@ def navix_env():
 def _navix_env_warmup(navix_env, prng_key):
     env = navix_env
     key_reset, key_step = jax.random.split(prng_key)
-    state, _info = env.reset(key_reset)
+    state, _info = env.init(key_reset)
     action = env.action_space.sample(key_step)
     env.step(state, action)
 
@@ -90,7 +90,7 @@ def test_container_conversion_reset(navix_env, prng_key):
 
     # Get the raw navix timestep
     navix_timestep = env.navix_env.reset(key)
-    state, info = env.reset(key)
+    state, info = env.init(key)
 
     # Verify obs, reward, terminated, truncated fields
     assert jnp.array_equal(info.obs, navix_timestep.observation)
@@ -119,7 +119,7 @@ def test_container_conversion_step(navix_env, prng_key):
     env = navix_env
     key = prng_key
 
-    state, _ = env.reset(key)
+    state, _ = env.init(key)
     action = env.action_space.sample(jax.random.fold_in(prng_key, 1))
 
     # Get the raw navix timestep
@@ -141,7 +141,7 @@ def test_episode_truncation(prng_key):
     env = _create_navix_env(max_steps=5)  # Very short episode
     key = prng_key
 
-    state, info = env.reset(key)
+    state, info = env.init(key)
 
     # Step until truncation
     for _ in range(10):  # More than max_steps
@@ -195,7 +195,7 @@ def test_step_type_conversion(navix_env, prng_key):
     assert not reset_info.truncated
 
     # Test TRANSITION on normal step (before termination/truncation)
-    state, _ = env.reset(key)
+    state, _ = env.init(key)
     action = env.action_space.sample(jax.random.fold_in(prng_key, 1))
     step_timestep = env.navix_env.step(state, action)
     step_info = convert_navix_to_envelope_info(step_timestep)

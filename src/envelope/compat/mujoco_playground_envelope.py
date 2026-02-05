@@ -56,7 +56,7 @@ class MujocoPlaygroundEnvelope(Environment):
         return self._default_max_steps
 
     @override
-    def reset(self, key: Key) -> tuple[State, Info]:
+    def init(self, key: Key) -> tuple[State, Info]:
         env_state = self.mujoco_playground_env.reset(key)
         info = InfoContainer(obs=env_state.obs, reward=0.0, terminated=False)
         info = info.update(**dataclasses.asdict(env_state))

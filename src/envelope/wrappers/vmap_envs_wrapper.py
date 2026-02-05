@@ -17,34 +17,39 @@ class VmapEnvsWrapper(Wrapper):
     Usage:
         envs = jax.vmap(make_env)(params_batch)     # env pytree batched on leading axis
         wrapped = VmapEnvsWrapper(env=envs, batch_size=B)
-        state, info = wrapped.reset(keys)           # keys shape (B, 2) or single key
+        state, info = wrapped.init(keys)             # keys shape (B, 2) or single key
         next_state, info = wrapped.step(state, action)
     """
 
     batch_size: int = field(kw_only=True)
 
-    @override
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs
-    ) -> tuple[WrappedState, Info]:
+    def _split_keys(self, key: Key) -> Key:
         if key.shape == (2,):
-            keys = jax.random.split(key, self.batch_size)
-        else:
-            if key.shape[0] != self.batch_size:
-                raise ValueError(
-                    f"reset key's leading dimension ({key.shape[0]}) must match "
-                    f"batch_size ({self.batch_size})."
-                )
-            keys = key
-        # vmap over env 'self' and keys
-        state, info = jax.vmap(lambda e, k: e.reset(k, state, **kwargs))(self.env, keys)
+            return jax.random.split(key, self.batch_size)
+        if key.shape[0] != self.batch_size:
+            raise ValueError(
+                f"reset key's leading dimension ({key.shape[0]}) must match "
+                f"batch_size ({self.batch_size})."
+            )
+        return key
+
+    @override
+    def init(self, key: Key) -> tuple[WrappedState, Info]:
+        keys = self._split_keys(key)
+        state, info = jax.vmap(lambda e, k: e.init(k))(self.env, keys)
         return state, info
 
     @override
-    def step(
-        self, state: WrappedState, action: PyTree, **kwargs
-    ) -> tuple[WrappedState, Info]:
-        next_state, info = jax.vmap(lambda e, s, a: e.step(s, a, **kwargs))(
+    def reset(self, key: Key, state: PyTree) -> tuple[WrappedState, Info]:
+        keys = self._split_keys(key)
+        state, info = jax.vmap(lambda e, k, s: e.reset(k, s))(
+            self.env, keys, state
+        )
+        return state, info
+
+    @override
+    def step(self, state: WrappedState, action: PyTree) -> tuple[WrappedState, Info]:
+        next_state, info = jax.vmap(lambda e, s, a: e.step(s, a))(
             self.env, state, action
         )
         return next_state, info

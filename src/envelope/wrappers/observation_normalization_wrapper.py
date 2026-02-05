@@ -67,26 +67,26 @@ class ObservationNormalizationWrapper(Wrapper):
         return state, info
 
     @override
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs
-    ) -> tuple[WrappedState, Info]:
-        inner_state = None
+    def init(self, key: Key) -> tuple[WrappedState, Info]:
+        inner_state, info = self.env.init(key)
         rmv_state = self._init_rmv_state()
-        if state:
-            inner_state = state.inner_state
-            rmv_state = state.rmv_state
-
-        inner_state, info = self.env.reset(key, inner_state, **kwargs)
         next_state = self.ObservationNormalizationState(
             inner_state=inner_state, rmv_state=rmv_state
         )
         return self._normalize_and_update(next_state, info)
 
     @override
-    def step(
-        self, state: WrappedState, action: PyTree, **kwargs
-    ) -> tuple[WrappedState, Info]:
-        inner_state, info = self.env.step(state.inner_state, action, **kwargs)
+    def reset(self, key: Key, state: WrappedState) -> tuple[WrappedState, Info]:
+        inner_state, info = self.env.reset(key, state.inner_state)
+        # Preserve running statistics across resets
+        next_state = self.ObservationNormalizationState(
+            inner_state=inner_state, rmv_state=state.rmv_state
+        )
+        return self._normalize_and_update(next_state, info)
+
+    @override
+    def step(self, state: WrappedState, action: PyTree) -> tuple[WrappedState, Info]:
+        inner_state, info = self.env.step(state.inner_state, action)
         state = state.replace(inner_state=inner_state)
         return self._normalize_and_update(state, info)
 

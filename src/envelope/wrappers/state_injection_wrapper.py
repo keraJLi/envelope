@@ -12,7 +12,7 @@ class StateInjectionWrapper(Wrapper):
 
     Usage:
         env = AutoResetWrapper(StateInjectionWrapper(env=base_env))
-        state, info = env.reset(key)
+        state, info = env.init(key)
 
         for outer_iter in range(num_outer_iters):
             # Sample a new task and set it as the reset state
@@ -60,32 +60,23 @@ class StateInjectionWrapper(Wrapper):
 
         return update_injected(state)
 
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs
-    ) -> tuple[WrappedState, Info]:
-        # Default state has no inner state to reset to
-        if state is None:
-            state = self.InjectedState(inner_state=None)
+    def init(self, key: Key) -> tuple[WrappedState, Info]:
+        inner_state, info = self.env.init(key)
+        state = self.InjectedState(inner_state=inner_state)
+        return state, info
 
-        # If no reset state is set, reset wrapped environment
-        if state.reset_state is None and state.reset_obs is None:
-            inner_state, info = self.env.reset(key, state=state.inner_state, **kwargs)
-
-        # If reset state is set, use it
-        elif state.reset_state is not None and state.reset_obs is not None:
+    def reset(self, key: Key, state: WrappedState) -> tuple[WrappedState, Info]:
+        # If reset state is set, use it instead of resetting inner env
+        if state.reset_state is not None and state.reset_obs is not None:
             inner_state = state.reset_state
             info = InfoContainer(obs=state.reset_obs, reward=0.0, terminated=False)
-
-        # If only one of reset_state or reset_obs is set, raise error
+        elif state.reset_state is None and state.reset_obs is None:
+            inner_state, info = self.env.reset(key, state.inner_state)
         else:
             raise ValueError("State must set both reset_state and reset_obs or neither")
 
-        # Return new state with updated inner state
-        state = state.replace(inner_state=inner_state)
-        return state, info
+        return state.replace(inner_state=inner_state), info
 
-    def step(
-        self, state: WrappedState, action: PyTree, **kwargs
-    ) -> tuple[WrappedState, Info]:
-        inner_state, info = self.env.step(state.inner_state, action, **kwargs)
+    def step(self, state: WrappedState, action: PyTree) -> tuple[WrappedState, Info]:
+        inner_state, info = self.env.step(state.inner_state, action)
         return state.replace(inner_state=inner_state), info

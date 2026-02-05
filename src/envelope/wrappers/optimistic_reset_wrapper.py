@@ -50,26 +50,29 @@ class OptimisticResetWrapper(Wrapper):
                 f"batch_size ({self.batch_size})."
             )
 
-    @override
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs
-    ) -> tuple[WrappedState, Info]:
-        key, subkey = jax.random.split(key)
-
+    def _split_keys(self, key: Key) -> Key:
         if is_single_key(key):
-            keys = jax.random.split(key, self.batch_size)
-        else:
-            keys = key
+            return jax.random.split(key, self.batch_size)
+        return key
 
-        inner_state = state.inner_state if state else None
-        inner_state, info = jax.vmap(self.env.reset)(keys, inner_state)
+    @override
+    def init(self, key: Key) -> tuple[WrappedState, Info]:
+        key, subkey = jax.random.split(key)
+        keys = self._split_keys(key)
+        inner_state, info = jax.vmap(self.env.init)(keys)
         state = self.OptimisticResetState(inner_state=inner_state, reset_key=subkey)
         return state, info.update(obs_true=info.obs)
 
     @override
-    def step(
-        self, state: WrappedState, action: PyTree, **kwargs
-    ) -> tuple[WrappedState, Info]:
+    def reset(self, key: Key, state: WrappedState) -> tuple[WrappedState, Info]:
+        key, subkey = jax.random.split(key)
+        keys = self._split_keys(key)
+        inner_state, info = jax.vmap(self.env.reset)(keys, state.inner_state)
+        state = self.OptimisticResetState(inner_state=inner_state, reset_key=subkey)
+        return state, info.update(obs_true=info.obs)
+
+    @override
+    def step(self, state: WrappedState, action: PyTree) -> tuple[WrappedState, Info]:
         # Step all environments
         inner_state, info_step = jax.vmap(self.env.step)(state.inner_state, action)
         done = jnp.asarray(info_step.terminated | info_step.truncated)
@@ -79,7 +82,7 @@ class OptimisticResetWrapper(Wrapper):
         key_for_resets = jax.random.fold_in(state.reset_key, 0)
         next_reset_key = jax.random.fold_in(state.reset_key, 1)
         reset_keys = jax.random.split(key_for_resets, self.num_resets)
-        reset_inner_state, reset_info = jax.vmap(self.env.reset)(reset_keys, None)
+        reset_inner_state, reset_info = jax.vmap(self.env.init)(reset_keys)
 
         # Assign resets to done environments
         # Default: each reset is repeated reset_ratio times

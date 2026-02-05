@@ -40,28 +40,24 @@ class AutoResetWrapper(Wrapper):
         reset_key: jax.Array = field()
         last_final: Info = field()
 
-    def reset(
-        self, key: Key, state: PyTree | None = None, **kwargs
-    ) -> tuple[WrappedState, Info]:
+    def init(self, key: Key) -> tuple[WrappedState, Info]:
         key, subkey = jax.random.split(key)
-
-        if state is None:
-            inner_state, info = self.env.reset(key, **kwargs)
-            # Initialize last_final with the reset info (no previous episode yet)
-            state = self.AutoResetState(
-                inner_state=inner_state, reset_key=subkey, last_final=info
-            )
-        else:
-            inner_state, info = self.env.reset(key, state.inner_state, **kwargs)
-            # Preserve last_final from previous state (keep last episode's info)
-            state = state.replace(inner_state=inner_state, reset_key=subkey)
-
+        inner_state, info = self.env.init(key)
+        # Initialize last_final with the reset info (no previous episode yet)
+        state = self.AutoResetState(
+            inner_state=inner_state, reset_key=subkey, last_final=info
+        )
         return state, info.update(final=state.last_final)
 
-    def step(
-        self, state: WrappedState, action: PyTree, **kwargs
-    ) -> tuple[WrappedState, Info]:
-        inner_state, info_step = self.env.step(state.inner_state, action, **kwargs)
+    def reset(self, key: Key, state: WrappedState) -> tuple[WrappedState, Info]:
+        key, subkey = jax.random.split(key)
+        inner_state, info = self.env.reset(key, state.inner_state)
+        # Preserve last_final from previous state (keep last episode's info)
+        state = state.replace(inner_state=inner_state, reset_key=subkey)
+        return state, info.update(final=state.last_final)
+
+    def step(self, state: WrappedState, action: PyTree) -> tuple[WrappedState, Info]:
+        inner_state, info_step = self.env.step(state.inner_state, action)
         done = jnp.asarray(info_step.terminated | info_step.truncated)
 
         # Derive keys deterministically using fold_in (works with any key shape)
@@ -69,9 +65,7 @@ class AutoResetWrapper(Wrapper):
         next_reset_key = jax.random.fold_in(state.reset_key, 1)
 
         # Always compute reset (both branches evaluated for jnp.where)
-        reset_inner_state, reset_info = self.env.reset(
-            key_for_reset, inner_state, **kwargs
-        )
+        reset_inner_state, reset_info = self.env.reset(key_for_reset, inner_state)
 
         # Build info for continue case: persist last episode's final info
         continue_info = info_step.update(final=state.last_final)

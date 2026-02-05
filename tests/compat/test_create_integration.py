@@ -24,7 +24,7 @@ def test_create_brax_smoke(prng_key):
     assert isinstance(env, Environment)
     assert env.max_steps == 1000  # Brax default
 
-    _state, info = env.reset(prng_key)
+    _state, info = env.init(prng_key)
     assert hasattr(info, "obs")
 
 
@@ -39,7 +39,7 @@ def test_create_gymnax_smoke(prng_key):
     assert isinstance(env, Environment)
     assert env.max_steps == 500  # CartPole-v1 default
 
-    _state, info = env.reset(prng_key)
+    _state, info = env.init(prng_key)
     assert hasattr(info, "obs")
 
 
@@ -54,7 +54,7 @@ def test_create_navix_smoke(prng_key):
     assert isinstance(env, Environment)
     assert env.max_steps == 100  # Navix default
 
-    _state, info = env.reset(prng_key)
+    _state, info = env.init(prng_key)
     assert hasattr(info, "obs")
 
 
@@ -69,7 +69,7 @@ def test_create_jumanji_smoke(prng_key):
     assert isinstance(env, Environment)
     assert env.max_steps == 4000  # Snake-v1 default
 
-    _state, info = env.reset(prng_key)
+    _state, info = env.init(prng_key)
     assert hasattr(info, "obs")
 
 
@@ -84,7 +84,7 @@ def test_create_craftax_smoke(prng_key):
     assert isinstance(env, Environment)
     assert env.max_steps == 100000  # Craftax default
 
-    _state, info = env.reset(prng_key)
+    _state, info = env.init(prng_key)
     assert hasattr(info, "obs")
 
 
@@ -99,7 +99,7 @@ def test_create_mujoco_playground_smoke(prng_key):
     assert isinstance(env, Environment)
     assert env.max_steps == 1000  # CartpoleBalance default
 
-    _state, info = env.reset(prng_key)
+    _state, info = env.init(prng_key)
     assert hasattr(info, "obs")
 
 
@@ -114,7 +114,7 @@ def test_create_kinetix_smoke(prng_key):
     assert isinstance(env, Environment)
     assert env.max_steps == 256  # Kinetix default
 
-    _state, info = env.reset(prng_key)
+    _state, info = env.init(prng_key)
     assert hasattr(info, "obs")
 
 

@@ -34,7 +34,7 @@ def _mujoco_playground_env_warmup(mujoco_playground_env, prng_key):
     """Warm up reset/step once to amortize compilation."""
     env = mujoco_playground_env
     key_reset, key_step = jax.random.split(prng_key)
-    state, _info = env.reset(key_reset)
+    state, _info = env.init(key_reset)
     action = env.action_space.sample(key_step)
     env.step(state, action)
 
@@ -62,7 +62,7 @@ def test_mujoco_playground_terminated_matches_done_on_step(
     """MuJoCo Playground-specific: wrapper exposes underlying `done` and maps it to `terminated`."""
     env = mujoco_playground_env
     key_reset, key_action = jax.random.split(prng_key)
-    state, _info = env.reset(key_reset)
+    state, _info = env.init(key_reset)
     action = env.action_space.sample(key_action)
     _next_state, info = env.step(state, action)
     assert hasattr(info, "done")
@@ -93,7 +93,7 @@ def test_observation_space_int_obs_size(prng_key):
     assert env.observation_space.shape == (obs_size,)
 
     # Verify reset produces obs that matches the space
-    state, info = env.reset(prng_key)
+    state, info = env.init(prng_key)
     assert env.observation_space.contains(info.obs)
 
 
@@ -113,7 +113,7 @@ def test_observation_space_dict_obs_size(prng_key):
         assert env.observation_space.tree[key].shape == shape
 
     # Verify reset produces obs that matches the space
-    state, info = env.reset(prng_key)
+    state, info = env.init(prng_key)
     assert isinstance(info.obs, dict)
     assert env.observation_space.contains(info.obs)
 
@@ -126,7 +126,7 @@ def test_from_name_with_env_kwargs(prng_key):
 
     assert env is not None
     key = prng_key
-    state, info = env.reset(key)
+    state, info = env.init(key)
     assert state is not None
 
 
@@ -159,7 +159,7 @@ def test_multiple_mujoco_playground_envs(prng_key):
         env = _create_mujoco_playground_env(env_name)
         reset_key, action_key = jax.random.split(prng_key, 2)
 
-        state, info = env.reset(reset_key)
+        state, info = env.init(reset_key)
         assert state is not None
         assert isinstance(info, Info)
         # Skip expensive contains check - shape/dtype check is sufficient

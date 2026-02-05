@@ -32,7 +32,7 @@ def test_protocol_conformance_reset_and_step():
     envs = ParamEnv(offset=params)
     w = VmapEnvsWrapper(env=envs, batch_size=batch_size)
     key = jax.random.PRNGKey(0)
-    state, info = w.reset(key)
+    state, info = w.init(key)
     assert state is not None
     assert isinstance(info, Info)
     action = w.action_space.sample(key)
@@ -53,9 +53,9 @@ def test_reset_and_step_equivalence_to_manual(batch_size):
     w = VmapEnvsWrapper(env=envs, batch_size=batch_size)
     key = jax.random.PRNGKey(0)
     keys = jax.random.split(key, batch_size)
-    s_w, i_w = w.reset(key)
+    s_w, i_w = w.init(key)
     # Manual: vmap over (env, key)
-    s_m, i_m = jax.vmap(lambda e, k: e.reset(k))(envs, keys)
+    s_m, i_m = jax.vmap(lambda e, k: e.init(k))(envs, keys)
     assert jax.tree_util.tree_all(
         jax.tree.map(lambda a, b: jnp.allclose(a, b), s_w, s_m)
     )
@@ -82,7 +82,7 @@ def test_reset_raises_on_wrong_key_batch_dim():
     w = VmapEnvsWrapper(env=envs, batch_size=batch_size)
     bad_keys = jax.random.split(jax.random.PRNGKey(0), batch_size + 1)
     with pytest.raises(ValueError):
-        _ = w.reset(bad_keys)
+        _ = w.init(bad_keys)
 
 
 def test_pickle_serialization_of_state_and_info():
@@ -91,7 +91,7 @@ def test_pickle_serialization_of_state_and_info():
     envs = ParamEnv(offset=params)
     w = VmapEnvsWrapper(env=envs, batch_size=batch_size)
     key = jax.random.PRNGKey(0)
-    state, info = w.reset(key)
+    state, info = w.init(key)
     blob = pickle.dumps((state, info))
     s2, i2 = pickle.loads(blob)
     assert jnp.allclose(s2, state)
@@ -120,7 +120,7 @@ def test_prop_reset_step_shapes(batch_size, seed):
     envs = ParamEnv(offset=params)
     w = VmapEnvsWrapper(env=envs, batch_size=batch_size)
     key = jax.random.PRNGKey(seed)
-    state, info = w.reset(key)
+    state, info = w.init(key)
     assert state is not None and info is not None
     assert info.obs.shape == (batch_size, 2)
     action = w.action_space.sample(key)
@@ -134,7 +134,7 @@ def test_param_effect_applies_per_env_no_cross_mix():
     envs = ParamEnv(offset=offsets)
     w = VmapEnvsWrapper(env=envs, batch_size=batch_size)
     key = jax.random.PRNGKey(0)
-    s, i = w.reset(key)
+    s, i = w.init(key)
     s2, i2 = w.step(s, jnp.zeros((batch_size, 2), dtype=jnp.float32))
     expected = i.obs + offsets.reshape((batch_size, 1))
     assert jnp.allclose(i2.obs, expected)

@@ -14,7 +14,7 @@ def test_reset_sets_truncated_false():
     env = StepCounterEnv()
     w = TruncationWrapper(env=env, max_steps=3)
     key = jax.random.PRNGKey(0)
-    state, info = w.reset(key)
+    state, info = w.init(key)
     assert state is not None
     assert info.truncated is False
 
@@ -34,7 +34,7 @@ def test_step_truncates_at_threshold(
     env = env_factory()
     w = TruncationWrapper(env=env, max_steps=max_steps)
     key = jax.random.PRNGKey(0)
-    state, info = w.reset(key)
+    state, info = w.init(key)
     truncs = []
     for a in actions:
         state, info = w.step(state, jnp.asarray(a))
@@ -46,7 +46,7 @@ def test_preserves_other_info_fields():
     env = StepCounterEnv()
     w = TruncationWrapper(env=env, max_steps=2)
     key = jax.random.PRNGKey(0)
-    state, info = w.reset(key)
+    state, info = w.init(key)
     # Step once: not truncated yet
     state, info = w.step(state, jnp.asarray(0.5))
     assert info.terminated is False
@@ -62,7 +62,7 @@ def test_reset_overrides_underlying_truncated_true():
     env = StepCounterEnv(reset_truncated=True)
     w = TruncationWrapper(env=env, max_steps=5)
     key = jax.random.PRNGKey(0)
-    state, info = w.reset(key)
+    state, info = w.init(key)
     assert info.truncated is False
 
 
@@ -71,7 +71,7 @@ def test_max_steps_edge_values(max_steps):
     env = StepCounterEnv()
     w = TruncationWrapper(env=env, max_steps=max_steps)
     key = jax.random.PRNGKey(0)
-    state, info = w.reset(key)
+    state, info = w.init(key)
     # First step should truncate immediately when max_steps == 0
     state, info = w.step(state, jnp.asarray(0.0))
     # After first step, steps == 1; wrapper truncates when steps >= max_steps
@@ -83,7 +83,7 @@ def test_truncated_remains_true_after_threshold():
     env = StepCounterEnv()
     w = TruncationWrapper(env=env, max_steps=2)
     key = jax.random.PRNGKey(0)
-    state, info = w.reset(key)
+    state, info = w.init(key)
     # Step 1: steps=1 < 2
     state, info = w.step(state, jnp.asarray(0.1))
     assert bool(jnp.asarray(info.truncated)) is False
@@ -99,7 +99,7 @@ def test_wrapper_overrides_underlying_truncated_on_step():
     env = StepCounterEnv(step_truncated=True)
     w = TruncationWrapper(env=env, max_steps=10)
     key = jax.random.PRNGKey(0)
-    state, info = w.reset(key)
+    state, info = w.init(key)
     # Underlying env sets truncated True, but steps < max_steps => wrapper should set False
     state, info = w.step(state, jnp.asarray(0.5))
     assert bool(jnp.asarray(info.truncated)) is False
@@ -109,7 +109,7 @@ def test_steps_as_jax_scalar_array_behaves_correctly():
     env = StepCounterEnv(steps_dtype=jnp.int32)
     w = TruncationWrapper(env=env, max_steps=2)
     key = jax.random.PRNGKey(0)
-    state, info = w.reset(key)
+    state, info = w.init(key)
     # After one step: steps = 1 (jax scalar), not truncated
     state, info = w.step(state, jnp.asarray(0.1))
     assert jnp.asarray(info.truncated).dtype == jnp.bool_
@@ -125,7 +125,7 @@ def test_reset_with_state_passes_inner_state_down():
     w = TruncationWrapper(env=env, max_steps=10)
     key = jax.random.PRNGKey(0)
 
-    state, _ = w.reset(key)
+    state, _ = w.init(key)
     for _ in range(5):
         state, _ = w.step(state, jnp.asarray(0.1))
     assert state.steps == 5
@@ -138,13 +138,13 @@ def test_reset_with_state_passes_inner_state_down():
     assert new_state.steps == 0
 
 
-def test_reset_with_none_does_not_pass_inner_state():
-    """reset(key, None) should not pass inner state to the inner env."""
+def test_init_does_not_pass_inner_state():
+    """init(key) should not pass inner state to the inner env."""
     env = StepCounterEnv()
     w = TruncationWrapper(env=env, max_steps=10)
     key = jax.random.PRNGKey(0)
 
-    state, _ = w.reset(key)
+    state, _ = w.init(key)
     assert state.steps == 0
 
 
@@ -162,7 +162,7 @@ def test_jit_compatibility(env_factory, action):
     key = jax.random.PRNGKey(0)
 
     # Avoid returning InfoContainer across JIT boundary; return only needed pieces
-    reset_jit_state = jax.jit(lambda k: w.reset(k)[0])
+    reset_jit_state = jax.jit(lambda k: w.init(k)[0])
     step_jit_state_trunc = jax.jit(
         lambda s, a: (w.step(s, a)[0], w.step(s, a)[1].truncated)
     )

@@ -56,7 +56,7 @@ class GymnaxEnvelope(Environment):
         return jax.tree.map(lambda x: jnp.full_like(x, jnp.nan), info)
 
     @override
-    def reset(self, key: Key) -> tuple[State, Info]:
+    def init(self, key: Key) -> tuple[State, Info]:
         key, subkey = jax.random.split(key)
         obs, env_state = self.gymnax_env.reset(subkey, self.env_params)
         state = Container().update(key=key, env_state=env_state)

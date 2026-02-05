@@ -47,10 +47,14 @@ class ClipActionWrapper(envelope.Wrapper):
 
 class FlattenObservationWrapper(envelope.Wrapper):
     @override
-    def reset(
-        self, key: Key, state: State | None = None, **kwargs
-    ) -> tuple[State, Info]:
-        state, info = self.env.reset(key, state, **kwargs)
+    def init(self, key: Key) -> tuple[State, Info]:
+        state, info = self.env.init(key)
+        info = info.update(obs=flatten_x(info.obs))
+        return state, info
+
+    @override
+    def reset(self, key: Key, state: State) -> tuple[State, Info]:
+        state, info = self.env.reset(key, state)
         info = info.update(obs=flatten_x(info.obs))
         return state, info
 
@@ -139,16 +143,14 @@ class EpisodeStatisticsWrapper(envelope.Wrapper):
         current_stats: EpisodeStatistics = envelope.field(default_factory=zero_stats)
         last_stats: EpisodeStatistics = envelope.field(default_factory=nan_stats)
 
-    def reset(
-        self, key: Key, state: State | None = None, **kwargs
-    ) -> tuple[State, Info]:
-        if state is None:
-            inner_state, info = self.env.reset(key, None, **kwargs)
-            state = self.EpisodeStatisticsState(inner_state=inner_state)
-            info = self._update_info(state, info)
-            return state, info
+    def init(self, key: Key) -> tuple[State, Info]:
+        inner_state, info = self.env.init(key)
+        state = self.EpisodeStatisticsState(inner_state=inner_state)
+        info = self._update_info(state, info)
+        return state, info
 
-        inner_state, info = self.env.reset(key, state.inner_state, **kwargs)
+    def reset(self, key: Key, state: State) -> tuple[State, Info]:
+        inner_state, info = self.env.reset(key, state.inner_state)
         state = state.replace(
             inner_state=inner_state,
             current_stats=zero_stats(),

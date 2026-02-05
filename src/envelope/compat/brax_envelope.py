@@ -57,7 +57,7 @@ class BraxEnvelope(Environment):
             object.__setattr__(self, "brax_env", self.brax_env.unwrapped)
 
     @override
-    def reset(self, key: Key) -> tuple[State, Info]:
+    def init(self, key: Key) -> tuple[State, Info]:
         brax_state = self.brax_env.reset(key)
         info = InfoContainer(obs=brax_state.obs, reward=0.0, terminated=False)
         info = info.update(**dataclasses.asdict(brax_state))

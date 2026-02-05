@@ -38,18 +38,25 @@ class Environment(ABC, FrozenPyTreeNode):
 
     State is an opaque PyTree owned by each environment; wrappers that stack
     environments should expose their wrapped env state as `inner_state` while
-    adding any wrapper-specific fields. `reset` may optionally receive a prior
-    state (for cross-episode persistence) and arbitrary **kwargs that wrappers
-    or environments can use.
+    adding any wrapper-specific fields.
+
+    Two distinct lifecycle methods:
+        init(key) - Initialize environment and all state from scratch.
+        reset(key, state) - Reset the inner environment while preserving
+            episode-persistent state.
     """
 
     @abstractmethod
-    def reset(
-        self, key: Key, state: State | None = None, **kwargs
-    ) -> tuple[State, Info]: ...
+    def init(self, key: Key) -> tuple[State, Info]:
+        """Initialize environment and all state from scratch."""
+        ...
+
+    def reset(self, key: Key, state: State) -> tuple[State, Info]:
+        """Reset the inner environment while preserving episode-persistent state."""
+        return self.init(key)
 
     @abstractmethod
-    def step(self, state: State, action: PyTree, **kwargs) -> tuple[State, Info]: ...
+    def step(self, state: State, action: PyTree) -> tuple[State, Info]: ...
 
     @abstractmethod
     @cached_property

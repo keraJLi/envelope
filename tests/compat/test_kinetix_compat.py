@@ -39,7 +39,7 @@ def kinetix_random_env_warmup(kinetix_random_env, prng_key):
     """Warm up reset/step/scan once to amortize compilation cost."""
     env = kinetix_random_env
     key_reset, key_step, key_scan = jax.random.split(prng_key, 3)
-    state, _info = env.reset(key_reset)
+    state, _info = env.init(key_reset)
     action = env.action_space.sample(key_step)
     _state2, _info2 = env.step(state, action)
 
@@ -129,7 +129,7 @@ def test_from_name_premade_level_smoke(prng_key):
     level_id = _first_packaged_level_id("s")
     env = _create_kinetix_env(level_id)
 
-    state, info = env.reset(prng_key)
+    state, info = env.init(prng_key)
     assert state is not None
     assert isinstance(info, Info)
     assert env.observation_space.contains(info.obs)
@@ -142,7 +142,7 @@ def test_create_random_with_auto_reset_warning(prng_key):
     ):
         env = _create_kinetix_env("random", auto_reset=True)
 
-    state, info = env.reset(prng_key)
+    state, info = env.init(prng_key)
     assert state is not None
     assert isinstance(info, Info)
 
@@ -150,7 +150,7 @@ def test_create_random_with_auto_reset_warning(prng_key):
 def test_key_splitting(kinetix_random_env, prng_key):
     env = kinetix_random_env
     key = prng_key
-    state, _info = env.reset(key)
+    state, _info = env.init(key)
     assert hasattr(state, "key")
     assert not jnp.array_equal(state.key, key)
 
@@ -170,7 +170,7 @@ def test_random_premade_kinetix_envs(prng_key):
         env = _create_kinetix_env(level_id)
         reset_key, action_key = jax.random.split(prng_key, 2)
 
-        state, info = env.reset(reset_key)
+        state, info = env.init(reset_key)
         assert state is not None
         assert isinstance(info, Info)
         # Skip expensive contains check - shape/dtype check is sufficient

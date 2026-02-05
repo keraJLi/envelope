@@ -38,7 +38,7 @@ def assert_reset_step_contract(
     # Derive subkeys so callers can pass a single fixture key.
     key_reset, key_action = jax.random.split(key)
 
-    state, info = env.reset(key_reset)
+    state, info = env.init(key_reset)
     assert_info_has_contract_fields(info)
     assert jnp.asarray(info.reward).shape == ()
     assert jnp.isfinite(jnp.asarray(info.reward))
@@ -65,7 +65,7 @@ def assert_jitted_rollout_contract(
     num_steps: int,
 ) -> None:
     """Contract: rollout works under `jax.jit` and produces a valid `Info` container."""
-    reset_jit = jax.jit(env.reset)
+    reset_jit = jax.jit(env.init)
     step_jit = jax.jit(env.step)
 
     key_reset, key_rollout = jax.random.split(key)

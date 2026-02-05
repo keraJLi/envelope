@@ -25,25 +25,16 @@ class Wrapper(Environment):
     env: Environment = field(kw_only=True)
 
     @override
-    def reset(
-        self, key: Key, state: State | None = None, **kwargs
-    ) -> tuple[State, Info]:
-        """
-        Wraps the reset method of the underlying environment. It should reset the
-        underlying environment, but not the wrapper-specific state.
-
-        If `state` is None, we should reset the wrapped environment and initialize any
-        wrapper-specific state.
-        If `state` is not None, we should reset the wrapped environment, and update the
-        wrapper-specific state.
-        """
-        return self.env.reset(key, state=state, **kwargs)
+    def init(self, key: Key) -> tuple[State, Info]:
+        return self.env.init(key)
 
     @override
-    def step(
-        self, state: WrappedState, action: PyTree, **kwargs
-    ) -> tuple[WrappedState, Info]:
-        return self.env.step(state, action, **kwargs)
+    def reset(self, key: Key, state: State) -> tuple[State, Info]:
+        return self.env.reset(key, state)
+
+    @override
+    def step(self, state: WrappedState, action: PyTree) -> tuple[WrappedState, Info]:
+        return self.env.step(state, action)
 
     @override
     @cached_property

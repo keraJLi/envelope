@@ -38,7 +38,7 @@ class NavixEnvelope(Environment):
         return _NAVIX_DEFAULT_MAX_STEPS
 
     @override
-    def reset(self, key: Key) -> tuple[State, Info]:
+    def init(self, key: Key) -> tuple[State, Info]:
         timestep = self.navix_env.reset(key)
         return timestep, convert_navix_to_envelope_info(timestep)
 
