@@ -125,11 +125,7 @@ def test_reset_with_state_passes_inner_state_down():
     w = TruncationWrapper(env=env, max_steps=10)
     key = jax.random.PRNGKey(0)
 
-<<<<<<< HEAD
-    state, _ = w.reset(key)
-=======
     state, _ = w.init(key)
->>>>>>> autoreset-final-info
     for _ in range(5):
         state, _ = w.step(state, jnp.asarray(0.1))
     assert state.steps == 5
@@ -142,22 +138,13 @@ def test_reset_with_state_passes_inner_state_down():
     assert new_state.steps == 0
 
 
-<<<<<<< HEAD
-def test_reset_with_none_does_not_pass_inner_state():
-    """reset(key, None) should not pass inner state to the inner env."""
-=======
 def test_init_does_not_pass_inner_state():
     """init(key) should not pass inner state to the inner env."""
->>>>>>> autoreset-final-info
     env = StepCounterEnv()
     w = TruncationWrapper(env=env, max_steps=10)
     key = jax.random.PRNGKey(0)
 
-<<<<<<< HEAD
-    state, _ = w.reset(key)
-=======
     state, _ = w.init(key)
->>>>>>> autoreset-final-info
     assert state.steps == 0
 
 
