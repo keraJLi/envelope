@@ -44,75 +44,32 @@ class AutoResetWrapper(Wrapper):
         key, subkey = jax.random.split(key)
         inner_state, info = self.env.init(key)
         # Initialize last_final with the reset info (no previous episode yet)
+        last_final = jax.tree.map(lambda x: jnp.full_like(x, jnp.nan), info)
         state = self.AutoResetState(
-            inner_state=inner_state, reset_key=subkey, last_final=info
+            inner_state=inner_state, reset_key=subkey, last_final=last_final
         )
         return state, info.update(final=state.last_final)
 
     def reset(self, key: Key, state: WrappedState) -> tuple[WrappedState, Info]:
-        key, subkey = jax.random.split(key)
-        inner_state, info = self.env.reset(key, state.inner_state)
-        # Preserve last_final from previous state (keep last episode's info)
-        state = state.replace(inner_state=inner_state, reset_key=subkey)
-        return state, info.update(final=state.last_final)
+        raise NotImplementedError("Reset is not implemented for AutoResetWrapper")
 
     def step(self, state: WrappedState, action: PyTree) -> tuple[WrappedState, Info]:
-        inner_state, info_step = self.env.step(state.inner_state, action)
-        done = jnp.asarray(info_step.terminated | info_step.truncated)
+        key, key_reset = jax.random.split(state.reset_key)
+        state = state.replace(reset_key=key)
 
-        # Derive keys deterministically using fold_in (works with any key shape)
-        key_for_reset = jax.random.fold_in(state.reset_key, 0)
-        next_reset_key = jax.random.fold_in(state.reset_key, 1)
+        inner_state, info = self.env.step(state.inner_state, action)
+        reset_inner_state, reset_info = self.env.reset(key_reset, inner_state)
 
-        # Always compute reset (both branches evaluated for jnp.where)
-        reset_inner_state, reset_info = self.env.reset(key_for_reset, inner_state)
-
-        # Build info for continue case: persist last episode's final info
-        continue_info = info_step.update(final=state.last_final)
-
-        # Build info for done case: reset obs but preserve terminal step's flags/reward
-        # info.final captures the FULL terminal info snapshot (before reset)
-        done_info = info_step.update(
-            obs=reset_info.obs,  # New episode's initial observation
-            final=info_step,  # Full terminal info snapshot
+        # Select next state and info based on done
+        done = info.terminated | info.truncated
+        state = jax.tree.map(
+            lambda reset, next: jax.lax.select(done, reset, next),
+            state.replace(inner_state=reset_inner_state),
+            state.replace(inner_state=inner_state),
         )
-
-        # Select between done and continue branches using jnp.where
-        batch_size = done.shape[0] if done.ndim > 0 else None
-
-        def select(done_val, continue_val):
-            # Handle non-array leaves (Python scalars)
-            if not hasattr(done_val, "ndim"):
-                # Use jnp.where with array conversion (keeps JAX array type)
-                return jnp.where(done, done_val, continue_val)
-
-            if batch_size is None:
-                # Scalar done (unbatched env): simple where
-                return jnp.where(done, done_val, continue_val)
-
-            # Batched done: only select if array is batched (first dim matches)
-            if done_val.ndim > 0 and done_val.shape[0] == batch_size:
-                # Expand done to broadcast correctly with higher-rank arrays
-                cond = done
-                for _ in range(done_val.ndim - done.ndim):
-                    cond = jnp.expand_dims(cond, axis=-1)
-                return jnp.where(cond, done_val, continue_val)
-            else:
-                # Non-batched array (shared state): keep the continue value
-                # These are typically wrapper-level state like running stats
-                return continue_val
-
-        # Select inner_state per-env
-        final_inner_state = jax.tree.map(select, reset_inner_state, inner_state)
-
-        # Select last_final: on done, store terminal info; on continue, keep previous
-        final_last_final = jax.tree.map(select, info_step, state.last_final)
-
-        final_state = self.AutoResetState(
-            inner_state=final_inner_state,
-            reset_key=next_reset_key,
-            last_final=final_last_final,
+        info = jax.tree.map(
+            lambda reset, next: jax.lax.select(done, reset, next),
+            reset_info.update(final=info),
+            info.update(final=state.last_final),
         )
-        final_info = jax.tree.map(select, done_info, continue_info)
-
-        return final_state, final_info
+        return state, info
