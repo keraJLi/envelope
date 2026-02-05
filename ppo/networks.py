@@ -75,6 +75,37 @@ class GaussianPolicy(nnx.Module):
         return dist
 
 
+class ReshapeCategoricalBijector(distrax.Bijector):
+    """Maps flat categorical indices to multi-dimensional indices.
+
+    Forward: flat index in [0, prod(n)-1] -> multi-index of shape n.shape
+    Inverse: multi-index of shape n.shape -> flat index
+    """
+
+    def __init__(self, n):
+        n_arr = np.asarray(n)
+        self._dims = tuple(n_arr.flatten().tolist())
+        self._out_shape = n_arr.shape
+        super().__init__(
+            event_ndims_in=0,
+            event_ndims_out=len(self._out_shape),
+            is_constant_jacobian=True,
+            is_constant_log_det=True,
+        )
+
+    def forward_and_log_det(self, x):
+        indices = jnp.unravel_index(x, self._dims)
+        y = jnp.stack(indices, axis=-1).reshape(*x.shape, *self._out_shape)
+        return y, jnp.zeros(x.shape, dtype=jnp.float32)
+
+    def inverse_and_log_det(self, y):
+        batch_shape = y.shape[: len(y.shape) - len(self._out_shape)]
+        flat = y.reshape(*batch_shape, -1)
+        indices = tuple(flat[..., i] for i in range(len(self._dims)))
+        x = jnp.ravel_multi_index(indices, self._dims, mode="clip")
+        return x, jnp.zeros(batch_shape, dtype=jnp.float32)
+
+
 class DiscretePolicy(nnx.Module):
     def __init__(
         self,
@@ -84,11 +115,10 @@ class DiscretePolicy(nnx.Module):
         layer_size: int = 256,
     ):
         in_dim = jnp.prod(jnp.array(obs_space.shape))
-        out_dim = action_space.n.item()
+        out_dim = jnp.prod(jnp.asarray(action_space.n))
+        self.n = nnx.static(jnp.asarray(action_space.n).tolist())
         self.layers = nnx.Sequential(
             ortho_linear(in_dim, layer_size, rngs),
-            nnx.swish,
-            ortho_linear(layer_size, layer_size, rngs),
             nnx.swish,
             ortho_linear(layer_size, layer_size, rngs),
             nnx.swish,
@@ -97,4 +127,6 @@ class DiscretePolicy(nnx.Module):
 
     def __call__(self, obs: jax.Array) -> distrax.Distribution:
         action_logits = self.layers(obs)
-        return distrax.Categorical(logits=action_logits)
+        dist = distrax.Categorical(logits=action_logits)
+        dist = distrax.Transformed(dist, ReshapeCategoricalBijector(self.n))
+        return dist
