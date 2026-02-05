@@ -10,7 +10,6 @@ from envelope.wrappers.wrapper import Wrapper
 
 
 def clip_action(action: PyTree, space: Space) -> PyTree:
-    print(action, space)
     if isinstance(space, BatchedSpace):
         return jax.vmap(clip_action, in_axes=(0, None))(action, space.space)
     elif isinstance(space, PyTreeSpace):

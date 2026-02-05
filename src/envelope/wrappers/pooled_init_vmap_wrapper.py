@@ -1,4 +1,3 @@
-import warnings
 from functools import cached_property
 from typing import override
 
@@ -26,12 +25,15 @@ class PooledInitVmapWrapper(Wrapper):
         keys = _split_or_keep_key(key, self.batch_size + 1)
         key_next, keys_pool = keys[0], keys[1:]
         inner_state, info = jax.vmap(self.env.init)(keys_pool)
+        pholder_info = jax.tree.map(
+            lambda x: jnp.full_like(x, jnp.nan, dtype=jnp.float32), info
+        )
         state = self.PooledInitVmapState(
             inner_state=inner_state,
             init_key=key_next,
-            last_final=info,
+            last_final=pholder_info,
         )
-        return state, info.update(final=state.last_final)
+        return state, info.update(final=pholder_info)
 
     @override
     def reset(self, key: Key, state: WrappedState) -> tuple[WrappedState, Info]:
