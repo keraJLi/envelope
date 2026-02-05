@@ -486,6 +486,50 @@ class ConstantObsEnv(Environment):
         )
 
 
+class PyTreeActionEnv(Environment):
+    """Env with PyTreeSpace action space for testing flatten/clip wrappers.
+
+    action_space: PyTreeSpace with "a": Continuous(-1, 1, shape=(2,)), "b": Continuous(-1, 1, shape=(3,)).
+    observation_space: Continuous(shape=(5,)).
+    step: concatenates action leaves and adds to state (state is a vector of shape (5,)).
+    """
+
+    @cached_property
+    def observation_space(self) -> Continuous:
+        return Continuous.from_shape(low=-jnp.inf, high=jnp.inf, shape=(5,))
+
+    @cached_property
+    def action_space(self) -> PyTreeSpace:
+        return PyTreeSpace({
+            "a": Continuous.from_shape(low=-1.0, high=1.0, shape=(2,)),
+            "b": Continuous.from_shape(low=-1.0, high=1.0, shape=(3,)),
+        })
+
+    def _action_to_vec(self, action: PyTree) -> jax.Array:
+        leaves = jax.tree.leaves(action)
+        return jnp.concatenate([jnp.reshape(x, -1) for x in leaves], axis=0)
+
+    def init(self, key: Key) -> tuple[jax.Array, InfoContainer]:
+        s = jnp.zeros(5, dtype=jnp.float32)
+        return s, InfoContainer(obs=s, reward=0.0, terminated=False, truncated=False)
+
+    def reset(self, key: Key, state: State) -> tuple[jax.Array, InfoContainer]:
+        return self.init(key)
+
+    def step(
+        self, state: jax.Array, action: PyTree
+    ) -> tuple[jax.Array, InfoContainer]:
+        vec = self._action_to_vec(action)
+        ns = state + jnp.asarray(vec, dtype=jnp.float32)
+        reward = jnp.sum(vec)
+        return ns, InfoContainer(
+            obs=ns,
+            reward=jnp.asarray(reward, dtype=jnp.float32),
+            terminated=False,
+            truncated=False,
+        )
+
+
 class IntObsEnv(Environment):
     """Non-floating obs env used to assert normalization wrapper raises."""
 
