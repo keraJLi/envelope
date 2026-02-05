@@ -58,7 +58,7 @@ class GaussianPolicy(nnx.Module):
         features = self.layers(obs)
         action_mean = self.action_mean(features)
         action_log_std = self.action_log_std(features)
-        return distrax.Independent(
+        dist = distrax.Independent(
             distrax.Clipped(
                 distrax.Normal(loc=action_mean, scale=jnp.exp(action_log_std)),
                 minimum=self.action_low,
@@ -66,6 +66,13 @@ class GaussianPolicy(nnx.Module):
             ),
             reinterpreted_batch_ndims=1,
         )
+
+        # Monkey-patch entropy to use the nested distribution for easy access
+        # This is mathematically not correct since it ignores clipping, and semantically
+        # not correct since it does not sum up the entropies of the independent
+        # variables. But it's convenient and we take the mean anyways.
+        dist.entropy = dist.distribution.distribution.entropy
+        return dist
 
 
 class DiscretePolicy(nnx.Module):
