@@ -14,10 +14,8 @@ pytestmark = pytest.mark.compat
 
 pytest.importorskip("kinetix")
 
-from kinetix.environment import (
-    EnvParams,
-    StaticEnvParams,
-)
+import kinetix
+from kinetix.environment import EnvParams, StaticEnvParams
 
 from envelope.compat.kinetix_envelope import KinetixEnvelope, _normalize_level_id
 from envelope.environment import Info
