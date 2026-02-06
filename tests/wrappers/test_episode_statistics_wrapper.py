@@ -13,7 +13,7 @@ from tests.wrappers.helpers import StepCounterEnv
 def test_init_creates_default_stats():
     env = StepCounterEnv()
     w = EpisodeStatisticsWrapper(env=env)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     state, info = w.init(key)
     assert jnp.allclose(state.stats.reward, 0.0)
     assert jnp.allclose(state.stats.length, 0.0)
@@ -25,7 +25,7 @@ def test_init_creates_default_stats():
 def test_step_accumulates_reward():
     env = StepCounterEnv()
     w = EpisodeStatisticsWrapper(env=env)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     state, _ = w.init(key)
     actions = [0.1, 0.2, -0.1]
     for a in actions:
@@ -37,7 +37,7 @@ def test_step_accumulates_reward():
 def test_step_increments_length():
     env = StepCounterEnv()
     w = EpisodeStatisticsWrapper(env=env)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     state, _ = w.init(key)
     n_steps = 5
     for _ in range(n_steps):
@@ -49,7 +49,7 @@ def test_step_increments_length():
 def test_info_contains_stats_field():
     env = StepCounterEnv()
     w = EpisodeStatisticsWrapper(env=env)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     state, info = w.init(key)
     assert hasattr(info, "stats")
     state, info = w.step(state, jnp.asarray(0.5))
@@ -60,7 +60,7 @@ def test_info_contains_stats_field():
 def test_reset_preserves_stats():
     env = StepCounterEnv()
     w = EpisodeStatisticsWrapper(env=env)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     state, _ = w.init(key)
     for _ in range(3):
         state, _ = w.step(state, jnp.asarray(0.2))
@@ -77,7 +77,7 @@ def test_reset_preserves_stats():
 def test_stats_persist_and_continue_after_reset():
     env = StepCounterEnv()
     w = EpisodeStatisticsWrapper(env=env)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     state, _ = w.init(key)
     for _ in range(3):
         state, _ = w.step(state, jnp.asarray(0.1))
@@ -92,7 +92,7 @@ def test_stats_persist_and_continue_after_reset():
 def test_negative_rewards_accumulate_correctly():
     env = StepCounterEnv()
     w = EpisodeStatisticsWrapper(env=env)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     state, _ = w.init(key)
     state, _ = w.step(state, jnp.asarray(1.0))
     state, _ = w.step(state, jnp.asarray(-0.5))
@@ -102,7 +102,7 @@ def test_negative_rewards_accumulate_correctly():
 def test_state_is_episode_statistics_state_with_inner_state():
     env = StepCounterEnv()
     w = EpisodeStatisticsWrapper(env=env)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     state, _ = w.init(key)
     assert hasattr(state, "inner_state")
     assert hasattr(state, "stats")
@@ -112,7 +112,7 @@ def test_state_is_episode_statistics_state_with_inner_state():
 def test_state_unwrapped_reaches_inner_env_state():
     env = StepCounterEnv()
     w = EpisodeStatisticsWrapper(env=env)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     state, _ = w.init(key)
     assert hasattr(state, "unwrapped")
     inner = state.unwrapped
@@ -129,7 +129,7 @@ def test_observation_space_action_space_unchanged():
 def test_observation_space_contains_after_init_and_step():
     env = StepCounterEnv()
     w = EpisodeStatisticsWrapper(env=env)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     state, info = w.init(key)
     assert w.observation_space.contains(info.obs)
     state, info = w.step(state, jnp.asarray(0.1))
@@ -139,7 +139,7 @@ def test_observation_space_contains_after_init_and_step():
 def test_jit_init_step_loop():
     env = StepCounterEnv()
     w = EpisodeStatisticsWrapper(env=env)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     n_steps = 4
 
     @jax.jit
@@ -162,7 +162,7 @@ def test_composability_with_vmap_wrapper():
     batch_size = 3
     env = StepCounterEnv()
     w = EpisodeStatisticsWrapper(env=VmapWrapper(env=env, batch_size=batch_size))
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     state, _ = w.init(key)
     action = jnp.array([0.1, 0.2, 0.3])
     state, info = w.step(state, action)
@@ -174,7 +174,7 @@ def test_composability_with_vmap_wrapper():
 def test_composability_with_truncation_wrapper():
     env = StepCounterEnv(terminate_after=10)
     w = EpisodeStatisticsWrapper(env=TruncationWrapper(env=env, max_steps=5))
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     state, _ = w.init(key)
     for _ in range(6):
         state, info = w.step(state, jnp.asarray(0.1))

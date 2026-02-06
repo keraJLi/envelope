@@ -94,7 +94,7 @@ def test_continuous_space_sampling(
     """Exercise sampling and containment across Continuous configurations."""
     space = space_factory()
 
-    key = jax.random.PRNGKey(1)
+    key = jax.random.key(1)
     sample = space.sample(key)
 
     assert sample.shape == expected_shape
@@ -133,7 +133,7 @@ def test_continuous_space_jit():
         valid = space.contains(sample)
         return sample, valid
 
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample, valid = sample_and_check(key)
 
     assert sample.shape == (3,)
@@ -144,7 +144,7 @@ def test_continuous_space_different_dtypes():
     """Test Continuous space with different dtypes."""
     # float32
     space32 = Continuous.from_shape(low=0.0, high=1.0, shape=(2,))
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample32 = space32.sample(key)
     assert sample32.dtype == jnp.float32
 
@@ -175,7 +175,7 @@ def test_continuous_tree_operations():
 
 def test_continuous_space_validation():
     """Test that Continuous space validates bounds at appropriate points."""
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
 
     # Test 1: Shape mismatch - fails when accessing shape property
     with pytest.raises(ValueError, match="low and high must have the same shape"):
@@ -269,7 +269,7 @@ def test_continuous_space_from_vmapped_function():
     assert jnp.allclose(spaces.low, 0.0)
 
     # Test sampling from the vmapped space
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = spaces.sample(key)
     assert sample.shape == (batch_size, 2)
     assert jnp.all(sample >= 0.0)

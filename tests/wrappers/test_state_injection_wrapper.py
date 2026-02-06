@@ -20,7 +20,7 @@ class TestStateInjectionCoreFunctionality:
         """Verify that init() calls inner env init."""
         env = StepCounterEnv()
         w = StateInjectionWrapper(env=env)
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
 
         state, info = w.init(key)
 
@@ -36,7 +36,7 @@ class TestStateInjectionCoreFunctionality:
         """Verify that set_reset_state() updates the injected state."""
         env = StepCounterEnv()
         w = StateInjectionWrapper(env=env)
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
 
         # Get initial state
         state, _ = w.init(key)
@@ -56,7 +56,7 @@ class TestStateInjectionCoreFunctionality:
         """Verify that reset with existing state preserves the injected state."""
         env = StepCounterEnv()
         w = StateInjectionWrapper(env=env)
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
 
         # Get initial state and set custom reset state
         state, _ = w.init(key)
@@ -65,7 +65,7 @@ class TestStateInjectionCoreFunctionality:
         state = w.set_reset_state(state, custom_state, custom_obs)
 
         # Reset again, passing the current state (simulates auto-reset)
-        key2 = jax.random.PRNGKey(1)
+        key2 = jax.random.key(1)
         state2, info2 = w.reset(state, key2)
 
         # Should preserve the injected state
@@ -76,7 +76,7 @@ class TestStateInjectionCoreFunctionality:
         """Verify that set_reset_state() overrides existing injected state."""
         env = StepCounterEnv()
         w = StateInjectionWrapper(env=env)
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
 
         # Get initial state and set first custom state
         state, _ = w.init(key)
@@ -101,7 +101,7 @@ class TestStateInjectionCoreFunctionality:
         """Verify that step updates inner_state but keeps reset_state unchanged."""
         env = StepCounterEnv()
         w = StateInjectionWrapper(env=env)
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
 
         # Get initial state and set custom reset state
         state, _ = w.init(key)
@@ -123,7 +123,7 @@ class TestStateInjectionCoreFunctionality:
         """Verify that reset with state but reset_state=None does normal reset."""
         env = StepCounterEnv()
         w = StateInjectionWrapper(env=env)
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
 
         # Get initial state and take a step so inner_state differs from fresh reset
         state, _ = w.init(key)
@@ -131,7 +131,7 @@ class TestStateInjectionCoreFunctionality:
         assert jnp.allclose(state.inner_state.env_state, jnp.array(5.0))
 
         # Reset with this state (no reset_state set) - should delegate to inner env
-        key2 = jax.random.PRNGKey(1)
+        key2 = jax.random.key(1)
         state2, info2 = w.reset(state, key2)
 
         # Should have done a normal reset - inner_state is fresh from env
@@ -156,7 +156,7 @@ class TestStateInjectionCoreFunctionality:
         """Verify that reset raises when only one of reset_state/reset_obs is set."""
         env = StepCounterEnv()
         w = StateInjectionWrapper(env=env)
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
 
         # Create state with only reset_state set (not reset_obs)
         state_with_only_reset_state = w.InjectedState(
@@ -192,7 +192,7 @@ class TestStateInjectionWithAutoReset:
         env = StepCounterEnv(terminate_after=2)
         inner_w = StateInjectionWrapper(env=env)
         w = AutoResetWrapper(env=inner_w)
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
 
         # Reset and set a custom reset state
         state, _ = w.init(key)
@@ -213,7 +213,7 @@ class TestStateInjectionWithAutoReset:
         env = StepCounterEnv(terminate_after=1)
         inner_w = StateInjectionWrapper(env=env)
         w = AutoResetWrapper(env=inner_w)
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
 
         # Get initial state
         state, _ = w.init(key)
@@ -235,7 +235,7 @@ class TestStateInjectionWithAutoReset:
         env = StepCounterEnv(terminate_after=1)
         inner_w = StateInjectionWrapper(env=env)
         w = AutoResetWrapper(env=inner_w)
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
 
         # Get initial state and set custom reset state
         state, _ = w.init(key)
@@ -257,7 +257,7 @@ class TestStateInjectionWithAutoReset:
         env = StepCounterEnv(terminate_after=2)
         inner_w = StateInjectionWrapper(env=env)
         w = AutoResetWrapper(env=inner_w)
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
 
         # Initial reset
         state, _ = w.init(key)
@@ -295,7 +295,7 @@ class TestStateInjectionJITCompatibility:
         """Verify that reset and step can be JIT compiled."""
         env = StepCounterEnv(terminate_after=2)
         w = AutoResetWrapper(env=StateInjectionWrapper(env=env))
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
 
         @jax.jit
         def run_episode(k):
@@ -323,7 +323,7 @@ class TestStateInjectionJITCompatibility:
                 s, info = w.step(s, jnp.array(0.1))
             return s, info
 
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
         custom_state = StepState(env_state=jnp.array(77.0), steps=0)
         custom_obs = jnp.array(77.0)
 
@@ -353,7 +353,7 @@ class TestStateInjectionJITCompatibility:
 
             return state, info
 
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
         state, _ = w.init(key)
 
         # Run multiple outer iterations

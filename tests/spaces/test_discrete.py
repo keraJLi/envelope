@@ -76,7 +76,7 @@ def test_discrete_space_sampling(
     """Exercise sampling and containment across Discrete configurations without duplication."""
     space = space_factory()
 
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = space.sample(key)
 
     assert sample.shape == expected_shape
@@ -129,7 +129,7 @@ def test_discrete_space_jit():
         valid = space.contains(sample)
         return sample, valid
 
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample, valid = sample_and_check(key)
 
     assert 0 <= sample < 10
@@ -140,7 +140,7 @@ def test_discrete_space_different_dtypes():
     """Test Discrete space with different dtypes."""
     # int32
     space32 = Discrete(n=10)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample32 = space32.sample(key)
     assert sample32.dtype == jnp.int32
 
@@ -205,7 +205,7 @@ def test_discrete_space_replace():
 def test_discrete_zero_or_negative_n(n, seed):
     """Test Discrete space with n=0 or negative n."""
     space = Discrete(n=n)
-    key = jax.random.PRNGKey(seed)
+    key = jax.random.key(seed)
 
     # Space can be created, sampling produces 0 (jax.random.randint with high<=0 returns 0)
     sample = space.sample(key)
@@ -237,7 +237,7 @@ def test_discrete_array_n_with_zero_or_negative(n_values, seed):
     """Test Discrete space with array n containing zero or negative values."""
     n_values = jnp.array(n_values)
     space = Discrete(n=n_values)
-    key = jax.random.PRNGKey(seed)
+    key = jax.random.key(seed)
 
     sample = space.sample(key)
     assert sample.shape == n_values.shape
@@ -289,7 +289,7 @@ def test_discrete_space_from_vmapped_function():
     assert spaces.shape == (batch_size,)
 
     # Test sampling from the vmapped space
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = spaces.sample(key)
     assert sample.shape == (batch_size,)
     assert jnp.all(sample >= 0)

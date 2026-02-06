@@ -23,7 +23,7 @@ def _init_rmv_from_example(x_like, dtype=jnp.float32, count=0) -> RunningMeanVar
     "dtype", [jnp.float32, jnp.float16, jnp.bfloat16], ids=["f32", "f16", "bf16"]
 )
 def test_update_rmv_scalar_batch_matches_sample_stats(dtype):
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     x = jax.random.normal(key, (256, 1), dtype=dtype) * jnp.asarray(
         3.0, dtype
     ) + jnp.asarray(2.0, dtype)
@@ -48,7 +48,7 @@ def test_update_rmv_scalar_batch_matches_sample_stats(dtype):
     ids=["f32", "f16"],
 )
 def test_update_rmv_two_batches_equals_single_concat(dtype, atol, rtol):
-    k1, k2 = jax.random.split(jax.random.PRNGKey(1))
+    k1, k2 = jax.random.split(jax.random.key(1))
     x1 = jax.random.normal(k1, (64, 3), dtype=dtype) + jnp.asarray(1.0, dtype)
     x2 = jax.random.normal(k2, (96, 3), dtype=dtype) - jnp.asarray(2.0, dtype)
     x_all = jnp.concatenate([x1, x2], axis=0)
@@ -65,7 +65,7 @@ def test_update_rmv_two_batches_equals_single_concat(dtype, atol, rtol):
 
 
 def test_update_rmv_batch_size_independence():
-    key = jax.random.PRNGKey(2)
+    key = jax.random.key(2)
     x = jax.random.uniform(key, (128, 4), dtype=jnp.float32) * 10.0
     rmv0 = _init_rmv_from_example(x, dtype=jnp.float32, count=0)
 
@@ -86,7 +86,7 @@ def test_update_rmv_batch_size_independence():
 
 
 def test_update_rmv_pytree_leaves():
-    key = jax.random.PRNGKey(3)
+    key = jax.random.key(3)
     x = {
         "a": jax.random.normal(key, (32, 2), dtype=jnp.float32),
         "b": jnp.stack(
@@ -112,7 +112,7 @@ def test_update_rmv_pytree_leaves():
 
 
 def test_update_rmv_jit_compatibility():
-    key = jax.random.PRNGKey(4)
+    key = jax.random.key(4)
     x = jax.random.normal(key, (50, 5), dtype=jnp.float32)
     rmv0 = _init_rmv_from_example(x, dtype=jnp.float32, count=0)
 

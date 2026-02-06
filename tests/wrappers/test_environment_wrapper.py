@@ -38,7 +38,7 @@ class TestWrapperCoreMethods:
         env = WrapperSimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
         state, info = environment_wrapper.init(key)
 
         assert jnp.allclose(state, jnp.array(0.0))
@@ -50,7 +50,7 @@ class TestWrapperCoreMethods:
         env = WrapperSimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
         state, info = environment_wrapper.init(key)
         next_state, next_info = environment_wrapper.step(state, jnp.array(0.5))
 
@@ -62,7 +62,7 @@ class TestWrapperCoreMethods:
         env = WrapperSimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
         state, info = environment_wrapper.init(key)
 
         # Check types
@@ -79,7 +79,7 @@ class TestWrapperCoreMethods:
         env = WrapperSimpleEnv()
         environment_wrapper = Wrapper(env=env)
 
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
         state, _ = environment_wrapper.init(key)
         next_state, next_info = environment_wrapper.step(state, jnp.array(0.3))
 
@@ -276,7 +276,7 @@ class TestWrapperNested:
         environment_wrapper1 = Wrapper(env=env)
         environment_wrapper2 = Wrapper(env=environment_wrapper1)
 
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
         state, info = environment_wrapper2.init(key)
 
         assert jnp.allclose(state, jnp.array(0.0))
@@ -288,7 +288,7 @@ class TestWrapperNested:
         environment_wrapper1 = Wrapper(env=env)
         environment_wrapper2 = Wrapper(env=environment_wrapper1)
 
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
         state, _ = environment_wrapper2.init(key)
         next_state, next_info = environment_wrapper2.step(state, jnp.array(0.5))
 
@@ -325,7 +325,7 @@ class TestWrapperNested:
         environment_wrapper1 = Wrapper(env=env)
         environment_wrapper2 = Wrapper(env=environment_wrapper1)
 
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
 
         # Both should work identically
         state1, info1 = environment_wrapper1.init(key)
@@ -340,7 +340,7 @@ class TestWrapperNested:
         environment_wrapper1 = Wrapper(env=env)
         environment_wrapper2 = Wrapper(env=environment_wrapper1)
 
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
         state, _ = environment_wrapper2.init(key)
         next_state, next_info = environment_wrapper2.step(state, jnp.array(0.3))
 
@@ -464,7 +464,7 @@ class TestWrapperEdgeCases:
         env = make_wrapper_complex_state_env()
         environment_wrapper = Wrapper(env=env)
 
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
         state, info = environment_wrapper.init(key)
 
         assert isinstance(state, dict)

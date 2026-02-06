@@ -31,7 +31,7 @@ def test_protocol_conformance_reset_and_step():
     params = jnp.linspace(0.0, 0.3, batch_size)
     envs = ParamEnv(offset=params)
     w = VmapEnvsWrapper(env=envs, batch_size=batch_size)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     state, info = w.init(key)
     assert state is not None
     assert isinstance(info, Info)
@@ -51,7 +51,7 @@ def test_reset_and_step_equivalence_to_manual(batch_size):
     params = jnp.linspace(-0.5, 0.5, batch_size)
     envs = ParamEnv(offset=params)
     w = VmapEnvsWrapper(env=envs, batch_size=batch_size)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     keys = jax.random.split(key, batch_size)
     s_w, i_w = w.init(key)
     # Manual: vmap over (env, key)
@@ -80,7 +80,7 @@ def test_reset_raises_on_wrong_key_batch_dim():
     params = jnp.linspace(0.0, 1.0, batch_size)
     envs = ParamEnv(offset=params)
     w = VmapEnvsWrapper(env=envs, batch_size=batch_size)
-    bad_keys = jax.random.split(jax.random.PRNGKey(0), batch_size + 1)
+    bad_keys = jax.random.split(jax.random.key(0), batch_size + 1)
     with pytest.raises(ValueError):
         _ = w.init(bad_keys)
 
@@ -90,7 +90,7 @@ def test_pickle_serialization_of_state_and_info():
     params = jnp.linspace(0.0, 1.0, batch_size)
     envs = ParamEnv(offset=params)
     w = VmapEnvsWrapper(env=envs, batch_size=batch_size)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     state, info = w.init(key)
     blob = pickle.dumps((state, info))
     s2, i2 = pickle.loads(blob)
@@ -119,7 +119,7 @@ def test_prop_reset_step_shapes(batch_size, seed):
     params = jnp.linspace(-1.0, 1.0, batch_size)
     envs = ParamEnv(offset=params)
     w = VmapEnvsWrapper(env=envs, batch_size=batch_size)
-    key = jax.random.PRNGKey(seed)
+    key = jax.random.key(seed)
     state, info = w.init(key)
     assert state is not None and info is not None
     assert info.obs.shape == (batch_size, 2)
@@ -133,7 +133,7 @@ def test_param_effect_applies_per_env_no_cross_mix():
     offsets = jnp.array([0.0, 1.0, -1.0, 2.0], dtype=jnp.float32)
     envs = ParamEnv(offset=offsets)
     w = VmapEnvsWrapper(env=envs, batch_size=batch_size)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     s, i = w.init(key)
     s2, i2 = w.step(s, jnp.zeros((batch_size, 2), dtype=jnp.float32))
     expected = i.obs + offsets.reshape((batch_size, 1))

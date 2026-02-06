@@ -57,7 +57,7 @@ class GymnaxEnvelope(Environment):
         reset_fn = cast(_GymnaxReset, self.gymnax_env.reset)
         step_fn = cast(_GymnaxStep, self.gymnax_env.step)
 
-        key = jax.random.PRNGKey(0)
+        key = jax.random.key(0)
         _, state = reset_fn(key, self.env_params)
         _, _, _, _, info = step_fn(
             key,

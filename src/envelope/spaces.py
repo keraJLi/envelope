@@ -188,16 +188,19 @@ class BatchedSpace(Space):
     batch_size: int = static_field()
 
     def sample(self, key: Key) -> PyTree:
-        # Accept single PRNGKey or a batch of keys shaped (batch_size, 2)
-        if getattr(key, "shape", ()) == (2,):
+        if not jnp.issubdtype(key.dtype, jax.dtypes.prng_key):
+            raise ValueError("key must be a (new-style) `jax.random.key`.")
+
+        # Accept single key or a batch of keys shaped (batch_size, )
+        if key.shape == ():
             keys = jax.random.split(key, self.batch_size)
-        else:
-            if key.shape[0] != self.batch_size:
-                raise ValueError(
-                    f"sample key's leading dimension ({key.shape[0]}) must match "
-                    f"batch_size ({self.batch_size})."
-                )
+        elif key.shape == (self.batch_size,):
             keys = key
+        else:
+            raise ValueError(
+                f"sample key's leading dimension ({key.shape[0]}) must match "
+                f"batch_size ({self.batch_size})."
+            )
         return jax.vmap(self.space.sample)(keys)
 
     def contains(self, x: PyTree) -> bool:

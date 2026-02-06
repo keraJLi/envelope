@@ -123,7 +123,7 @@ def test_discrete_space_pickle():
     assert unpickled.dtype == space.dtype
 
     # Verify functionality works
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = unpickled.sample(key)
     assert unpickled.contains(sample)
 
@@ -145,7 +145,7 @@ def test_continuous_space_pickle():
     assert unpickled.dtype == space.dtype
 
     # Verify functionality works
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = unpickled.sample(key)
     assert unpickled.contains(sample)
 
@@ -172,7 +172,7 @@ def test_pytree_space_pickle():
     assert isinstance(unpickled.tree["continuous"], Continuous)
 
     # Verify functionality works
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = unpickled.sample(key)
     assert unpickled.contains(sample)
 
@@ -211,7 +211,7 @@ def test_space_equality_after_pickle():
     assert space1.shape == space2.shape
 
     # And should produce valid samples
-    key = jax.random.PRNGKey(42)
+    key = jax.random.key(42)
     assert space1.contains(space2.sample(key))
     assert space2.contains(space1.sample(key))
 

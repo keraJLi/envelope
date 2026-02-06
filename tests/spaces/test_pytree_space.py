@@ -22,7 +22,7 @@ def test_pytree_space_basic():
     )
 
     # Test sampling
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = space.sample(key)
 
     assert isinstance(sample, dict)
@@ -60,7 +60,7 @@ def test_pytree_space_nested():
     )
 
     # Test sampling
-    key = jax.random.PRNGKey(42)
+    key = jax.random.key(42)
     sample = space.sample(key)
 
     # Check structure
@@ -89,7 +89,7 @@ def test_pytree_space_list():
         ]
     )
 
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = space.sample(key)
 
     assert isinstance(sample, list)
@@ -111,7 +111,7 @@ def test_pytree_space_tuple():
         )
     )
 
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = space.sample(key)
 
     assert isinstance(sample, tuple)
@@ -207,7 +207,7 @@ def test_pytree_space_jit():
         valid = space.contains(sample)
         return sample, valid
 
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample, valid = sample_and_check(key)
 
     assert isinstance(sample, dict)
@@ -231,7 +231,7 @@ def test_pytree_space_many_samples():
     )
 
     # Generate 100 random seeds and sample
-    keys = jax.random.split(jax.random.PRNGKey(123), 100)
+    keys = jax.random.split(jax.random.key(123), 100)
     samples = jax.vmap(space.sample)(keys)
 
     # Check shapes
@@ -272,7 +272,7 @@ def test_pytree_space_batched_parameters_basic():
     )
 
     # Create keys for batched sampling
-    keys = jax.random.split(jax.random.PRNGKey(42), 5)
+    keys = jax.random.split(jax.random.key(42), 5)
 
     # vmap over the batched keys
     samples = jax.vmap(space.sample)(keys)
@@ -294,7 +294,7 @@ def test_pytree_space_batched_parameters_bounds():
         }
     )
 
-    keys = jax.random.split(jax.random.PRNGKey(42), 5)
+    keys = jax.random.split(jax.random.key(42), 5)
     samples = jax.vmap(space.sample)(keys)
 
     # Check discrete bounds per dimension
@@ -380,7 +380,7 @@ def test_pytree_space_empty_dict():
     """Test PyTreeSpace with empty dictionary."""
     space = PyTreeSpace({})
 
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = space.sample(key)
 
     assert isinstance(sample, dict)
@@ -392,7 +392,7 @@ def test_pytree_space_empty_list():
     """Test PyTreeSpace with empty list."""
     space = PyTreeSpace([])
 
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = space.sample(key)
 
     assert isinstance(sample, list)
@@ -404,7 +404,7 @@ def test_pytree_space_single_element():
     """Test PyTreeSpace with single element."""
     space = PyTreeSpace({"only": Discrete(n=5)})
 
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = space.sample(key)
 
     assert isinstance(sample, dict)
@@ -418,7 +418,7 @@ def test_pytree_space_deep_nesting():
         {"level1": {"level2": {"level3": {"level4": {"level5": Discrete(n=10)}}}}}
     )
 
-    key = jax.random.PRNGKey(42)
+    key = jax.random.key(42)
     sample = space.sample(key)
 
     # Navigate to deepest level
@@ -455,7 +455,7 @@ def test_pytree_space_from_vmapped_function():
 
     # Verify the vmapped result works - spaces should be a batched pytree
     # The tree structure should be preserved
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = spaces.sample(key)
 
     # Sample should have the same structure as a single PyTreeSpace sample
@@ -485,9 +485,7 @@ def test_pytree_space_from_vmapped_function():
 def test_pytree_space_rejects_batched_space_leaf():
     """Test that PyTreeSpace rejects BatchedSpace as a leaf."""
     with pytest.raises(TypeError, match="Discrete or Continuous"):
-        PyTreeSpace(
-            {"bad": BatchedSpace(space=Discrete(n=5), batch_size=3)}
-        )
+        PyTreeSpace({"bad": BatchedSpace(space=Discrete(n=5), batch_size=3)})
 
 
 def test_pytree_space_rejects_nested_pytree_space_leaf():

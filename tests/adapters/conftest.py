@@ -7,7 +7,7 @@ pytestmark = pytest.mark.adapters
 def prng_key():
     import jax
 
-    return jax.random.PRNGKey(0)
+    return jax.random.key(0)
 
 
 @pytest.fixture

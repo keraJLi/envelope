@@ -14,7 +14,7 @@ from tests.wrappers.helpers import IntObsEnv, PyTreeObsEnv, ScalarToyEnv
 def test_init_reset_step_cast_discrete_obs_to_float32():
     env = IntObsEnv()
     w = ContinuousObservationWrapper(env=env)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     state, info = w.init(key)
     assert info.obs.dtype == jnp.float32
     state, info = w.reset(state, key)
@@ -27,7 +27,7 @@ def test_init_reset_step_cast_discrete_obs_to_float32():
 def test_float32_obs_passes_through():
     env = ScalarToyEnv()
     w = ContinuousObservationWrapper(env=env)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     state, info = w.init(key)
     assert info.obs.dtype == jnp.float32
     assert jnp.allclose(info.obs, 0.0)
@@ -39,7 +39,7 @@ def test_float32_obs_passes_through():
 def test_init_equivalence_to_manual_to_float():
     env = IntObsEnv()
     w = ContinuousObservationWrapper(env=env)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     _, info_w = w.init(key)
     _, info_raw = env.init(key)
     manual = to_float(info_raw.obs)
@@ -50,7 +50,7 @@ def test_init_equivalence_to_manual_to_float():
 def test_pytree_obs_all_leaves_cast():
     env = PyTreeObsEnv(shapes={"a": (2,), "b": (3,)})
     w = ContinuousObservationWrapper(env=env)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     state, info = w.init(key)
     assert info.obs["a"].dtype == jnp.float32
     assert info.obs["b"].dtype == jnp.float32
@@ -77,7 +77,7 @@ def test_observation_space_preserves_continuous_bounds_float32():
 def test_observation_space_contains_after_init_and_step():
     env = IntObsEnv()
     w = ContinuousObservationWrapper(env=env)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     state, info = w.init(key)
     assert w.observation_space.contains(info.obs)
     state, info = w.step(state, jnp.array(0))
@@ -129,7 +129,7 @@ def test_to_continuous_helper_float64_continuous():
 def test_jit_init_step():
     env = IntObsEnv()
     w = ContinuousObservationWrapper(env=env)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
 
     @jax.jit
     def run(k):
@@ -143,7 +143,7 @@ def test_jit_init_step():
 def test_composability_with_vmap_wrapper():
     env = IntObsEnv()
     w = ContinuousObservationWrapper(env=VmapWrapper(env=env, batch_size=3))
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     state, info = w.init(key)
     assert info.obs.dtype == jnp.float32
     assert info.obs.shape == (3,)

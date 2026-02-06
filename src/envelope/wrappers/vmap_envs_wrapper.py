@@ -2,6 +2,7 @@ from functools import cached_property
 from typing import override
 
 import jax
+import jax.numpy as jnp
 
 from envelope import spaces
 from envelope.environment import Environment, Info
@@ -24,14 +25,18 @@ class VmapEnvsWrapper(Wrapper):
     batch_size: int = field(kw_only=True)
 
     def _split_keys(self, key: Key) -> Key:
-        if key.shape == (2,):
+        if not jnp.issubdtype(key.dtype, jax.dtypes.prng_key):
+            raise ValueError("key must be a (new-style) `jax.random.key`.")
+
+        if key.shape == ():
             return jax.random.split(key, self.batch_size)
-        if key.shape[0] != self.batch_size:
+        elif key.shape == (self.batch_size,):
+            return jax.random.split(key, self.batch_size)
+        else:
             raise ValueError(
                 f"reset key's leading dimension ({key.shape[0]}) must match "
                 f"batch_size ({self.batch_size})."
             )
-        return key
 
     @override
     def init(self, key: Key) -> tuple[WrappedState, Info]:

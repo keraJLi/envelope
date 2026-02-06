@@ -22,7 +22,7 @@ def test_batched_space_discrete():
     assert batched.dtype == jnp.int32
 
     # Test sampling with single key
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = batched.sample(key)
     assert sample.shape == (batch_size,)
     assert jnp.all(sample >= 0)
@@ -47,7 +47,7 @@ def test_batched_space_continuous():
     assert batched.dtype == jnp.float32
 
     # Test sampling
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = batched.sample(key)
     assert sample.shape == (batch_size, 3)
     assert jnp.all(sample >= 0.0)
@@ -79,7 +79,7 @@ def test_batched_space_pytree():
     assert dtype["continuous"] == jnp.float32
 
     # Test sampling
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = batched.sample(key)
     assert isinstance(sample, dict)
     assert sample["discrete"].shape == (batch_size,)
@@ -94,7 +94,7 @@ def test_batched_space_sample_key_validation():
     batched = BatchedSpace(space=base_space, batch_size=batch_size)
 
     # Single key should work
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     batched.sample(key)  # Should not raise
 
     # Batched keys with correct size should work
@@ -156,7 +156,7 @@ def test_batched_pytree_space():
     assert batched.batch_size == batch_size
 
     # Test sampling
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = batched.sample(key)
     assert sample["discrete"].shape == (batch_size,)
     assert sample["continuous"].shape == (batch_size, 2)
@@ -181,7 +181,7 @@ def test_batched_nested_pytree_space():
     assert isinstance(batched.space, PyTreeSpace)
 
     # Test sampling
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = batched.sample(key)
     assert sample["obs"]["position"].shape == (batch_size, 2)
     assert sample["obs"]["velocity"].shape == (batch_size,)
@@ -205,7 +205,7 @@ def test_batched_tuple_pytree_space():
     assert shape[0] == (batch_size,)
     assert shape[1] == (batch_size, 2)
 
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = batched.sample(key)
     assert sample[0].shape == (batch_size,)
     assert sample[1].shape == (batch_size, 2)
@@ -225,7 +225,7 @@ def test_batched_space_multiple_calls():
     assert batched2.space.batch_size == 3
 
     # Test sampling
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = batched2.sample(key)
     assert sample.shape == (2, 3)
 
@@ -247,7 +247,7 @@ def test_double_batched_pytree_space():
 
     assert outer.dtype == base_space.dtype
 
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = outer.sample(key)
     assert sample["discrete"].shape == (2, 3)
     assert sample["continuous"].shape == (2, 3, 2)
@@ -265,7 +265,7 @@ def test_batched_space_batch_size_one():
     batched = BatchedSpace(space=base_space, batch_size=1)
 
     assert batched.shape == (1,)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = batched.sample(key)
     assert sample.shape == (1,)
     assert batched.contains(sample)
@@ -281,7 +281,7 @@ def test_batched_space_scalar_continuous():
     batched = BatchedSpace(space=base_space, batch_size=batch_size)
 
     assert batched.shape == (batch_size,)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     sample = batched.sample(key)
     assert sample.shape == (batch_size,)
     assert batched.contains(sample)
