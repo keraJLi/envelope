@@ -3,9 +3,10 @@ from copy import copy
 from functools import cached_property
 from typing import Any, override
 
+import jax
 import jax.numpy as jnp
 import jumanji
-from jumanji.specs import Array, BoundedArray, DiscreteArray, MultiDiscreteArray
+from jumanji.specs import Array, BoundedArray, DiscreteArray, MultiDiscreteArray, Spec
 from jumanji.types import TimeStep as JumanjiTimeStep
 
 from envelope import spaces as envelope_spaces
@@ -88,8 +89,18 @@ def convert_jumanji_to_envelope_info(timestep: JumanjiTimeStep) -> InfoContainer
     return info
 
 
-def convert_jumanji_spec_to_envelope_space(spec: Any) -> envelope_spaces.Space:
-    """Convert a Jumanji Spec to a envelope Space."""
+def convert_jumanji_spec_to_envelope_space(
+    spec: Spec | PyTree,
+) -> envelope_spaces.Space:
+    """Convert a Jumanji Spec to an envelope Space."""
+    tree = _spec_to_tree(spec)
+    if isinstance(tree, envelope_spaces.Space):
+        return tree
+    return envelope_spaces.PyTreeSpace(tree=tree)
+
+
+def _spec_to_tree(spec: Spec | PyTree):
+    """Convert a Jumanji Spec to a Space leaf or a raw pytree of Space leaves."""
 
     if isinstance(spec, (DiscreteArray, MultiDiscreteArray)):
         n = jnp.asarray(spec.num_values, dtype=spec.dtype)
@@ -114,15 +125,17 @@ def convert_jumanji_spec_to_envelope_space(spec: Any) -> envelope_spaces.Space:
         return envelope_spaces.Continuous(low=low, high=high)
 
     # Structured specs (most Jumanji envs): access private mapping when available.
-    subspecs = getattr(spec, "_specs", None)
-    if isinstance(subspecs, dict):
-        tree = {
-            k: convert_jumanji_spec_to_envelope_space(v) for k, v in subspecs.items()
-        }
-        return envelope_spaces.PyTreeSpace(tree)
-
+    if isinstance(spec, Spec):
+        return spec._constructor(
+            **jax.tree.map(
+                _spec_to_tree,
+                spec._specs,
+                is_leaf=lambda x: isinstance(x, Spec),
+            )
+        )
     if isinstance(spec, (tuple, list)):
-        tree = tuple(convert_jumanji_spec_to_envelope_space(s) for s in spec)
-        return envelope_spaces.PyTreeSpace(tree)
+        return tuple(_spec_to_tree(s) for s in spec)
+    if isinstance(spec, dict):
+        return {k: _spec_to_tree(v) for k, v in spec.items()}
 
     raise ValueError(f"Unsupported spec type: {type(spec)}")
