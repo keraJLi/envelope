@@ -1,4 +1,4 @@
-"""Tests for envelope.compat.gymnax_envelope module."""
+"""Tests for envelope.adapters.gymnax_envelope module."""
 
 # ruff: noqa: E402
 
@@ -10,11 +10,11 @@ pytestmark = pytest.mark.adapters
 
 pytest.importorskip("gymnax")
 
-from envelope.compat.gymnax_envelope import GymnaxEnvelope, _convert_space
 from gymnax.environments import spaces as gymnax_spaces
 
+from envelope.adapters.gymnax_envelope import GymnaxEnvelope, _convert_space
 from envelope.spaces import Continuous, Discrete, PyTreeSpace
-from tests.compat.contract import (
+from tests.adapters.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )
