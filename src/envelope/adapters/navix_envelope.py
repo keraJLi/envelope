@@ -55,7 +55,11 @@ class NavixEnvelope(Environment):
     @override
     @cached_property
     def observation_space(self) -> envelope_spaces.Space:
-        return convert_navix_to_envelope_space(self.navix_env.observation_space)
+        nvx_obs_space = self.navix_env.observation_space
+        obs_space = convert_navix_to_envelope_space(nvx_obs_space)
+        n = obs_space.n
+        n = jnp.maximum(n, 10)  # See https://github.com/epignatelli/navix/issues/109
+        return obs_space.replace(n=n)
 
 
 def convert_navix_to_envelope_info(nvx_timestep: navix.Timestep) -> InfoContainer:
