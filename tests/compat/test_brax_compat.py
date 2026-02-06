@@ -93,8 +93,8 @@ def test_wrapper_unwrapping():
 
     # Create a simple wrapper
     class SimpleWrapper(BraxWrapper):
-        def reset(self, rng):
-            return self.env.reset(rng)
+        def init(self, rng):
+            return self.env.init(rng)
 
         def step(self, state, action):
             return self.env.step(state, action)
