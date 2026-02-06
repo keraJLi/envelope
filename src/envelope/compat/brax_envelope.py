@@ -69,7 +69,7 @@ class BraxEnvelope(Environment):
         info = InfoContainer(
             obs=brax_state.obs,
             reward=brax_state.reward,
-            terminated=jnp.asarry(brax_state.done, dtype=bool).item(),
+            terminated=jnp.asarray(brax_state.done, dtype=bool).item(),
         )
         info = info.update(**dataclasses.asdict(brax_state))
         return brax_state, info
