@@ -108,7 +108,7 @@ def test_reset_vmaps_inner_reset():
     w = PooledInitVmapWrapper(env=env, batch_size=batch_size, pool_size=3)
     key = jax.random.PRNGKey(0)
     state, info = w.init(key)
-    state, info = w.reset(key, state)
+    state, info = w.reset(state, key)
     assert info.obs.shape == (batch_size,)
     assert w.observation_space.contains(info.obs)
 

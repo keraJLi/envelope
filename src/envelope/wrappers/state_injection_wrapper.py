@@ -69,13 +69,13 @@ class StateInjectionWrapper(Wrapper):
         return state, info
 
     @override
-    def reset(self, key: Key, state: WrappedState) -> tuple[WrappedState, Info]:
+    def reset(self, state: WrappedState, key: Key) -> tuple[WrappedState, Info]:
         # If reset state is set, use it instead of resetting inner env
         if state.reset_state is not None and state.reset_obs is not None:
             inner_state = state.reset_state
             info = InfoContainer(obs=state.reset_obs, reward=0.0, terminated=False)
         elif state.reset_state is None and state.reset_obs is None:
-            inner_state, info = self.env.reset(key, state.inner_state)
+            inner_state, info = self.env.reset(state.inner_state, key)
         else:
             raise ValueError("State must set both reset_state and reset_obs or neither")
 

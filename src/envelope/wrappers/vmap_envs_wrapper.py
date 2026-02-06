@@ -40,11 +40,9 @@ class VmapEnvsWrapper(Wrapper):
         return state, info
 
     @override
-    def reset(self, key: Key, state: PyTree) -> tuple[WrappedState, Info]:
+    def reset(self, state: PyTree, key: Key) -> tuple[WrappedState, Info]:
         keys = self._split_keys(key)
-        state, info = jax.vmap(lambda e, k, s: e.reset(k, s))(
-            self.env, keys, state
-        )
+        state, info = jax.vmap(lambda e, s, k: e.reset(s, k))(self.env, state, keys)
         return state, info
 
     @override
@@ -58,7 +56,9 @@ class VmapEnvsWrapper(Wrapper):
     @property
     def observation_space(self) -> spaces.Space:
         env0 = _index_env(self.env, 0, self.batch_size)
-        return spaces.BatchedSpace(space=env0.observation_space, batch_size=self.batch_size)
+        return spaces.BatchedSpace(
+            space=env0.observation_space, batch_size=self.batch_size
+        )
 
     @override
     @cached_property

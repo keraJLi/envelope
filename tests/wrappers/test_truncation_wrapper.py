@@ -116,7 +116,7 @@ def test_steps_as_jax_scalar_array_behaves_correctly():
 
 
 def test_reset_with_state_passes_inner_state_down():
-    """reset(key, state) should pass state.inner_state to the inner env's reset."""
+    """reset(state, key) should pass state.inner_state to the inner env's reset."""
     env = StepCounterEnv()
     w = TruncationWrapper(env=env, max_steps=10)
     key = jax.random.PRNGKey(0)
@@ -126,7 +126,7 @@ def test_reset_with_state_passes_inner_state_down():
         state, _ = w.step(state, jnp.asarray(0.1))
     assert state.steps == 5
 
-    new_state, _ = w.reset(jax.random.PRNGKey(1), state)
+    new_state, _ = w.reset(state, jax.random.PRNGKey(1))
 
     # Inner env should be reset
     assert jnp.allclose(new_state.inner_state.env_state, 0.0)

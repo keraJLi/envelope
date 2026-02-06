@@ -60,8 +60,8 @@ def test_init_reset_delegate_unchanged():
     state_e, info_e = env.init(key)
     assert jnp.allclose(state_w, state_e)
     assert jnp.allclose(info_w.obs, info_e.obs)
-    state_w, info_w = w.reset(key, state_w)
-    state_e, info_e = env.reset(key, state_e)
+    state_w, info_w = w.reset(state_w, key)
+    state_e, info_e = env.reset(state_e, key)
     assert jnp.allclose(state_w, state_e)
     assert jnp.allclose(info_w.obs, info_e.obs)
 
@@ -101,7 +101,7 @@ def test_action_space_flattened_discrete():
                 obs=s, reward=0.0, terminated=False, truncated=False
             )
 
-        def reset(self, key, state):
+        def reset(self, state, key):
             return self.init(key)
 
         def step(self, state, action):
@@ -161,7 +161,7 @@ def test_mixed_space_types_raises_value_error():
                 obs=s, reward=0.0, terminated=False, truncated=False
             )
 
-        def reset(self, key, state):
+        def reset(self, state, key):
             return self.init(key)
 
         def step(self, state, action):

@@ -35,8 +35,8 @@ class ContinuousObservationWrapper(Wrapper):
         return state, info
 
     @override
-    def reset(self, key: Key, state: State) -> tuple[State, Info]:
-        state, info = self.env.reset(key, state)
+    def reset(self, state: State, key: Key) -> tuple[State, Info]:
+        state, info = self.env.reset(state, key)
         info = info.update(obs=to_float(info.obs))
         return state, info
 

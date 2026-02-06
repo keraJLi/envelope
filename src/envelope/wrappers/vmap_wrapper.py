@@ -41,9 +41,9 @@ class VmapWrapper(Wrapper):
         return state, info
 
     @override
-    def reset(self, key: Key, state: PyTree) -> tuple[WrappedState, Info]:
+    def reset(self, state: PyTree, key: Key) -> tuple[WrappedState, Info]:
         keys = _split_or_keep_key(key, self.batch_size)
-        state, info = jax.vmap(self.env.reset)(keys, state)
+        state, info = jax.vmap(self.env.reset)(state, keys)
         return state, info
 
     @override

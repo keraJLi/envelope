@@ -29,7 +29,7 @@ def test_reset_step_flatten_pytree_obs():
     key = jax.random.PRNGKey(0)
     state, info = w.init(key)
     assert info.obs.shape == (5,)
-    state, info = w.reset(key, state)
+    state, info = w.reset(state, key)
     assert info.obs.shape == (5,)
     assert w.observation_space.contains(info.obs)
     state, info = w.step(state, jnp.array(0.0))
@@ -126,7 +126,7 @@ def test_mixed_space_types_raises_value_error():
                 obs=obs, reward=0.0, terminated=False, truncated=False
             )
 
-        def reset(self, key, state):
+        def reset(self, state, key):
             return self.init(key)
 
         def step(self, state, action):

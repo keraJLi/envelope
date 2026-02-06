@@ -36,7 +36,7 @@ class PooledInitVmapWrapper(Wrapper):
         return state, info.update(final=pholder_info)
 
     @override
-    def reset(self, key: Key, state: WrappedState) -> tuple[WrappedState, Info]:
+    def reset(self, state: WrappedState, key: Key) -> tuple[WrappedState, Info]:
         # It's hard to support reset for this wrapper.
         # We would have to init the state of a pool of unwrapped environments, and then
         # somehow inject this into the stack of wrapped states. The current data
@@ -48,7 +48,7 @@ class PooledInitVmapWrapper(Wrapper):
         # episodes before vmapping, we will implement this later.
         keys = _split_or_keep_key(key, self.batch_size + 1)
         key_next, keys_pool = keys[0], keys[1:]
-        inner_state, info = jax.vmap(self.env.reset)(keys_pool, state.inner_state)
+        inner_state, info = jax.vmap(self.env.reset)(state.inner_state, keys_pool)
         state = state.replace(inner_state=inner_state, init_key=key_next)
         return state, info.update(final=state.last_final)
 

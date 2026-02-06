@@ -21,8 +21,8 @@ def test_init_reset_delegate_unchanged():
     assert jnp.allclose(state_w, state_e)
     assert jnp.allclose(info_w.obs, info_e.obs)
 
-    state_w, info_w = w.reset(key, state_w)
-    state_e, info_e = env.reset(key, state_e)
+    state_w, info_w = w.reset(state_w, key)
+    state_e, info_e = env.reset(state_e, key)
     assert jnp.allclose(state_w, state_e)
     assert jnp.allclose(info_w.obs, info_e.obs)
     assert w.observation_space.contains(info_w.obs)

@@ -24,8 +24,8 @@ class EpisodeStatisticsWrapper(Wrapper):
         return state, info.update(stats=state.stats)
 
     @override
-    def reset(self, key: Key, state: State) -> tuple[State, Info]:
-        inner_state, info = self.env.reset(key, state.inner_state)
+    def reset(self, state: State, key: Key) -> tuple[State, Info]:
+        inner_state, info = self.env.reset(state.inner_state, key)
         state = state.replace(inner_state=inner_state)
         return state, info.update(stats=state.stats)
 

@@ -21,8 +21,8 @@ class TruncationWrapper(Wrapper):
         return state, info.update(truncated=self.max_steps <= 0)
 
     @override
-    def reset(self, key: Key, state: WrappedState) -> tuple[WrappedState, Info]:
-        inner_state, info = self.env.reset(key, state.inner_state)
+    def reset(self, state: WrappedState, key: Key) -> tuple[WrappedState, Info]:
+        inner_state, info = self.env.reset(state.inner_state, key)
         state = state.replace(inner_state=inner_state, steps=0)
         return state, info.update(truncated=self.max_steps <= 0)
 

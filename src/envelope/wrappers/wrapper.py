@@ -29,11 +29,11 @@ class Wrapper(Environment):
         return self.env.init(key)
 
     @override
-    def reset(self, key: Key, state: State) -> tuple[State, Info]:
-        return self.env.reset(key, state)
+    def reset(self, state: State, key: Key) -> tuple[State, Info]:
+        return self.env.reset(state, key)
 
     @override
-    def step(self, state: WrappedState, action: PyTree) -> tuple[WrappedState, Info]:
+    def step(self, state: State, action: PyTree) -> tuple[State, Info]:
         return self.env.step(state, action)
 
     @override

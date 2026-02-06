@@ -544,8 +544,8 @@ def test_auto_reset_passes_state_to_inner_wrapper():
                 received_state_on_reset=False,
             ), info
 
-        def reset(self, key, state):
-            inner_state, info = self.env.reset(key, state.inner_state)
+        def reset(self, state, key):
+            inner_state, info = self.env.reset(state.inner_state, key)
             return self.TrackingState(
                 inner_state=inner_state,
                 received_state_on_reset=True,

@@ -76,8 +76,8 @@ class ObservationNormalizationWrapper(Wrapper):
         return self._normalize_and_update(next_state, info)
 
     @override
-    def reset(self, key: Key, state: WrappedState) -> tuple[WrappedState, Info]:
-        inner_state, info = self.env.reset(key, state.inner_state)
+    def reset(self, state: WrappedState, key: Key) -> tuple[WrappedState, Info]:
+        inner_state, info = self.env.reset(state.inner_state, key)
         # Preserve running statistics across resets
         next_state = self.ObservationNormalizationState(
             inner_state=inner_state, rmv_state=state.rmv_state

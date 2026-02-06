@@ -66,7 +66,7 @@ def test_reset_preserves_stats():
         state, _ = w.step(state, jnp.asarray(0.2))
     reward_before = state.stats.reward
     length_before = state.stats.length
-    state, info = w.reset(key, state)
+    state, info = w.reset(state, key)
     assert jnp.allclose(state.stats.reward, reward_before)
     assert jnp.allclose(state.stats.length, length_before)
     assert jnp.allclose(info.stats.reward, reward_before)
@@ -81,7 +81,7 @@ def test_stats_persist_and_continue_after_reset():
     state, _ = w.init(key)
     for _ in range(3):
         state, _ = w.step(state, jnp.asarray(0.1))
-    state, _ = w.reset(key, state)
+    state, _ = w.reset(state, key)
     for _ in range(2):
         state, _ = w.step(state, jnp.asarray(0.1))
     # Total length = 3 + 2 = 5, reward = 0.1*5 = 0.5

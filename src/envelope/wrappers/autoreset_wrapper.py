@@ -54,7 +54,7 @@ class AutoResetWrapper(Wrapper):
         return state, info.update(final=state.last_final)
 
     @override
-    def reset(self, key: Key, state: WrappedState) -> tuple[WrappedState, Info]:
+    def reset(self, state: WrappedState, key: Key) -> tuple[WrappedState, Info]:
         raise NotImplementedError("Reset is not implemented for AutoResetWrapper")
 
     @override
@@ -63,7 +63,7 @@ class AutoResetWrapper(Wrapper):
         state = state.replace(reset_key=key)
 
         inner_state, info = self.env.step(state.inner_state, action)
-        reset_inner_state, reset_info = self.env.reset(key_reset, inner_state)
+        reset_inner_state, reset_info = self.env.reset(inner_state, key_reset)
 
         # Select next state and info based on done
         done = info.terminated | info.truncated

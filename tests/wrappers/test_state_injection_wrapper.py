@@ -66,7 +66,7 @@ class TestStateInjectionCoreFunctionality:
 
         # Reset again, passing the current state (simulates auto-reset)
         key2 = jax.random.PRNGKey(1)
-        state2, info2 = w.reset(key2, state)
+        state2, info2 = w.reset(state, key2)
 
         # Should preserve the injected state
         assert jnp.allclose(state2.reset_state.env_state, jnp.array(42.0))
@@ -132,7 +132,7 @@ class TestStateInjectionCoreFunctionality:
 
         # Reset with this state (no reset_state set) - should delegate to inner env
         key2 = jax.random.PRNGKey(1)
-        state2, info2 = w.reset(key2, state)
+        state2, info2 = w.reset(state, key2)
 
         # Should have done a normal reset - inner_state is fresh from env
         assert jnp.allclose(state2.inner_state.env_state, jnp.array(0.0))
@@ -166,7 +166,7 @@ class TestStateInjectionCoreFunctionality:
         )
 
         with pytest.raises(ValueError, match="must set both"):
-            w.reset(key, state_with_only_reset_state)
+            w.reset(state_with_only_reset_state, key)
 
         # Create state with only reset_obs set (not reset_state)
         state_with_only_reset_obs = w.InjectedState(
@@ -176,7 +176,7 @@ class TestStateInjectionCoreFunctionality:
         )
 
         with pytest.raises(ValueError, match="must set both"):
-            w.reset(key, state_with_only_reset_obs)
+            w.reset(state_with_only_reset_obs, key)
 
 
 # ============================================================================

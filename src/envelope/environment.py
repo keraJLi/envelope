@@ -42,7 +42,7 @@ class Environment(ABC, FrozenPyTreeNode):
 
     Two distinct lifecycle methods:
         init(key) - Initialize environment and all state from scratch.
-        reset(key, state) - Reset the inner environment while preserving
+        reset(state, key) - Reset the inner environment while preserving
             episode-persistent state.
     """
 
@@ -51,7 +51,7 @@ class Environment(ABC, FrozenPyTreeNode):
         """Initialize environment and all state from scratch."""
         ...
 
-    def reset(self, key: Key, state: State) -> tuple[State, Info]:
+    def reset(self, state: State, key: Key) -> tuple[State, Info]:
         """Reset the inner environment while preserving episode-persistent state."""
         return self.init(key)
 

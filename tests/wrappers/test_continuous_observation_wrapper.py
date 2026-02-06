@@ -17,7 +17,7 @@ def test_init_reset_step_cast_discrete_obs_to_float32():
     key = jax.random.PRNGKey(0)
     state, info = w.init(key)
     assert info.obs.dtype == jnp.float32
-    state, info = w.reset(key, state)
+    state, info = w.reset(state, key)
     assert info.obs.dtype == jnp.float32
     assert w.observation_space.contains(info.obs)
     state, info = w.step(state, jnp.array(0, dtype=jnp.int32))
