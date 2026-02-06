@@ -33,14 +33,15 @@ env = envelope.wrappers.ObservationNormalizationWrapper(env)
 
 | 📦                                                                        | # 🤖    | # 🌍    |
 | ------------------------------------------------------------------------- | ------- | ------- |
-| [gymnax](https://github.com/RobertTLange/gymnax)                          | 🕺      | 24      |
 | [brax](https://github.com/google/brax)                                    | 🕺      | 12      |
+| [craftax](https://github.com/MichaelTMatthews/craftax)                    | 🕺      | 4       |
+| [gymnax](https://github.com/RobertTLange/gymnax)                          | 🕺      | 24      |
 | [jumanji](https://github.com/instadeepai/jumanji)                         | 🕺 / 👯 | 25 / 1  |
 | [kinetix](https://github.com/flairox/kinetix)                             | 🕺      | 74      |
-| [craftax](https://github.com/MichaelTMatthews/craftax)                    | 🕺      | 4       |
 | [mujoco_playground](https://github.com/google-deepmind/mujoco_playground) | 🕺      | 54      |
+| [navix](https://github.com/instadeepai/navix)                             | 🕺      | 41      |
 |                                                                           |         |         |
-| Total                                                                     | 🕺 / 👯 | 193 / 1 |
+| Total                                                                     | 🕺 / 👯 | 234 / 1 |
 
 
 ```python
@@ -66,6 +67,5 @@ pip install jax-envelope
 ## 💞 Related projects
 
 - [stoa](https://github.com/EdanToledo/Stoa) is a very similar project that provides adapters and wrappers for the jumanji-like interface.
-- Check out all the great suites we have adapters for! [gymnax](https://github.com/RobertTLange/gymnax), [brax](https://github.com/google/brax), [jumanji](https://github.com/instadeepai/jumanji), [kinetix](https://github.com/flairox/kinetix), [craftax](https://github.com/MichaelTMatthews/craftax), [mujoco_playground](https://github.com/google-deepmind/mujoco_playground).
+- Check out all the great suites we have adapters for! [gymnax](https://github.com/RobertTLange/gymnax), [brax](https://github.com/google/brax), [jumanji](https://github.com/instadeepai/jumanji), [kinetix](https://github.com/flairox/kinetix), [craftax](https://github.com/MichaelTMatthews/craftax), [navix](https://github.com/instadeepai/navix), [mujoco_playground](https://github.com/google-deepmind/mujoco_playground).
 - We will be adding support for [jaxmarl](https://github.com/flairox/jaxmarl) and [pgx](https://github.com/sotetsuk/pgx) in the future, as soon as we figured out the best ever MARL interface for JAX!
-
