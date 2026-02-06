@@ -13,7 +13,7 @@ import jax.numpy as jnp
 
 from envelope.environment import Environment, Info, InfoContainer, State
 from envelope.spaces import Continuous, Discrete, PyTreeSpace
-from envelope.struct import FrozenPyTreeNode, static_field
+from envelope.struct import Container, FrozenPyTreeNode, static_field
 from envelope.typing import Key, PyTree
 
 # ============================================================================
@@ -593,7 +593,7 @@ class RandomImageEnv(Environment):
 # ============================================================================
 
 
-class TestInfo(FrozenPyTreeNode):
+class TestInfo(Container):
     """Simple Info implementation for Wrapper tests (includes `.done`)."""
 
     obs: jax.Array
