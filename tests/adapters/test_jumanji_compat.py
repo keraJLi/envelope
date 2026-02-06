@@ -1,4 +1,4 @@
-"""Tests for envelope.compat.jumanji_envelope module."""
+"""Tests for envelope.adapters.jumanji_envelope module."""
 
 # ruff: noqa: E402
 
@@ -11,19 +11,19 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-pytestmark = pytest.mark.compat
+pytestmark = pytest.mark.adapters
 
 pytest.importorskip("jumanji")
 
 from jumanji import specs
 
-import envelope.compat.jumanji_envelope as jumanji_envelope
-from envelope.compat.jumanji_envelope import (
+import envelope.adapters.jumanji_envelope as jumanji_envelope
+from envelope.adapters.jumanji_envelope import (
     JumanjiEnvelope,
     convert_jumanji_spec_to_envelope_space,
 )
 from envelope.spaces import Continuous, Discrete, PyTreeSpace
-from tests.compat.contract import (
+from tests.adapters.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )

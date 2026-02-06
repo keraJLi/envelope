@@ -1,22 +1,22 @@
-"""Integration tests for envelope.compat.create().
+"""Integration tests for envelope.adapters.create().
 
-These require optional compatibility dependencies (brax/gymnax/navix). They are
-kept separate from the unit tests so a minimal install can still run the suite.
+These require optional adapter dependencies (brax/gymnax/navix). They are kept separate
+from the unit tests so a minimal install can still run the suite.
 """
 
 import pytest
 
-from envelope.compat import create
+from envelope.adapters import create
 from envelope.environment import Environment
 from envelope.wrappers.truncation_wrapper import TruncationWrapper
 
-pytestmark = pytest.mark.compat
+pytestmark = pytest.mark.adapters
 
 
 def test_create_brax_smoke(prng_key):
     pytest.importorskip("brax")
 
-    from envelope.compat.brax_envelope import BraxEnvelope
+    from envelope.adapters.brax_envelope import BraxEnvelope
 
     env = create("brax::fast")
     assert isinstance(env, TruncationWrapper)
@@ -31,7 +31,7 @@ def test_create_brax_smoke(prng_key):
 def test_create_gymnax_smoke(prng_key):
     pytest.importorskip("gymnax")
 
-    from envelope.compat.gymnax_envelope import GymnaxEnvelope
+    from envelope.adapters.gymnax_envelope import GymnaxEnvelope
 
     env = create("gymnax::CartPole-v1")
     assert isinstance(env, TruncationWrapper)
@@ -46,7 +46,7 @@ def test_create_gymnax_smoke(prng_key):
 def test_create_navix_smoke(prng_key):
     pytest.importorskip("navix")
 
-    from envelope.compat.navix_envelope import NavixEnvelope
+    from envelope.adapters.navix_envelope import NavixEnvelope
 
     env = create("navix::Navix-Empty-5x5-v0")
     assert isinstance(env, TruncationWrapper)
@@ -61,7 +61,7 @@ def test_create_navix_smoke(prng_key):
 def test_create_jumanji_smoke(prng_key):
     pytest.importorskip("jumanji")
 
-    from envelope.compat.jumanji_envelope import JumanjiEnvelope
+    from envelope.adapters.jumanji_envelope import JumanjiEnvelope
 
     env = create("jumanji::Snake-v1")
     assert isinstance(env, TruncationWrapper)
@@ -76,7 +76,7 @@ def test_create_jumanji_smoke(prng_key):
 def test_create_craftax_smoke(prng_key):
     pytest.importorskip("craftax")
 
-    from envelope.compat.craftax_envelope import CraftaxEnvelope
+    from envelope.adapters.craftax_envelope import CraftaxEnvelope
 
     env = create("craftax::Craftax-Symbolic-v1")
     assert isinstance(env, TruncationWrapper)
@@ -91,7 +91,7 @@ def test_create_craftax_smoke(prng_key):
 def test_create_mujoco_playground_smoke(prng_key):
     pytest.importorskip("mujoco_playground")
 
-    from envelope.compat.mujoco_playground_envelope import MujocoPlaygroundEnvelope
+    from envelope.adapters.mujoco_playground_envelope import MujocoPlaygroundEnvelope
 
     env = create("mujoco_playground::CartpoleBalance")
     assert isinstance(env, TruncationWrapper)
@@ -106,7 +106,7 @@ def test_create_mujoco_playground_smoke(prng_key):
 def test_create_kinetix_smoke(prng_key):
     pytest.importorskip("kinetix")
 
-    from envelope.compat.kinetix_envelope import KinetixEnvelope
+    from envelope.adapters.kinetix_envelope import KinetixEnvelope
 
     env = create("kinetix::random")
     assert isinstance(env, TruncationWrapper)

@@ -1,4 +1,4 @@
-from envelope.compat import create
+from envelope.adapters import create
 from envelope.environment import Environment, Info, InfoContainer
 from envelope.spaces import BatchedSpace, Continuous, Discrete, PyTreeSpace, Space
 from envelope.struct import Container, FrozenPyTreeNode, field, static_field

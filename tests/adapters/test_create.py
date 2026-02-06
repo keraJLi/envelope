@@ -1,4 +1,4 @@
-"""Unit tests for envelope.compat.create() factory function.
+"""Unit tests for envelope.adapters.create() factory function.
 
 These tests are dependency-free (no brax/gymnax/navix imports) and focus on:
 - parsing/validation of the env id
@@ -12,8 +12,8 @@ import types
 
 import pytest
 
-import envelope.compat as compat
-from envelope.compat import create
+import envelope.adapters as adapters
+from envelope.adapters import create
 
 
 def _install_dummy_suite(
@@ -44,7 +44,7 @@ def _install_dummy_suite(
             raise AssertionError(f"Unexpected import: {name}")
         return dummy_module
 
-    monkeypatch.setattr(compat, "_env_module_map", {suite: (module_name, class_name)})
+    monkeypatch.setattr(adapters, "_env_module_map", {suite: (module_name, class_name)})
     monkeypatch.setattr(importlib, "import_module", fake_import_module)
 
     return import_calls, from_name_calls
@@ -77,7 +77,7 @@ def test_create_unknown_suite_mentions_available_suites(
 ):
     # Keep the map deterministic so we can assert it appears in the message.
     monkeypatch.setattr(
-        compat, "_env_module_map", {"dummy": ("dummy_mod", "DummyWrapper")}
+        adapters, "_env_module_map", {"dummy": ("dummy_mod", "DummyWrapper")}
     )
 
     with pytest.raises(ValueError) as excinfo:
@@ -91,7 +91,7 @@ def test_create_unknown_suite_mentions_available_suites(
 
 def test_create_wraps_import_error_and_chains_cause(monkeypatch):
     monkeypatch.setattr(
-        compat, "_env_module_map", {"dummy": ("dummy_mod", "DummyWrapper")}
+        adapters, "_env_module_map", {"dummy": ("dummy_mod", "DummyWrapper")}
     )
 
     def fake_import_module(name: str):
@@ -164,7 +164,7 @@ def test_create_imports_only_the_requested_suite(monkeypatch):
     module_b = types.SimpleNamespace(WrapperB=WrapperB)
 
     monkeypatch.setattr(
-        compat,
+        adapters,
         "_env_module_map",
         {"a": ("a_mod", "WrapperA"), "b": ("b_mod", "WrapperB")},
     )

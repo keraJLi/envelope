@@ -16,6 +16,7 @@ env = envelope.wrappers.ObservationNormalizationWrapper(env)
 ```
 
 ## 🌍 Simple, expressive interaction!
+
 - **Environments are pytrees**. Squish them through JAX transformations and trace their parameters.
 - **Idiomatic jax-y interface** of `init(key: Key) -> State, Info` and `step(state: State, action: PyTree) -> State, Info`. You can directly `jax.scan` over a `step(...)`!
 - **Spaces are super simple**. No `Tuple`, `Dict` nonsense! There are two spaces: `Continuous` and `Discrete`, which you can compose into a `PyTreeSpace`.
@@ -26,8 +27,6 @@ env = envelope.wrappers.ObservationNormalizationWrapper(env)
 
 - **Carry state across episodes** to track running statistics, for example to normalize observations.
 - **Composable wrappers** can be stacked in any order. For example, `ObservationNormalizationWrapper` before vs. after `VmapWrapper` gives per-env vs. global normalization.
-
-
 
 ## 🔌 Adapters for existing suites
 
@@ -52,11 +51,11 @@ let's you create environments from any of the above!
 
 ## 📝 Testing
 
-- **Default (no optional compat deps required)**: `uv run pytest -m "not compat"`
-- **Compat suite (requires full compat dependency group)**:
-  - `uv sync --group compat`
-  - `uv run pytest -m compat`
-  - If any compat dependency is missing/broken, the run will fail fast with an error telling you what to install.
+- **Default (no optional adapters deps required)**: `uv run pytest -m "not adapters"`
+- **Adapters suite (requires full adapters dependency group)**:
+  - `uv sync --group adapters`
+  - `uv run pytest -m adapters`
+  - If any adapter dependency is missing/broken, the run will fail fast with an error telling you what to install.
 
 ## 🏗️ Installation
 

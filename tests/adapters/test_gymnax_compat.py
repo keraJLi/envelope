@@ -6,13 +6,13 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-pytestmark = pytest.mark.compat
+pytestmark = pytest.mark.adapters
 
 pytest.importorskip("gymnax")
 
+from envelope.compat.gymnax_envelope import GymnaxEnvelope, _convert_space
 from gymnax.environments import spaces as gymnax_spaces
 
-from envelope.compat.gymnax_envelope import GymnaxEnvelope, _convert_space
 from envelope.spaces import Continuous, Discrete, PyTreeSpace
 from tests.compat.contract import (
     assert_jitted_rollout_contract,

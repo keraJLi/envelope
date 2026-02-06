@@ -28,7 +28,7 @@ jobs:
           uv sync --group dev --locked
 
       - name: Run tests
-        run: uv run pytest -m "not compat"
+        run: uv run pytest -m "not adapters"
 
   build:
     name: Build distribution

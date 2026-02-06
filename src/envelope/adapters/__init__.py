@@ -4,14 +4,14 @@ from typing import Any, Protocol, Self
 
 # Lazy imports to avoid requiring all dependencies at once
 _env_module_map = {
-    "gymnax": ("envelope.compat.gymnax_envelope", "GymnaxEnvelope"),
-    "brax": ("envelope.compat.brax_envelope", "BraxEnvelope"),
-    "navix": ("envelope.compat.navix_envelope", "NavixEnvelope"),
-    "jumanji": ("envelope.compat.jumanji_envelope", "JumanjiEnvelope"),
-    "kinetix": ("envelope.compat.kinetix_envelope", "KinetixEnvelope"),
-    "craftax": ("envelope.compat.craftax_envelope", "CraftaxEnvelope"),
+    "gymnax": ("envelope.adapters.gymnax_envelope", "GymnaxEnvelope"),
+    "brax": ("envelope.adapters.brax_envelope", "BraxEnvelope"),
+    "navix": ("envelope.adapters.navix_envelope", "NavixEnvelope"),
+    "jumanji": ("envelope.adapters.jumanji_envelope", "JumanjiEnvelope"),
+    "kinetix": ("envelope.adapters.kinetix_envelope", "KinetixEnvelope"),
+    "craftax": ("envelope.adapters.craftax_envelope", "CraftaxEnvelope"),
     "mujoco_playground": (
-        "envelope.compat.mujoco_playground_envelope",
+        "envelope.adapters.mujoco_playground_envelope",
         "MujocoPlaygroundEnvelope",
     ),
 }

@@ -1,4 +1,4 @@
-"""Tests for envelope.compat.craftax_envelope module."""
+"""Tests for envelope.adapters.craftax_envelope module."""
 
 # ruff: noqa: E402
 
@@ -8,12 +8,12 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-pytestmark = pytest.mark.compat
+pytestmark = pytest.mark.adapters
 
 pytest.importorskip("craftax")
 
 from envelope.spaces import Continuous, Discrete
-from tests.compat.contract import (
+from tests.adapters.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )
@@ -35,7 +35,7 @@ def craftax_env_id(request: pytest.FixtureRequest) -> str:
 
 @pytest.fixture(scope="module")
 def craftax_env(craftax_env_id: str):
-    from envelope.compat.craftax_envelope import CraftaxEnvelope
+    from envelope.adapters.craftax_envelope import CraftaxEnvelope
 
     return CraftaxEnvelope.from_name(craftax_env_id)
 
@@ -114,7 +114,7 @@ class _DummyEnv:
 
 
 def test_from_name_errors_on_auto_reset():
-    from envelope.compat.craftax_envelope import CraftaxEnvelope
+    from envelope.adapters.craftax_envelope import CraftaxEnvelope
 
     with pytest.raises(ValueError, match="Cannot override 'auto_reset' directly"):
         CraftaxEnvelope.from_name("AnyEnv", env_kwargs={"auto_reset": True})

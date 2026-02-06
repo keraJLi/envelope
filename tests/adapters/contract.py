@@ -1,6 +1,6 @@
-"""Shared contract helpers for compat wrappers.
+"""Shared contract helpers for adapters.
 
-These functions enforce a consistent baseline across all compat wrappers:
+These functions enforce a consistent baseline across all adapters:
 - reset/step return (state, info) with Info fields present
 - reward is scalar-ish and finite
 - action sampling is valid for action_space

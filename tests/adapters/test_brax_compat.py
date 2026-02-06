@@ -1,4 +1,4 @@
-"""Tests for envelope.compat.brax_envelope module."""
+"""Tests for envelope.adapters.brax_envelope module."""
 
 # ruff: noqa: E402
 
@@ -7,14 +7,14 @@ from copy import deepcopy
 import jax
 import pytest
 
-pytestmark = pytest.mark.compat
+pytestmark = pytest.mark.adapters
 
 pytest.importorskip("brax")
 
 from brax.envs import Wrapper as BraxWrapper
 
-from envelope.compat.brax_envelope import BraxEnvelope
-from tests.compat.contract import (
+from envelope.adapters.brax_envelope import BraxEnvelope
+from tests.adapters.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )

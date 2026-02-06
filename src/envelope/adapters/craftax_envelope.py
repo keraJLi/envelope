@@ -10,7 +10,7 @@ from craftax.craftax_classic.envs.craftax_state import (
 from craftax.craftax_env import make_craftax_env_from_name
 
 from envelope import spaces as envelope_spaces
-from envelope.compat.gymnax_envelope import _convert_space as _convert_gymnax_space
+from envelope.adapters.gymnax_envelope import _convert_space as _convert_gymnax_space
 from envelope.environment import Environment, Info, InfoContainer, State
 from envelope.struct import Container, static_field
 from envelope.typing import Key, PyTree, TypeAlias

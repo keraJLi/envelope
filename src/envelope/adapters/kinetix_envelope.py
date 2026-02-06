@@ -1,7 +1,7 @@
 """Kinetix compatibility wrapper.
 
 This module exposes Kinetix environments through the `envelope.environment.Environment`
-API. It mirrors envelope's compat philosophy:
+API. It mirrors envelope's adapters philosophy:
 - prefer *no* environment-side auto-reset (use `AutoResetWrapper` in envelope)
 - prefer *no* fixed episode time-limits (use `TruncationWrapper` in envelope)
 
@@ -30,7 +30,7 @@ from kinetix.util.saving import load_from_json_file
 
 from envelope import field
 from envelope import spaces as envelope_spaces
-from envelope.compat.gymnax_envelope import _convert_space as _convert_gymnax_space
+from envelope.adapters.gymnax_envelope import _convert_space as _convert_gymnax_space
 from envelope.environment import Environment, Info, InfoContainer, State
 from envelope.struct import Container, static_field
 from envelope.typing import Key, PyTree

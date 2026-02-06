@@ -1,4 +1,4 @@
-"""Tests for envelope.compat.navix_envelope module."""
+"""Tests for envelope.adapters.navix_envelope module."""
 
 # ruff: noqa: E402
 
@@ -6,15 +6,15 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-pytestmark = pytest.mark.compat
+pytestmark = pytest.mark.adapters
 
 pytest.importorskip("navix")
 
 import navix
 
-from envelope.compat.navix_envelope import NavixEnvelope
+from envelope.adapters.navix_envelope import NavixEnvelope
 from envelope.spaces import Continuous, Discrete
-from tests.compat.contract import (
+from tests.adapters.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )
@@ -160,7 +160,7 @@ def test_unsupported_space_type():
     import jax.numpy as jnp
     from navix import spaces as navix_spaces
 
-    from envelope.compat.navix_envelope import convert_navix_to_envelope_space
+    from envelope.adapters.navix_envelope import convert_navix_to_envelope_space
 
     # Create a mock space that's neither Discrete nor Continuous
     class MockSpace(navix_spaces.Space):
@@ -181,7 +181,7 @@ def test_step_type_conversion(navix_env, prng_key):
     """Test all navix StepType values are correctly converted."""
     import navix
 
-    from envelope.compat.navix_envelope import convert_navix_to_envelope_info
+    from envelope.adapters.navix_envelope import convert_navix_to_envelope_info
 
     env = navix_env
     key = prng_key
@@ -224,7 +224,7 @@ def test_discrete_space_conversion():
     """Test conversion of discrete spaces from navix to envelope."""
     from navix import spaces as navix_spaces
 
-    from envelope.compat.navix_envelope import convert_navix_to_envelope_space
+    from envelope.adapters.navix_envelope import convert_navix_to_envelope_space
 
     # Create a navix Discrete space
     navix_discrete = navix_spaces.Discrete.create(10, shape=(3,), dtype=jnp.int32)
@@ -245,7 +245,7 @@ def test_continuous_space_conversion():
     """Test conversion of continuous spaces from navix to envelope."""
     from navix import spaces as navix_spaces
 
-    from envelope.compat.navix_envelope import convert_navix_to_envelope_space
+    from envelope.adapters.navix_envelope import convert_navix_to_envelope_space
 
     # Create a navix Continuous space
     navix_continuous = navix_spaces.Continuous.create(

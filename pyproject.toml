@@ -52,7 +52,7 @@ allow-direct-references = true
 packages = ["src/envelope"]
 
 [dependency-groups]
-compat = [
+adapters = [
     "brax>=0.13.0",
     "craftax>=1.4.3",
     "navix>=0.7.0",
@@ -80,5 +80,5 @@ kinetix-env = { git = "https://github.com/FLAIROx/Kinetix.git" }
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
-  "compat: tests requiring optional compat dependencies",
+  "adapters: tests requiring optional adapters dependencies",
 ]

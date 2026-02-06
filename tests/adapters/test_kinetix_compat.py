@@ -1,4 +1,4 @@
-"""Tests for envelope.compat.kinetix_envelope module."""
+"""Tests for envelope.adapters.kinetix_envelope module."""
 
 # ruff: noqa: E402
 
@@ -10,17 +10,17 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-pytestmark = pytest.mark.compat
+pytestmark = pytest.mark.adapters
 
 pytest.importorskip("kinetix")
 
 import kinetix
 from kinetix.environment import EnvParams, StaticEnvParams
 
-from envelope.compat.kinetix_envelope import KinetixEnvelope, _normalize_level_id
+from envelope.adapters.kinetix_envelope import KinetixEnvelope, _normalize_level_id
 from envelope.environment import Info
 from envelope.spaces import Continuous
-from tests.compat.contract import (
+from tests.adapters.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )
@@ -189,7 +189,7 @@ def test_from_name_rejects_unknown_env_kwargs():
 
 def test_from_name_allows_premade_state_none(monkeypatch: pytest.MonkeyPatch):
     """Current implementation does not guard against missing premade state."""
-    from envelope.compat import kinetix_envelope
+    from envelope.adapters import kinetix_envelope
 
     def mock_load(_level_id: str):
         return None, StaticEnvParams(), EnvParams()
@@ -210,7 +210,7 @@ def test_create_premade_replace_failure_raises(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(EnvParams, "replace", failing_replace)
     monkeypatch.setattr(
-        "envelope.compat.kinetix_envelope.load_from_json_file",
+        "envelope.adapters.kinetix_envelope.load_from_json_file",
         lambda _level_id: (object(), StaticEnvParams(), ep),
     )
 
@@ -218,6 +218,5 @@ def test_create_premade_replace_failure_raises(monkeypatch: pytest.MonkeyPatch):
         KinetixEnvelope.from_name("s/h4_thrust_aim")
 
 
-#
-# NOTE: Level-id normalization tests live in tests/compat/test_kinetix_level_id.py
+# NOTE: Level-id normalization tests live in tests/adapters/test_kinetix_level_id.py
 # to keep this module focused on runtime wrapper behavior.

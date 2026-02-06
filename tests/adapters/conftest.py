@@ -1,6 +1,6 @@
 import pytest
 
-pytestmark = pytest.mark.compat
+pytestmark = pytest.mark.adapters
 
 
 @pytest.fixture(scope="module")

@@ -1,4 +1,4 @@
-"""Tests for envelope.compat.mujoco_playground_envelope module."""
+"""Tests for envelope.adapters.mujoco_playground_envelope module."""
 
 # ruff: noqa: E402
 
@@ -6,14 +6,14 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-pytestmark = pytest.mark.compat
+pytestmark = pytest.mark.adapters
 
 pytest.importorskip("mujoco_playground")
 
-from envelope.compat.mujoco_playground_envelope import MujocoPlaygroundEnvelope
+from envelope.adapters.mujoco_playground_envelope import MujocoPlaygroundEnvelope
 from envelope.environment import Info
 from envelope.spaces import Continuous, PyTreeSpace
-from tests.compat.contract import (
+from tests.adapters.contract import (
     assert_jitted_rollout_contract,
     assert_reset_step_contract,
 )
