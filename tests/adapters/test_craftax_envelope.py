@@ -2,8 +2,6 @@
 
 # ruff: noqa: E402
 
-import math
-
 import jax
 import jax.numpy as jnp
 import pytest
@@ -12,9 +10,19 @@ pytestmark = pytest.mark.adapters
 
 pytest.importorskip("craftax")
 
+from craftax.craftax.envs.craftax_pixels_env import (
+    CraftaxPixelsEnv,
+    CraftaxPixelsEnvNoAutoReset,
+)
+from craftax.craftax_classic.envs.craftax_pixels_env import (
+    CraftaxClassicPixelsEnv,
+    CraftaxClassicPixelsEnvNoAutoReset,
+)
+
 from envelope.spaces import Continuous, Discrete
-from tests.adapters.contract import (
+from tests.contract import (
     assert_jitted_rollout_contract,
+    assert_obs_matches_space,
     assert_reset_step_contract,
 )
 
@@ -50,27 +58,26 @@ def _craftax_env_warmup(craftax_env, prng_key):
     env.step(state, action)
 
 
-def _assert_obs_matches_space(obs, obs_space: Continuous):
-    assert obs.dtype == obs_space.dtype
-    assert obs.ndim == len(obs_space.shape)
-    # Craftax pixel envs appear to have a width/height swap between returned obs
-    # and the declared space. Size-based check is robust to that.
-    assert obs.size == math.prod(obs_space.shape)
-
-
 def _one_step(env, state, key):
     action = env.action_space.sample(key)
     return env.step(state, action)
 
 
 def test_craftax_contract_smoke(craftax_env, prng_key):
-    env = craftax_env
-
-    def obs_check(obs, obs_space):
-        assert isinstance(obs_space, Continuous)
-        _assert_obs_matches_space(obs, obs_space)
-
-    assert_reset_step_contract(env, key=prng_key, obs_check=obs_check)
+    failing_envs = (
+        CraftaxPixelsEnv,
+        CraftaxClassicPixelsEnv,
+        CraftaxPixelsEnvNoAutoReset,
+        CraftaxClassicPixelsEnvNoAutoReset,
+    )
+    if isinstance(craftax_env.craftax_env, failing_envs):
+        pytest.xfail(
+            "Craftax currently returns the wrong observation space. "
+            "See https://github.com/MichaelTMatthews/Craftax/pull/49"
+        )
+    assert_reset_step_contract(
+        craftax_env, key=prng_key, obs_check=assert_obs_matches_space
+    )
 
 
 def test_craftax_contract_scan(craftax_env, prng_key, scan_num_steps):

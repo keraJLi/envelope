@@ -14,8 +14,9 @@ from gymnax.environments import spaces as gymnax_spaces
 
 from envelope.adapters.gymnax_envelope import GymnaxEnvelope, _convert_space
 from envelope.spaces import Continuous, Discrete, PyTreeSpace
-from tests.adapters.contract import (
+from tests.contract import (
     assert_jitted_rollout_contract,
+    assert_obs_matches_space,
     assert_reset_step_contract,
 )
 
@@ -208,12 +209,9 @@ def test_key_splitting(gymnax_env, prng_key):
 
 
 def test_gymnax_contract_smoke(prng_key, gymnax_env):
-    env = gymnax_env
-
-    def obs_check(obs, obs_space):
-        assert obs_space.contains(obs)
-
-    assert_reset_step_contract(env, key=prng_key, obs_check=obs_check)
+    assert_reset_step_contract(
+        gymnax_env, key=prng_key, obs_check=assert_obs_matches_space
+    )
 
 
 def test_gymnax_contract_scan(prng_key, gymnax_env, scan_num_steps):

@@ -13,8 +13,9 @@ pytest.importorskip("mujoco_playground")
 from envelope.adapters.mujoco_playground_envelope import MujocoPlaygroundEnvelope
 from envelope.environment import Info
 from envelope.spaces import Continuous, PyTreeSpace
-from tests.adapters.contract import (
+from tests.contract import (
     assert_jitted_rollout_contract,
+    assert_obs_matches_space,
     assert_reset_step_contract,
 )
 
@@ -40,12 +41,9 @@ def _mujoco_playground_env_warmup(mujoco_playground_env, prng_key):
 
 
 def test_mujoco_playground_contract_smoke(prng_key, mujoco_playground_env):
-    env = mujoco_playground_env
-
-    def obs_check(obs, obs_space):
-        assert obs_space.contains(obs)
-
-    assert_reset_step_contract(env, key=prng_key, obs_check=obs_check)
+    assert_reset_step_contract(
+        mujoco_playground_env, key=prng_key, obs_check=assert_obs_matches_space
+    )
 
 
 def test_mujoco_playground_contract_scan(

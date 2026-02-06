@@ -1,14 +1,11 @@
-"""Shared contract helpers for adapters.
+"""Shared contract helpers for adapters and wrappers.
 
-These functions enforce a consistent baseline across all adapters:
+These functions enforce a consistent baseline across environments and wrappers:
 - reset/step return (state, info) with Info fields present
 - reward is scalar-ish and finite
 - action sampling is valid for action_space
-- observation is validated via a provided callback (since some suites have known quirks)
+- observation is validated via a provided callback (contains + dtype)
 """
-
-# TODO: This is super useful to the wrapper tests as well. We should move it to tests
-# toplevel and use it everywhere.
 
 from __future__ import annotations
 
@@ -20,6 +17,21 @@ import jax.numpy as jnp
 from envelope.environment import Info
 
 ObsCheck = Callable[[object, object], None]
+
+
+def assert_obs_matches_space(obs: object, obs_space: object) -> None:
+    assert obs_space.contains(obs)
+    space_dtype = getattr(obs_space, "dtype", None)
+    if space_dtype is None:
+        return
+
+    try:
+        matches = jax.tree.map(
+            lambda o, dt: jnp.asarray(o).dtype == dt, obs, space_dtype
+        )
+        assert jnp.all(jnp.array(jax.tree.leaves(matches)))
+    except Exception:
+        assert jnp.asarray(obs).dtype == space_dtype
 
 
 def assert_info_has_contract_fields(info: Info) -> None:

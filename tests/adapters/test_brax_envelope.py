@@ -14,8 +14,9 @@ pytest.importorskip("brax")
 from brax.envs import Wrapper as BraxWrapper
 
 from envelope.adapters.brax_envelope import BraxEnvelope
-from tests.adapters.contract import (
+from tests.contract import (
     assert_jitted_rollout_contract,
+    assert_obs_matches_space,
     assert_reset_step_contract,
 )
 
@@ -36,12 +37,9 @@ def _brax_fast_env_warmup(brax_fast_env, prng_key):
 
 
 def test_brax_contract_smoke(prng_key, brax_fast_env):
-    env = brax_fast_env
-
-    def obs_check(obs, obs_space):
-        assert obs_space.contains(obs)
-
-    assert_reset_step_contract(env, key=prng_key, obs_check=obs_check)
+    assert_reset_step_contract(
+        brax_fast_env, key=prng_key, obs_check=assert_obs_matches_space
+    )
 
 
 def test_brax_contract_scan(prng_key, brax_fast_env, scan_num_steps):

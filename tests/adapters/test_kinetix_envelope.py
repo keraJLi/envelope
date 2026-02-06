@@ -20,8 +20,9 @@ from kinetix.environment import EnvParams, StaticEnvParams
 from envelope.adapters.kinetix_envelope import KinetixEnvelope, _normalize_level_id
 from envelope.environment import Info
 from envelope.spaces import Continuous
-from tests.adapters.contract import (
+from tests.contract import (
     assert_jitted_rollout_contract,
+    assert_obs_matches_space,
     assert_reset_step_contract,
 )
 
@@ -103,13 +104,9 @@ def _packaged_level_ids(sizes: tuple[str, ...] = ("s", "m", "l")) -> list[str]:
 
 
 def test_kinetix_contract_smoke(prng_key, kinetix_random_env):
-    env = kinetix_random_env
-
-    def obs_check(obs, obs_space):
-        # Kinetix observations can be large; a shape check is sufficient here.
-        assert obs.shape == obs_space.shape
-
-    assert_reset_step_contract(env, key=prng_key, obs_check=obs_check)
+    assert_reset_step_contract(
+        kinetix_random_env, key=prng_key, obs_check=assert_obs_matches_space
+    )
 
 
 def test_kinetix_contract_scan(prng_key, kinetix_random_env, scan_num_steps):

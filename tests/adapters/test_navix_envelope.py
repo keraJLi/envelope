@@ -14,8 +14,9 @@ import navix
 
 from envelope.adapters.navix_envelope import NavixEnvelope
 from envelope.spaces import Continuous, Discrete
-from tests.adapters.contract import (
+from tests.contract import (
     assert_jitted_rollout_contract,
+    assert_obs_matches_space,
     assert_reset_step_contract,
 )
 
@@ -40,15 +41,11 @@ def _navix_env_warmup(navix_env, prng_key):
     env.step(state, action)
 
 
+@pytest.mark.xfail(reason="navix obs space declares n=9 but env emits values >= 9")
 def test_navix_contract_smoke(prng_key, navix_env):
-    env = navix_env
-
-    def obs_check(obs, obs_space):
-        # Some navix envs can emit obs outside declared bounds; check shape/dtype only.
-        assert obs.shape == obs_space.shape
-        assert obs.dtype == obs_space.dtype
-
-    assert_reset_step_contract(env, key=prng_key, obs_check=obs_check)
+    assert_reset_step_contract(
+        navix_env, key=prng_key, obs_check=assert_obs_matches_space
+    )
 
 
 def test_navix_contract_scan(prng_key, navix_env, scan_num_steps):
@@ -66,6 +63,7 @@ def test_action_space_conversion(navix_env):
     assert env.action_space.dtype == env.navix_env.action_space.dtype
 
 
+@pytest.mark.xfail(reason="navix obs space declares n=9 but env emits values >= 9")
 def test_observation_space_conversion(navix_env):
     """Test conversion of navix observation spaces to envelope spaces."""
     env = navix_env

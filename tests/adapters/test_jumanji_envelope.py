@@ -23,8 +23,9 @@ from envelope.adapters.jumanji_envelope import (
     convert_jumanji_spec_to_envelope_space,
 )
 from envelope.spaces import Continuous, Discrete, PyTreeSpace
-from tests.adapters.contract import (
+from tests.contract import (
     assert_jitted_rollout_contract,
+    assert_obs_matches_space,
     assert_reset_step_contract,
 )
 
@@ -49,14 +50,9 @@ def _jumanji_env_warmup(jumanji_env, prng_key):
 
 
 def test_jumanji_contract_smoke(prng_key, jumanji_env):
-    env = jumanji_env
-
-    def obs_check(obs, _obs_space):
-        # Observations are pytrees (often namedtuples); containment is not guaranteed
-        # because observation_space is derived from Spec._specs dict.
-        jax.tree.structure(obs)
-
-    assert_reset_step_contract(env, key=prng_key, obs_check=obs_check)
+    assert_reset_step_contract(
+        jumanji_env, key=prng_key, obs_check=assert_obs_matches_space
+    )
 
 
 def test_jumanji_contract_scan(prng_key, jumanji_env, scan_num_steps):
@@ -158,15 +154,14 @@ def test_namedtuple_observation_preserved_for_info():
 def test_structured_spec_dict_conversion():
     """Hit Spec._specs dict branch in convert_jumanji_spec_to_envelope_space."""
 
-    class DummySpec:
-        _specs = {
-            "d": specs.DiscreteArray(num_values=3, dtype=np.int32, name="d"),
-            "b": specs.BoundedArray(
-                shape=(2,), dtype=np.float32, minimum=0.0, maximum=1.0, name="b"
-            ),
-        }
-
-    space = convert_jumanji_spec_to_envelope_space(DummySpec())
+    dummyspec = specs.Spec(
+        dict,
+        d=specs.DiscreteArray(num_values=3, dtype=np.int32, name="d"),
+        b=specs.BoundedArray(
+            shape=(2,), dtype=np.float32, minimum=0.0, maximum=1.0, name="b"
+        ),
+    )
+    space = convert_jumanji_spec_to_envelope_space(dummyspec)
     assert isinstance(space, PyTreeSpace)
     assert isinstance(space.tree, dict)
     assert set(space.tree.keys()) == {"d", "b"}
