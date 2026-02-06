@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from functools import cached_property
-from typing import cast, override
+from typing import override
 
 import jax
 from jax import numpy as jnp
