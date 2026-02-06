@@ -121,10 +121,13 @@ class PyTreeSpace(Space):
 
     def __post_init__(self):
         leaves = jax.tree.leaves(self.tree, is_leaf=lambda x: isinstance(x, Space))
+        if not leaves:
+            raise ValueError("PyTreeSpace must contain at least one leaf Space.")
         for leaf in leaves:
             if not isinstance(leaf, (Discrete, Continuous)):
                 raise TypeError(
-                    f"PyTreeSpace leaves must be Discrete or Continuous, got {type(leaf).__name__}"
+                    f"PyTreeSpace leaves must be Discrete or Continuous,"
+                    f"got {type(leaf).__name__}"
                 )
 
     @override
