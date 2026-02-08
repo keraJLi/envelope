@@ -65,7 +65,29 @@ def _warn_auto_reset(auto_reset: bool) -> None:
 
 
 class KinetixEnvelope(Environment):
-    """Wrapper to convert a Kinetix environment to a envelope environment."""
+    """Wrapper to convert a Kinetix environment to an envelope environment.
+
+    Kinetix environments are constructed via a ``reset_fn`` that produces a level
+    on each reset, rather than a simple environment name. Two creation modes are
+    provided:
+
+    - ``create_premade(env_name)``: loads a specific level from a packaged JSON
+      file. The level id has the form ``"{size}/{name}"`` (e.g.
+      ``"s/h4_thrust_aim"``); the ``.json`` suffix is added automatically.
+    - ``create_random()``: samples random levels on each reset using Kinetix's
+      ``make_reset_fn_sample_kinetix_level``.
+
+    ``from_name`` dispatches between the two: pass ``"random"`` to get random
+    level sampling, or any valid level id to load a premade level.
+
+    Kinetix only produces the ``env_info`` dict on the first ``step``, not on
+    ``reset``. To keep structural equivalence between the ``init`` and ``step``
+    infos (required for ``jax.lax.scan``, ``jax.vmap``, etc.), a NaN-filled
+    placeholder with the same pytree structure is returned on ``init``.
+
+    ``auto_reset`` and ``max_timesteps`` are disabled in favour of envelope's
+    ``AutoResetWrapper`` and ``TruncationWrapper`` respectively.
+    """
 
     kinetix_env: Any = static_field()
     env_params: Any = field()
@@ -162,13 +184,24 @@ class KinetixEnvelope(Environment):
         )
         return cls(kinetix_env=kinetix_env, env_params=env_params)
 
+    @cached_property
+    def _kinetix_info_placeholder(self) -> PyTree:
+        """NaN-filled placeholder matching the pytree structure of step's env_info."""
+        key = jax.random.key(0)
+        obs, env_state = self.kinetix_env.reset(key, self.env_params)
+        action = self.action_space.sample(key)
+        _, _, _, _, env_info = self.kinetix_env.step(
+            key, env_state, action, self.env_params
+        )
+        return jax.tree.map(lambda x: jnp.full_like(x, jnp.nan), env_info)
+
     @override
     def init(self, key: Key) -> tuple[State, Info]:
         key, subkey = jax.random.split(key)
         obs, env_state = self.kinetix_env.reset(subkey, self.env_params)
         state_out = Container().update(key=key, env_state=env_state)
         info = InfoContainer(obs=obs, reward=0.0, terminated=False)
-        info = info.update(info=None)
+        info = info.update(info=self._kinetix_info_placeholder)
         return state_out, info
 
     @override
