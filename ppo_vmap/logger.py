@@ -38,6 +38,9 @@ class Logger:
         self.log_every = args.log_every
         self.start_time: float | None = None
         self._step_count = 0
+        self._prev_flush_time: float | None = None
+        self._prev_flush_step: int = 0
+        self._sps: float = 0
 
         # Buffer: step -> {run_idx: metrics_dict}
         self.buffers: dict[int, dict[int, dict[str, float]]] = {}
@@ -109,6 +112,15 @@ class Logger:
         if self._step_count % self.log_every != 0:
             return
 
+        # Update SPS from wall time between flushes
+        now = time.time()
+        if self._prev_flush_time is not None:
+            dt = now - self._prev_flush_time
+            if dt > 0:
+                self._sps = (step - self._prev_flush_step) / dt
+        self._prev_flush_time = now
+        self._prev_flush_step = step
+
         keys = list(next(iter(all_metrics.values())).keys())
 
         # Collect per-run values and compute averages
@@ -119,13 +131,9 @@ class Logger:
             per_run[key] = values
             averaged[key] = np.mean(values)
 
-        # Compute SPS
-        elapsed = time.time() - self.start_time if self.start_time else 0
-        sps = step / elapsed if elapsed > 0 else 0
-
         # Append to HDF5
         self._h5_append("steps", step)
-        self._h5_append("sps", sps)
+        self._h5_append("sps", self._sps)
         for key in keys:
             self._h5_append(key, averaged[key])
             self._h5_append(f"{key}_per_run", per_run[key])
@@ -135,13 +143,13 @@ class Logger:
         print(
             f"step: {step}, "
             f"mean_return: {averaged['mean_return']:.4f}, "
-            f"sps: {sps:.0f}, "
+            f"sps: {self._sps:.0f}, "
             f"policy_loss: {averaged['policy_loss']:.4f}, "
             f"value_loss: {averaged['value_loss']:.4f}"
         )
 
         if self._wandb_run is not None:
-            wandb_data = {**averaged, "time/sps": sps}
+            wandb_data = {**averaged, "time/sps": self._sps}
             if self.num_runs > 1:
                 for key in keys:
                     wandb_data[f"{key}_std"] = np.std(per_run[key])

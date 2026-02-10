@@ -309,14 +309,6 @@ def make_pmap_vmap_step(graphdef, train_block, batched_state):
     return compiled, lower_time, compile_time
 
 
-def _checkpoint_schedule(num_blocks: int, num_checkpoints: int) -> set[int]:
-    if num_checkpoints <= 0:
-        return set()
-    return {
-        round(num_blocks * i / num_checkpoints) for i in range(1, num_checkpoints + 1)
-    }
-
-
 if __name__ == "__main__":
     args = tyro.cli(Args)
     logger = Logger(args)
@@ -341,22 +333,23 @@ if __name__ == "__main__":
     )
     logger.log_once({"time/lower": lower_time, "time/compile": compile_time})
 
-    # Determine checkpoint schedule
-    checkpoint_at = _checkpoint_schedule(num_blocks, args.num_checkpoints)
-
     # Run training blocks
     logger.start_time = time.time()
-    for block_idx in range(num_blocks):
+    for block_idx in range(1, num_blocks + 1):
+        # Run block of training
         batched_state, _ = step_fn(batched_state)
         jax.block_until_ready(batched_state)
-        block_num = block_idx + 1
+
+        # Print status
         elapsed = time.time() - logger.start_time
         print(
-            f"Block {block_num}/{num_blocks} done "
-            f"(update {block_num * block_size}/{num_updates}, {elapsed:.1f}s)"
+            f"Block {block_idx}/{num_blocks} done "
+            f"(update {block_idx * block_size}/{num_updates}, {elapsed:.1f}s)"
         )
-        if block_num in checkpoint_at:
-            global_step = block_num * block_size * steps_per_update
+
+        # Save checkpoint
+        if args.num_checkpoints > 0:
+            global_step = block_idx * block_size * steps_per_update
             train_states = nnx.merge(graphdef, batched_state)
             logger.save_checkpoint(global_step, train_states)
 
