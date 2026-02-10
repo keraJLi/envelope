@@ -19,7 +19,7 @@ class TestStateInjectionCoreFunctionality:
     def test_init_delegates_to_inner_env(self):
         """Verify that init() calls inner env init."""
         env = StepCounterEnv()
-        w = StateInjectionWrapper(env=env)
+        w = StateInjectionWrapper(env)
         key = jax.random.key(0)
 
         state, info = w.init(key)
@@ -35,7 +35,7 @@ class TestStateInjectionCoreFunctionality:
     def test_set_reset_state_updates_state(self):
         """Verify that set_reset_state() updates the injected state."""
         env = StepCounterEnv()
-        w = StateInjectionWrapper(env=env)
+        w = StateInjectionWrapper(env)
         key = jax.random.key(0)
 
         # Get initial state
@@ -55,7 +55,7 @@ class TestStateInjectionCoreFunctionality:
     def test_subsequent_reset_preserves_injected_state(self):
         """Verify that reset with existing state preserves the injected state."""
         env = StepCounterEnv()
-        w = StateInjectionWrapper(env=env)
+        w = StateInjectionWrapper(env)
         key = jax.random.key(0)
 
         # Get initial state and set custom reset state
@@ -75,7 +75,7 @@ class TestStateInjectionCoreFunctionality:
     def test_set_reset_state_overrides_existing(self):
         """Verify that set_reset_state() overrides existing injected state."""
         env = StepCounterEnv()
-        w = StateInjectionWrapper(env=env)
+        w = StateInjectionWrapper(env)
         key = jax.random.key(0)
 
         # Get initial state and set first custom state
@@ -100,7 +100,7 @@ class TestStateInjectionCoreFunctionality:
     def test_step_updates_inner_state_but_preserves_reset_state(self):
         """Verify that step updates inner_state but keeps reset_state unchanged."""
         env = StepCounterEnv()
-        w = StateInjectionWrapper(env=env)
+        w = StateInjectionWrapper(env)
         key = jax.random.key(0)
 
         # Get initial state and set custom reset state
@@ -122,7 +122,7 @@ class TestStateInjectionCoreFunctionality:
     def test_reset_with_state_but_no_reset_state_does_normal_reset(self):
         """Verify that reset with state but reset_state=None does normal reset."""
         env = StepCounterEnv()
-        w = StateInjectionWrapper(env=env)
+        w = StateInjectionWrapper(env)
         key = jax.random.key(0)
 
         # Get initial state and take a step so inner_state differs from fresh reset
@@ -144,7 +144,7 @@ class TestStateInjectionCoreFunctionality:
     def test_set_reset_state_raises_on_invalid_state(self):
         """Verify that set_reset_state raises when InjectedState not found."""
         env = StepCounterEnv()
-        w = StateInjectionWrapper(env=env)
+        w = StateInjectionWrapper(env)
 
         # Create a state that doesn't contain InjectedState
         invalid_state = StepState(env_state=jnp.array(0.0), steps=0)
@@ -155,7 +155,7 @@ class TestStateInjectionCoreFunctionality:
     def test_reset_raises_on_partial_reset_state(self):
         """Verify that reset raises when only one of reset_state/reset_obs is set."""
         env = StepCounterEnv()
-        w = StateInjectionWrapper(env=env)
+        w = StateInjectionWrapper(env)
         key = jax.random.key(0)
 
         # Create state with only reset_state set (not reset_obs)
@@ -190,8 +190,8 @@ class TestStateInjectionWithAutoReset:
     def test_auto_reset_returns_to_same_state(self):
         """Verify that auto-reset returns to the same injected state."""
         env = StepCounterEnv(terminate_after=2)
-        inner_w = StateInjectionWrapper(env=env)
-        w = AutoResetWrapper(env=inner_w)
+        inner_w = StateInjectionWrapper(env)
+        w = AutoResetWrapper(inner_w)
         key = jax.random.key(0)
 
         # Reset and set a custom reset state
@@ -211,8 +211,8 @@ class TestStateInjectionWithAutoReset:
     def test_set_reset_state_with_autoreset_wrapper(self):
         """Verify that set_reset_state works through AutoResetWrapper."""
         env = StepCounterEnv(terminate_after=1)
-        inner_w = StateInjectionWrapper(env=env)
-        w = AutoResetWrapper(env=inner_w)
+        inner_w = StateInjectionWrapper(env)
+        w = AutoResetWrapper(inner_w)
         key = jax.random.key(0)
 
         # Get initial state
@@ -233,8 +233,8 @@ class TestStateInjectionWithAutoReset:
     def test_multiple_auto_resets_preserve_state(self):
         """Verify that injected state persists through multiple auto-resets."""
         env = StepCounterEnv(terminate_after=1)
-        inner_w = StateInjectionWrapper(env=env)
-        w = AutoResetWrapper(env=inner_w)
+        inner_w = StateInjectionWrapper(env)
+        w = AutoResetWrapper(inner_w)
         key = jax.random.key(0)
 
         # Get initial state and set custom reset state
@@ -255,8 +255,8 @@ class TestStateInjectionWithAutoReset:
     def test_ued_style_outer_loop(self):
         """Test the UED-style outer loop pattern with set_reset_state."""
         env = StepCounterEnv(terminate_after=2)
-        inner_w = StateInjectionWrapper(env=env)
-        w = AutoResetWrapper(env=inner_w)
+        inner_w = StateInjectionWrapper(env)
+        w = AutoResetWrapper(inner_w)
         key = jax.random.key(0)
 
         # Initial reset
@@ -294,7 +294,7 @@ class TestStateInjectionJITCompatibility:
     def test_jit_reset_and_step(self):
         """Verify that reset and step can be JIT compiled."""
         env = StepCounterEnv(terminate_after=2)
-        w = AutoResetWrapper(env=StateInjectionWrapper(env=env))
+        w = AutoResetWrapper(StateInjectionWrapper(env))
         key = jax.random.key(0)
 
         @jax.jit
@@ -311,8 +311,8 @@ class TestStateInjectionJITCompatibility:
     def test_jit_set_reset_state(self):
         """Verify JIT works with set_reset_state."""
         env = StepCounterEnv(terminate_after=1)
-        inner_w = StateInjectionWrapper(env=env)
-        w = AutoResetWrapper(env=inner_w)
+        inner_w = StateInjectionWrapper(env)
+        w = AutoResetWrapper(inner_w)
 
         @jax.jit
         def run_with_state(k, reset_state, reset_obs):
@@ -336,8 +336,8 @@ class TestStateInjectionJITCompatibility:
     def test_jit_ued_outer_loop(self):
         """Verify JIT works with the UED outer loop pattern."""
         env = StepCounterEnv(terminate_after=1)
-        inner_w = StateInjectionWrapper(env=env)
-        w = AutoResetWrapper(env=inner_w)
+        inner_w = StateInjectionWrapper(env)
+        w = AutoResetWrapper(inner_w)
 
         @jax.jit
         def outer_iteration(state, task_value):

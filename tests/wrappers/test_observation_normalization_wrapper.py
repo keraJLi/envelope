@@ -24,8 +24,8 @@ from tests.wrappers.helpers import (
 def test_stats_spec_infers_from_unbatched_space():
     base = VectorObsEnv(dim=5)
     # Wrap with vmap first to add batch dimension, then normalize
-    vm = VmapWrapper(env=base, batch_size=7)
-    w = ObservationNormalizationWrapper(env=vm)
+    vm = VmapWrapper(base, batch_size=7)
+    w = ObservationNormalizationWrapper(vm)
     # stats_spec should match unbatched obs leaves
     sd = w.stats_spec  # jax.ShapeDtypeStruct for leaf
     assert hasattr(sd, "shape") and hasattr(sd, "dtype")
@@ -36,7 +36,7 @@ def test_stats_spec_infers_from_unbatched_space():
 def test_non_floating_observation_raises():
     env = IntObsEnv()
     with pytest.raises(ValueError):
-        _ = ObservationNormalizationWrapper(env=env)
+        _ = ObservationNormalizationWrapper(env)
 
 
 # -----------------------------------------------------------------------------
@@ -47,9 +47,7 @@ def test_non_floating_observation_raises():
 @pytest.mark.parametrize("batch_size,dim", [(3, 4), (5, 2)])
 def test_normalization_matches_manual(batch_size, dim):
     base = VectorObsEnv(dim=dim)
-    w = ObservationNormalizationWrapper(
-        env=VmapWrapper(env=base, batch_size=batch_size)
-    )
+    w = ObservationNormalizationWrapper(VmapWrapper(base, batch_size=batch_size))
     key = jax.random.key(0)
     state, info = w.init(key)
     # Manual rmv update on reshaped obs (-1, *spec.shape)
@@ -78,9 +76,9 @@ def test_normalization_matches_manual(batch_size, dim):
 @pytest.mark.parametrize("b1,b2,dim", [(2, 3, 2), (3, 2, 4)])
 def test_nested_vmap_stats_count_and_shapes(b1, b2, dim):
     base = VectorObsEnv(dim=dim)
-    inner = VmapWrapper(env=base, batch_size=b2)
-    outer = VmapWrapper(env=inner, batch_size=b1)
-    w = ObservationNormalizationWrapper(env=outer)
+    inner = VmapWrapper(base, batch_size=b2)
+    outer = VmapWrapper(inner, batch_size=b1)
+    w = ObservationNormalizationWrapper(outer)
     key = jax.random.key(123)
     state, info = w.init(key)
     assert state.rmv_state.count == b1 * b2
@@ -94,7 +92,7 @@ def test_nested_vmap_stats_count_and_shapes(b1, b2, dim):
 
 def test_jit_compatibility_smoke():
     base = VectorObsEnv(dim=3)
-    w = ObservationNormalizationWrapper(env=VmapWrapper(env=base, batch_size=4))
+    w = ObservationNormalizationWrapper(VmapWrapper(base, batch_size=4))
     key = jax.random.key(0)
     print(w)
 
@@ -114,7 +112,7 @@ def test_jit_compatibility_smoke():
 
 def test_pickle_running_mean_var_in_state():
     base = VectorObsEnv(dim=2)
-    w = ObservationNormalizationWrapper(env=VmapWrapper(env=base, batch_size=3))
+    w = ObservationNormalizationWrapper(VmapWrapper(base, batch_size=3))
     state, info = w.init(jax.random.key(0))
     blob = pickle.dumps(state.rmv_state)
     rmv2: RunningMeanVar = pickle.loads(blob)
@@ -155,9 +153,7 @@ except Exception:  # pragma: no cover - optional dependency
 @settings(deadline=None, max_examples=20)
 def test_prop_normalization_consistency(batch_size, dim, seed):
     base = VectorObsEnv(dim=dim)
-    w = ObservationNormalizationWrapper(
-        env=VmapWrapper(env=base, batch_size=batch_size)
-    )
+    w = ObservationNormalizationWrapper(VmapWrapper(base, batch_size=batch_size))
     key = jax.random.key(seed)
     state, info = w.init(key)
     reshaped = info.unnormalized_obs.reshape((-1,) + base.observation_space.shape)
@@ -178,7 +174,7 @@ def test_prop_normalization_consistency(batch_size, dim, seed):
 
 def test_constant_observations_produce_finite_near_zero_outputs():
     env = ConstantObsEnv(value=7.0, shape=(5,), dtype=jnp.float32)
-    w = ObservationNormalizationWrapper(env=env)
+    w = ObservationNormalizationWrapper(env)
     key = jax.random.key(0)
     state, info = w.init(key)
     assert jnp.all(jnp.isfinite(info.obs))
@@ -191,9 +187,9 @@ def test_image_per_pixel_stats_spec_zero_mean_unit_std():
     H, W, C, B, T = 8, 8, 3, 4, 64
 
     env = RandomImageEnv(shape=(H, W, C), dtype=jnp.float32)
-    v = VmapWrapper(env=env, batch_size=B)
+    v = VmapWrapper(env, batch_size=B)
     spec = jax.ShapeDtypeStruct((H, W, C), jnp.float32)
-    w = ObservationNormalizationWrapper(env=v, stats_spec=spec)
+    w = ObservationNormalizationWrapper(v, stats_spec=spec)
     key = jax.random.key(0)
     state, _ = w.init(key)
 
@@ -211,9 +207,9 @@ def test_image_per_pixel_stats_spec_zero_mean_unit_std():
 def test_image_channelwise_stats_spec_dtype_cast():
     H, W, C, B = 8, 8, 3, 2
     env = RandomImageEnv(shape=(H, W, C), dtype=jnp.float32)
-    v = VmapWrapper(env=env, batch_size=B)
+    v = VmapWrapper(env, batch_size=B)
     spec = jax.ShapeDtypeStruct((1, 1, C), jnp.bfloat16)
-    w = ObservationNormalizationWrapper(env=v, stats_spec=spec)
+    w = ObservationNormalizationWrapper(v, stats_spec=spec)
     key = jax.random.key(0)
     state, info = w.init(key)
     assert info.obs.dtype == jnp.bfloat16
@@ -224,9 +220,9 @@ def test_image_channelwise_stats_spec_dtype_cast():
 def test_scalar_stats_spec_broadcast_to_vector_and_cast():
     D, B = 5, 3
     env = VectorObsEnv(dim=D)
-    v = VmapWrapper(env=env, batch_size=B)
+    v = VmapWrapper(env, batch_size=B)
     spec = jax.ShapeDtypeStruct((), jnp.float16)
-    w = ObservationNormalizationWrapper(env=v, stats_spec=spec)
+    w = ObservationNormalizationWrapper(v, stats_spec=spec)
     key = jax.random.key(0)
     state, info = w.init(key)
     assert jnp.asarray(info.obs).dtype == jnp.float16

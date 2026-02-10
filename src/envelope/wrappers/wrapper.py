@@ -22,7 +22,7 @@ class WrappedState(FrozenPyTreeNode):
 class Wrapper(Environment):
     """Wrapper for environments."""
 
-    env: Environment = field(kw_only=True)
+    env: Environment = field()
 
     @override
     def init(self, key: Key) -> tuple[State, Info]:

@@ -8,9 +8,7 @@ import pytest
 
 from envelope.spaces import Discrete
 from envelope.wrappers.wrapper import Wrapper
-from tests.wrappers.helpers import (
-    TestInfo as Info,
-)
+from tests.wrappers.helpers import TestInfo as Info
 from tests.wrappers.helpers import (
     WrapperEnvWithFields,
     WrapperEnvWithMethods,
@@ -36,7 +34,7 @@ class TestWrapperCoreMethods:
     def test_reset_delegation(self):
         """Verify reset() delegates to wrapped environment."""
         env = WrapperSimpleEnv()
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         key = jax.random.key(0)
         state, info = environment_wrapper.init(key)
@@ -48,7 +46,7 @@ class TestWrapperCoreMethods:
     def test_step_delegation(self):
         """Verify step() delegates to wrapped environment."""
         env = WrapperSimpleEnv()
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         key = jax.random.key(0)
         state, info = environment_wrapper.init(key)
@@ -60,7 +58,7 @@ class TestWrapperCoreMethods:
     def test_reset_return_values(self):
         """Verify reset() returns correct types and values."""
         env = WrapperSimpleEnv()
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         key = jax.random.key(0)
         state, info = environment_wrapper.init(key)
@@ -77,7 +75,7 @@ class TestWrapperCoreMethods:
     def test_step_return_values(self):
         """Verify step() returns correct types and values."""
         env = WrapperSimpleEnv()
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         key = jax.random.key(0)
         state, _ = environment_wrapper.init(key)
@@ -105,7 +103,7 @@ class TestWrapperSpaceProperties:
     def test_observation_space_delegation(self):
         """Verify observation_space delegates correctly."""
         env = WrapperSimpleEnv()
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         assert environment_wrapper.observation_space == env.observation_space
         assert environment_wrapper.observation_space is env.observation_space
@@ -113,7 +111,7 @@ class TestWrapperSpaceProperties:
     def test_action_space_delegation(self):
         """Verify action_space delegates correctly."""
         env = WrapperSimpleEnv()
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         assert environment_wrapper.action_space == env.action_space
         assert environment_wrapper.action_space is env.action_space
@@ -121,7 +119,7 @@ class TestWrapperSpaceProperties:
     def test_space_cached_property(self):
         """Verify spaces are cached properties."""
         env = WrapperSimpleEnv()
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         # Access multiple times, should be same object
         obs_space1 = environment_wrapper.observation_space
@@ -135,7 +133,7 @@ class TestWrapperSpaceProperties:
     def test_space_identity(self):
         """Verify space objects maintain identity."""
         env = WrapperSimpleEnv()
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         # Spaces should be the exact same objects as env's spaces
         assert id(environment_wrapper.observation_space) == id(env.observation_space)
@@ -153,7 +151,7 @@ class TestWrapperUnwrapping:
     def test_unwrapped_single_level(self):
         """Verify unwrapped with one environment_wrapper level."""
         env = WrapperSimpleEnv()
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         assert environment_wrapper.unwrapped is env
         assert environment_wrapper.unwrapped is env.unwrapped
@@ -161,9 +159,9 @@ class TestWrapperUnwrapping:
     def test_unwrapped_multiple_levels(self):
         """Verify unwrapped traverses multiple environment_wrapper levels."""
         env = WrapperSimpleEnv()
-        environment_wrapper1 = Wrapper(env=env)
-        environment_wrapper2 = Wrapper(env=environment_wrapper1)
-        environment_wrapper3 = Wrapper(env=environment_wrapper2)
+        environment_wrapper1 = Wrapper(env)
+        environment_wrapper2 = Wrapper(environment_wrapper1)
+        environment_wrapper3 = Wrapper(environment_wrapper2)
 
         assert environment_wrapper3.unwrapped is env
         assert environment_wrapper2.unwrapped is env
@@ -172,8 +170,8 @@ class TestWrapperUnwrapping:
     def test_unwrapped_chain_termination(self):
         """Verify unwrapping stops at base environment."""
         env = WrapperSimpleEnv()
-        environment_wrapper1 = Wrapper(env=env)
-        environment_wrapper2 = Wrapper(env=environment_wrapper1)
+        environment_wrapper1 = Wrapper(env)
+        environment_wrapper2 = Wrapper(environment_wrapper1)
 
         unwrapped = environment_wrapper2.unwrapped
 
@@ -185,7 +183,7 @@ class TestWrapperUnwrapping:
     def test_unwrapped_identity(self):
         """Verify unwrapped returns same object as direct access."""
         env = WrapperSimpleEnv()
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         # unwrapped should be same as env.unwrapped
         assert environment_wrapper.unwrapped is env.unwrapped
@@ -203,7 +201,7 @@ class TestWrapperAttributeDelegation:
     def test_getattr_environment_methods(self):
         """Verify delegation of environment methods."""
         env = WrapperEnvWithMethods()
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         # Should delegate custom methods
         assert environment_wrapper.custom_method() == "custom_value"
@@ -212,7 +210,7 @@ class TestWrapperAttributeDelegation:
     def test_getattr_environment_properties(self):
         """Verify delegation of environment properties."""
         env = WrapperEnvWithMethods()
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         # Should delegate custom properties
         assert environment_wrapper.custom_property == 42
@@ -221,7 +219,7 @@ class TestWrapperAttributeDelegation:
     def test_getattr_custom_attributes(self):
         """Verify delegation of custom environment attributes."""
         env = WrapperEnvWithFields(some_field=100, another_field="hello")
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         # Should delegate custom fields
         assert environment_wrapper.env.some_field == 100
@@ -230,8 +228,8 @@ class TestWrapperAttributeDelegation:
     def test_getattr_nested_attributes(self):
         """Verify delegation through nested wrappers."""
         env = WrapperEnvWithMethods()
-        environment_wrapper1 = Wrapper(env=env)
-        environment_wrapper2 = Wrapper(env=environment_wrapper1)
+        environment_wrapper1 = Wrapper(env)
+        environment_wrapper2 = Wrapper(environment_wrapper1)
 
         # Should delegate through nested wrappers
         assert environment_wrapper2.custom_method() == "custom_value"
@@ -240,7 +238,7 @@ class TestWrapperAttributeDelegation:
     def test_getattr_missing_attribute(self):
         """Verify AttributeError for non-existent attributes."""
         env = WrapperSimpleEnv()
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         with pytest.raises(AttributeError):
             _ = environment_wrapper.nonexistent_attribute
@@ -248,7 +246,7 @@ class TestWrapperAttributeDelegation:
     def test_getattr_setstate_raises(self):
         """Verify __setstate__ raises AttributeError."""
         env = WrapperSimpleEnv()
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         with pytest.raises(AttributeError):
             _ = environment_wrapper.__setstate__
@@ -256,7 +254,7 @@ class TestWrapperAttributeDelegation:
     def test_getattr_private_attributes(self):
         """Verify behavior with private attributes."""
         env = make_wrapper_env_with_private_attr(private_value=10)
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         # Private attributes should be accessible via __getattr__
         assert environment_wrapper._private == 10
@@ -273,8 +271,8 @@ class TestWrapperNested:
     def test_nested_reset_delegation(self):
         """Verify reset() through nested wrappers."""
         env = WrapperSimpleEnv()
-        environment_wrapper1 = Wrapper(env=env)
-        environment_wrapper2 = Wrapper(env=environment_wrapper1)
+        environment_wrapper1 = Wrapper(env)
+        environment_wrapper2 = Wrapper(environment_wrapper1)
 
         key = jax.random.key(0)
         state, info = environment_wrapper2.init(key)
@@ -285,8 +283,8 @@ class TestWrapperNested:
     def test_nested_step_delegation(self):
         """Verify step() through nested wrappers."""
         env = WrapperSimpleEnv()
-        environment_wrapper1 = Wrapper(env=env)
-        environment_wrapper2 = Wrapper(env=environment_wrapper1)
+        environment_wrapper1 = Wrapper(env)
+        environment_wrapper2 = Wrapper(environment_wrapper1)
 
         key = jax.random.key(0)
         state, _ = environment_wrapper2.init(key)
@@ -298,8 +296,8 @@ class TestWrapperNested:
     def test_nested_space_access(self):
         """Verify space access through nested wrappers."""
         env = WrapperSimpleEnv()
-        environment_wrapper1 = Wrapper(env=env)
-        environment_wrapper2 = Wrapper(env=environment_wrapper1)
+        environment_wrapper1 = Wrapper(env)
+        environment_wrapper2 = Wrapper(environment_wrapper1)
 
         # All wrappers should return same spaces
         assert environment_wrapper2.observation_space == env.observation_space
@@ -310,9 +308,9 @@ class TestWrapperNested:
     def test_nested_unwrapped_chain(self):
         """Verify unwrapped chain with nested wrappers."""
         env = WrapperSimpleEnv()
-        environment_wrapper1 = Wrapper(env=env)
-        environment_wrapper2 = Wrapper(env=environment_wrapper1)
-        environment_wrapper3 = Wrapper(env=environment_wrapper2)
+        environment_wrapper1 = Wrapper(env)
+        environment_wrapper2 = Wrapper(environment_wrapper1)
+        environment_wrapper3 = Wrapper(environment_wrapper2)
 
         # All should unwrap to same base env
         assert environment_wrapper3.unwrapped is env
@@ -322,8 +320,8 @@ class TestWrapperNested:
     def test_composition_order_independence(self):
         """Verify environment_wrapper order doesn't break functionality."""
         env = WrapperSimpleEnv()
-        environment_wrapper1 = Wrapper(env=env)
-        environment_wrapper2 = Wrapper(env=environment_wrapper1)
+        environment_wrapper1 = Wrapper(env)
+        environment_wrapper2 = Wrapper(environment_wrapper1)
 
         key = jax.random.key(0)
 
@@ -337,8 +335,8 @@ class TestWrapperNested:
     def test_composition_state_preservation(self):
         """Verify state preserved through environment_wrapper layers."""
         env = WrapperSimpleEnv()
-        environment_wrapper1 = Wrapper(env=env)
-        environment_wrapper2 = Wrapper(env=environment_wrapper1)
+        environment_wrapper1 = Wrapper(env)
+        environment_wrapper2 = Wrapper(environment_wrapper1)
 
         key = jax.random.key(0)
         state, _ = environment_wrapper2.init(key)
@@ -360,7 +358,7 @@ class TestWrapperJAXCompatibility:
     def test_jax_tree_flatten(self):
         """Verify JAX tree_flatten works correctly."""
         env = WrapperSimpleEnv()
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         children, aux_data = jax.tree.flatten(environment_wrapper)
 
@@ -372,7 +370,7 @@ class TestWrapperJAXCompatibility:
     def test_jax_tree_unflatten(self):
         """Verify JAX tree_unflatten reconstructs correctly."""
         env = WrapperSimpleEnv()
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         children, aux_data = jax.tree.flatten(environment_wrapper)
         reconstructed = jax.tree.unflatten(aux_data, children)
@@ -383,7 +381,7 @@ class TestWrapperJAXCompatibility:
     def test_jax_tree_map(self):
         """Verify JAX tree_map operations work."""
         env = WrapperSimpleEnv()
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         # Map a function over the tree
         def double(x):
@@ -400,8 +398,8 @@ class TestWrapperJAXCompatibility:
     def test_nested_jax_operations(self):
         """Verify JAX operations with nested wrappers."""
         env = WrapperSimpleEnv()
-        environment_wrapper1 = Wrapper(env=env)
-        environment_wrapper2 = Wrapper(env=environment_wrapper1)
+        environment_wrapper1 = Wrapper(env)
+        environment_wrapper2 = Wrapper(environment_wrapper1)
 
         # Should work with nested wrappers
         children, aux_data = jax.tree.flatten(environment_wrapper2)
@@ -423,7 +421,7 @@ class TestWrapperEdgeCases:
     def test_wrapper_preserves_dataclass_fields(self):
         """Test that dataclasses.fields() on wrapped env shows unwrapped env's fields."""
         env = WrapperEnvWithFields(some_field=100, another_field="hello")
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         # dataclasses.fields() on environment_wrapper should show environment_wrapper's fields
         wrapper_fields = {f.name for f in dataclasses.fields(environment_wrapper)}
@@ -441,7 +439,7 @@ class TestWrapperEdgeCases:
     def test_wrapper_with_different_space_types(self):
         """Test environment_wrapper with different space types."""
         env = make_wrapper_discrete_env()
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         assert isinstance(environment_wrapper.observation_space, Discrete)
         assert isinstance(environment_wrapper.action_space, Discrete)
@@ -451,7 +449,7 @@ class TestWrapperEdgeCases:
     def test_wrapper_identity_preservation(self):
         """Verify environment_wrapper preserves environment identity."""
         env = WrapperSimpleEnv()
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         # env attribute should be same reference
         assert environment_wrapper.env is env
@@ -462,7 +460,7 @@ class TestWrapperEdgeCases:
     def test_wrapper_with_complex_state(self):
         """Test environment_wrapper with complex state structures."""
         env = make_wrapper_complex_state_env()
-        environment_wrapper = Wrapper(env=env)
+        environment_wrapper = Wrapper(env)
 
         key = jax.random.key(0)
         state, info = environment_wrapper.init(key)

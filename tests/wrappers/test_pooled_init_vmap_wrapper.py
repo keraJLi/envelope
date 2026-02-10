@@ -12,7 +12,7 @@ from tests.wrappers.helpers import ScalarToyEnv, StepCounterEnv
 def test_init_creates_batched_state():
     batch_size = 4
     env = ScalarToyEnv()
-    w = PooledInitVmapWrapper(env=env, batch_size=batch_size, pool_size=4)
+    w = PooledInitVmapWrapper(env, batch_size=batch_size, pool_size=4)
     key = jax.random.key(0)
     state, info = w.init(key)
     assert info.obs.shape == (batch_size,)
@@ -21,7 +21,7 @@ def test_init_creates_batched_state():
 def test_init_last_final_is_nan_placeholder():
     batch_size = 2
     env = ScalarToyEnv()
-    w = PooledInitVmapWrapper(env=env, batch_size=batch_size, pool_size=2)
+    w = PooledInitVmapWrapper(env, batch_size=batch_size, pool_size=2)
     key = jax.random.key(0)
     state, info = w.init(key)
     # last_final should be info-shaped with NaN
@@ -31,7 +31,7 @@ def test_init_last_final_is_nan_placeholder():
 
 def test_init_info_has_final_field():
     env = ScalarToyEnv()
-    w = PooledInitVmapWrapper(env=env, batch_size=2, pool_size=2)
+    w = PooledInitVmapWrapper(env, batch_size=2, pool_size=2)
     key = jax.random.key(0)
     state, info = w.init(key)
     assert hasattr(info, "final")
@@ -40,7 +40,7 @@ def test_init_info_has_final_field():
 
 def test_step_non_done_envs_continue_normally():
     env = ScalarToyEnv()  # never done
-    w = PooledInitVmapWrapper(env=env, batch_size=2, pool_size=2)
+    w = PooledInitVmapWrapper(env, batch_size=2, pool_size=2)
     key = jax.random.key(0)
     state, info = w.init(key)
     action = jnp.array([0.1, 0.2])
@@ -51,7 +51,7 @@ def test_step_non_done_envs_continue_normally():
 
 def test_step_done_envs_get_pool_states():
     env = StepCounterEnv(terminate_after=1)
-    w = PooledInitVmapWrapper(env=env, batch_size=2, pool_size=4)
+    w = PooledInitVmapWrapper(env, batch_size=2, pool_size=4)
     key = jax.random.key(0)
     state, _ = w.init(key)
     action = jnp.array([0.1, 0.1])  # both take one step -> both done
@@ -64,7 +64,7 @@ def test_step_done_envs_get_pool_states():
 
 def test_step_stores_terminal_info_in_last_final():
     env = StepCounterEnv(terminate_after=1)
-    w = PooledInitVmapWrapper(env=env, batch_size=1, pool_size=1)
+    w = PooledInitVmapWrapper(env, batch_size=1, pool_size=1)
     key = jax.random.key(0)
     state, _ = w.init(key)
     action = jnp.array([0.5])
@@ -76,7 +76,7 @@ def test_step_stores_terminal_info_in_last_final():
 
 def test_step_continue_envs_preserve_previous_last_final():
     env = StepCounterEnv(terminate_after=2)
-    w = PooledInitVmapWrapper(env=env, batch_size=2, pool_size=2)
+    w = PooledInitVmapWrapper(env, batch_size=2, pool_size=2)
     key = jax.random.key(0)
     state, _ = w.init(key)
     # Step once: no env done yet (env_state 0.1 each)
@@ -92,7 +92,7 @@ def test_step_continue_envs_preserve_previous_last_final():
 
 def test_step_info_final_field():
     env = StepCounterEnv(terminate_after=1)
-    w = PooledInitVmapWrapper(env=env, batch_size=1, pool_size=1)
+    w = PooledInitVmapWrapper(env, batch_size=1, pool_size=1)
     key = jax.random.key(0)
     state, info = w.init(key)
     assert hasattr(info, "final")
@@ -105,7 +105,7 @@ def test_step_info_final_field():
 def test_reset_vmaps_inner_reset():
     batch_size = 3
     env = ScalarToyEnv()
-    w = PooledInitVmapWrapper(env=env, batch_size=batch_size, pool_size=3)
+    w = PooledInitVmapWrapper(env, batch_size=batch_size, pool_size=3)
     key = jax.random.key(0)
     state, info = w.init(key)
     state, info = w.reset(state, key)
@@ -116,7 +116,7 @@ def test_reset_vmaps_inner_reset():
 def test_observation_space_is_batched_space():
     batch_size = 4
     env = ScalarToyEnv()
-    w = PooledInitVmapWrapper(env=env, batch_size=batch_size, pool_size=4)
+    w = PooledInitVmapWrapper(env, batch_size=batch_size, pool_size=4)
     assert isinstance(w.observation_space, BatchedSpace)
     assert w.observation_space.batch_size == batch_size
     assert w.observation_space.space == env.observation_space
@@ -125,14 +125,14 @@ def test_observation_space_is_batched_space():
 def test_action_space_is_batched_space():
     batch_size = 4
     env = ScalarToyEnv()
-    w = PooledInitVmapWrapper(env=env, batch_size=batch_size, pool_size=4)
+    w = PooledInitVmapWrapper(env, batch_size=batch_size, pool_size=4)
     assert isinstance(w.action_space, BatchedSpace)
     assert w.action_space.batch_size == batch_size
 
 
 def test_observation_space_contains_after_init_and_step():
     env = ScalarToyEnv()
-    w = PooledInitVmapWrapper(env=env, batch_size=2, pool_size=2)
+    w = PooledInitVmapWrapper(env, batch_size=2, pool_size=2)
     key = jax.random.key(0)
     state, info = w.init(key)
     assert w.observation_space.contains(info.obs)
@@ -142,7 +142,7 @@ def test_observation_space_contains_after_init_and_step():
 
 def test_action_space_sample_contains():
     env = ScalarToyEnv()
-    w = PooledInitVmapWrapper(env=env, batch_size=2, pool_size=2)
+    w = PooledInitVmapWrapper(env, batch_size=2, pool_size=2)
     key = jax.random.key(0)
     action = w.action_space.sample(key)
     assert w.action_space.contains(action)
@@ -151,7 +151,7 @@ def test_action_space_sample_contains():
 @pytest.mark.parametrize("pool_size", [1, 2, 4])
 def test_pool_size_parametrized(pool_size):
     env = ScalarToyEnv()
-    w = PooledInitVmapWrapper(env=env, batch_size=2, pool_size=pool_size)
+    w = PooledInitVmapWrapper(env, batch_size=2, pool_size=pool_size)
     key = jax.random.key(0)
     state, info = w.init(key)
     state, info = w.step(state, jnp.array([0.0, 0.0]))
@@ -160,7 +160,7 @@ def test_pool_size_parametrized(pool_size):
 
 def test_deterministic_given_same_key():
     env = ScalarToyEnv()
-    w = PooledInitVmapWrapper(env=env, batch_size=2, pool_size=2)
+    w = PooledInitVmapWrapper(env, batch_size=2, pool_size=2)
     key = jax.random.key(42)
     state1, info1 = w.init(key)
     state2, info2 = w.init(key)
@@ -173,7 +173,7 @@ def test_deterministic_given_same_key():
 def test_different_keys_different_pool_states():
     """Different keys produce valid inits; shape matches. ScalarToyEnv init is deterministic (obs 0), so we only assert no crash and shape."""
     env = ScalarToyEnv()
-    w = PooledInitVmapWrapper(env=env, batch_size=2, pool_size=2)
+    w = PooledInitVmapWrapper(env, batch_size=2, pool_size=2)
     s1, i1 = w.init(jax.random.key(0))
     s2, i2 = w.init(jax.random.key(1))
     assert s1.inner_state.shape == s2.inner_state.shape
@@ -182,7 +182,7 @@ def test_different_keys_different_pool_states():
 
 def test_all_envs_done_simultaneously():
     env = StepCounterEnv(terminate_after=1)
-    w = PooledInitVmapWrapper(env=env, batch_size=4, pool_size=4)
+    w = PooledInitVmapWrapper(env, batch_size=4, pool_size=4)
     key = jax.random.key(0)
     state, _ = w.init(key)
     action = jnp.array([0.1, 0.1, 0.1, 0.1])
@@ -193,7 +193,7 @@ def test_all_envs_done_simultaneously():
 
 def test_no_envs_done():
     env = ScalarToyEnv()
-    w = PooledInitVmapWrapper(env=env, batch_size=3, pool_size=2)
+    w = PooledInitVmapWrapper(env, batch_size=3, pool_size=2)
     key = jax.random.key(0)
     state, _ = w.init(key)
     state, info = w.step(state, jnp.array([0.1, 0.2, 0.3]))
@@ -203,7 +203,7 @@ def test_no_envs_done():
 
 def test_batch_size_one_pool_size_one():
     env = ScalarToyEnv()
-    w = PooledInitVmapWrapper(env=env, batch_size=1, pool_size=1)
+    w = PooledInitVmapWrapper(env, batch_size=1, pool_size=1)
     key = jax.random.key(0)
     state, info = w.init(key)
     assert info.obs.shape == (1,)
@@ -213,7 +213,7 @@ def test_batch_size_one_pool_size_one():
 
 def test_pool_size_greater_than_batch_size():
     env = ScalarToyEnv()
-    w = PooledInitVmapWrapper(env=env, batch_size=2, pool_size=8)
+    w = PooledInitVmapWrapper(env, batch_size=2, pool_size=8)
     key = jax.random.key(0)
     state, info = w.init(key)
     state, info = w.step(state, jnp.array([0.0, 0.0]))
@@ -222,7 +222,7 @@ def test_pool_size_greater_than_batch_size():
 
 def test_init_key_advances_each_step():
     env = ScalarToyEnv()
-    w = PooledInitVmapWrapper(env=env, batch_size=1, pool_size=1)
+    w = PooledInitVmapWrapper(env, batch_size=1, pool_size=1)
     key = jax.random.key(0)
     state, _ = w.init(key)
     key_before = state.init_key
@@ -233,7 +233,7 @@ def test_init_key_advances_each_step():
 
 def test_jit_init_step():
     env = ScalarToyEnv()
-    w = PooledInitVmapWrapper(env=env, batch_size=2, pool_size=2)
+    w = PooledInitVmapWrapper(env, batch_size=2, pool_size=2)
     key = jax.random.key(0)
 
     @jax.jit
@@ -249,7 +249,7 @@ def test_jit_init_step():
 
 def test_jax_lax_scan_multi_step_loop():
     env = ScalarToyEnv()
-    w = PooledInitVmapWrapper(env=env, batch_size=2, pool_size=2)
+    w = PooledInitVmapWrapper(env, batch_size=2, pool_size=2)
     key = jax.random.key(0)
     state, _ = w.init(key)
     keys = jax.random.split(key, 5)
@@ -265,9 +265,7 @@ def test_jax_lax_scan_multi_step_loop():
 
 def test_composability_with_episode_statistics_wrapper():
     env = StepCounterEnv(terminate_after=2)
-    w = EpisodeStatisticsWrapper(
-        env=PooledInitVmapWrapper(env=env, batch_size=2, pool_size=2)
-    )
+    w = EpisodeStatisticsWrapper(PooledInitVmapWrapper(env, batch_size=2, pool_size=2))
     key = jax.random.key(0)
     state, _ = w.init(key)
     for _ in range(4):
@@ -279,7 +277,7 @@ def test_composability_with_episode_statistics_wrapper():
 def test_composability_with_truncation_wrapper():
     env = StepCounterEnv(truncate_after=2)
     w = PooledInitVmapWrapper(
-        env=TruncationWrapper(env=env, max_steps=2),
+        TruncationWrapper(env, max_steps=2),
         batch_size=2,
         pool_size=2,
     )

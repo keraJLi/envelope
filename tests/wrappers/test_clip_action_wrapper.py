@@ -14,7 +14,7 @@ from tests.wrappers.helpers import (
 
 def test_init_reset_delegate_unchanged():
     env = ScalarToyEnv()
-    w = ClipActionWrapper(env=env)
+    w = ClipActionWrapper(env)
     key = jax.random.key(0)
     state_w, info_w = w.init(key)
     state_e, info_e = env.init(key)
@@ -30,7 +30,7 @@ def test_init_reset_delegate_unchanged():
 
 def test_step_clips_continuous_scalar_action():
     env = StepCounterEnv()
-    w = ClipActionWrapper(env=env)
+    w = ClipActionWrapper(env)
     key = jax.random.key(0)
     state, _ = w.init(key)
     # Action 5.0 out of bounds [-1, 1] -> clipped to 1.0
@@ -44,7 +44,7 @@ def test_step_clips_continuous_scalar_action():
 
 def test_step_clips_continuous_vector_action():
     env = VectorToyEnv(dim=3)
-    w = ClipActionWrapper(env=env)
+    w = ClipActionWrapper(env)
     key = jax.random.key(0)
     state, _ = w.init(key)
     # [2, -3, 0.5] -> [1, -1, 0.5] for bounds [-1, 1]
@@ -58,7 +58,7 @@ def test_step_clips_continuous_vector_action():
 
 def test_in_bounds_action_passes_through_unchanged():
     env = ScalarToyEnv()
-    w = ClipActionWrapper(env=env)
+    w = ClipActionWrapper(env)
     key = jax.random.key(0)
     state, _ = w.init(key)
     action = jnp.array(0.3)
@@ -70,7 +70,7 @@ def test_in_bounds_action_passes_through_unchanged():
 
 def test_clips_discrete_action():
     env = DiscreteStepCounterEnv(action_n=5)
-    w = ClipActionWrapper(env=env)
+    w = ClipActionWrapper(env)
     key = jax.random.key(0)
     state, _ = w.init(key)
     # action=10 with Discrete(5) -> valid [0,4], clip to 4
@@ -83,7 +83,7 @@ def test_clips_discrete_action():
 
 def test_clips_negative_discrete_action():
     env = DiscreteStepCounterEnv(action_n=5)
-    w = ClipActionWrapper(env=env)
+    w = ClipActionWrapper(env)
     key = jax.random.key(0)
     state, _ = w.init(key)
     action = jnp.array(-3, dtype=jnp.int32)
@@ -95,7 +95,7 @@ def test_clips_negative_discrete_action():
 
 def test_action_at_exact_boundary_passes_through():
     env = ScalarToyEnv()
-    w = ClipActionWrapper(env=env)
+    w = ClipActionWrapper(env)
     key = jax.random.key(0)
     state, _ = w.init(key)
     for bound in [jnp.array(-1.0), jnp.array(1.0)]:
@@ -115,14 +115,14 @@ def test_inf_bounds_env_large_action_passes_through():
 
 def test_spaces_unchanged():
     env = ScalarToyEnv()
-    w = ClipActionWrapper(env=env)
+    w = ClipActionWrapper(env)
     assert w.observation_space is env.observation_space
     assert w.action_space is env.action_space
 
 
 def test_observation_space_contains_after_init_and_step():
     env = ScalarToyEnv()
-    w = ClipActionWrapper(env=env)
+    w = ClipActionWrapper(env)
     key = jax.random.key(0)
     state, info = w.init(key)
     assert w.observation_space.contains(info.obs)
@@ -132,7 +132,7 @@ def test_observation_space_contains_after_init_and_step():
 
 def test_jit_compatibility():
     env = ScalarToyEnv()
-    w = ClipActionWrapper(env=env)
+    w = ClipActionWrapper(env)
     key = jax.random.key(0)
 
     @jax.jit
@@ -149,7 +149,7 @@ def test_jit_compatibility():
 def test_composability_with_vmap_wrapper():
     batch_size = 2
     env = ScalarToyEnv()
-    w = ClipActionWrapper(env=VmapWrapper(env=env, batch_size=batch_size))
+    w = ClipActionWrapper(VmapWrapper(env, batch_size=batch_size))
     key = jax.random.key(0)
     state, _ = w.init(key)
     # Batched out-of-bounds actions [5, -5] -> clipped to [1, -1]

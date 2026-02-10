@@ -5,7 +5,9 @@ import pytest
 
 from envelope.wrappers.autoreset_wrapper import AutoResetWrapper
 from envelope.wrappers.clip_action_wrapper import ClipActionWrapper
-from envelope.wrappers.continuous_observation_wrapper import ContinuousObservationWrapper
+from envelope.wrappers.continuous_observation_wrapper import (
+    ContinuousObservationWrapper,
+)
 from envelope.wrappers.episode_statistics_wrapper import EpisodeStatisticsWrapper
 from envelope.wrappers.flatten_action_wrapper import FlattenActionWrapper
 from envelope.wrappers.flatten_observation_wrapper import FlattenObservationWrapper
@@ -28,43 +30,43 @@ from tests.wrappers.helpers import (
 
 
 def _wrap_base():
-    return Wrapper(env=WrapperSimpleEnv())
+    return Wrapper(WrapperSimpleEnv())
 
 
 def _wrap_autoreset():
-    return AutoResetWrapper(env=StepCounterEnv())
+    return AutoResetWrapper(StepCounterEnv())
 
 
 def _wrap_truncation():
-    return TruncationWrapper(env=StepCounterEnv(), max_steps=3)
+    return TruncationWrapper(StepCounterEnv(), max_steps=3)
 
 
 def _wrap_clip_action():
-    return ClipActionWrapper(env=ScalarToyEnv())
+    return ClipActionWrapper(ScalarToyEnv())
 
 
 def _wrap_continuous_obs():
-    return ContinuousObservationWrapper(env=IntObsEnv())
+    return ContinuousObservationWrapper(IntObsEnv())
 
 
 def _wrap_flatten_obs():
-    return FlattenObservationWrapper(env=PyTreeObsEnv(shapes={"a": (2,), "b": (3,)}))
+    return FlattenObservationWrapper(PyTreeObsEnv(shapes={"a": (2,), "b": (3,)}))
 
 
 def _wrap_flatten_action():
-    return FlattenActionWrapper(env=PyTreeActionEnv())
+    return FlattenActionWrapper(PyTreeActionEnv())
 
 
 def _wrap_episode_statistics():
-    return EpisodeStatisticsWrapper(env=StepCounterEnv())
+    return EpisodeStatisticsWrapper(StepCounterEnv())
 
 
 def _wrap_observation_normalization():
-    return ObservationNormalizationWrapper(env=VectorToyEnv(dim=3))
+    return ObservationNormalizationWrapper(VectorToyEnv(dim=3))
 
 
 def _wrap_state_injection():
-    return StateInjectionWrapper(env=StepCounterEnv())
+    return StateInjectionWrapper(StepCounterEnv())
 
 
 @pytest.mark.parametrize(

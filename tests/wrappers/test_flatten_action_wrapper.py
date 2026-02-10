@@ -15,7 +15,7 @@ from tests.wrappers.helpers import PyTreeActionEnv, ScalarToyEnv
 
 def test_step_with_pytree_action_space():
     env = PyTreeActionEnv()
-    w = FlattenActionWrapper(env=env)
+    w = FlattenActionWrapper(env)
     key = jax.random.key(0)
     state, _ = w.init(key)
     # Flat action shape (5,) -> unflatten to {"a": (2,), "b": (3,)}
@@ -41,7 +41,7 @@ def test_unflatten_roundtrip():
 
 def test_single_leaf_action_space_near_noop():
     env = ScalarToyEnv()
-    w = FlattenActionWrapper(env=env)
+    w = FlattenActionWrapper(env)
     key = jax.random.key(0)
     state, _ = w.init(key)
     # Wrapper flattens to shape (1,) for scalar action space
@@ -54,7 +54,7 @@ def test_single_leaf_action_space_near_noop():
 
 def test_init_reset_delegate_unchanged():
     env = PyTreeActionEnv()
-    w = FlattenActionWrapper(env=env)
+    w = FlattenActionWrapper(env)
     key = jax.random.key(0)
     state_w, info_w = w.init(key)
     state_e, info_e = env.init(key)
@@ -68,7 +68,7 @@ def test_init_reset_delegate_unchanged():
 
 def test_action_space_flattened_continuous():
     env = PyTreeActionEnv()
-    w = FlattenActionWrapper(env=env)
+    w = FlattenActionWrapper(env)
     space = w.action_space
     assert isinstance(space, Continuous)
     assert space.shape == (5,)
@@ -112,7 +112,7 @@ def test_action_space_flattened_discrete():
             )
 
     env = DiscretePyTreeActionEnv()
-    w = FlattenActionWrapper(env=env)
+    w = FlattenActionWrapper(env)
     space = w.action_space
     assert isinstance(space, Discrete)
     assert space.shape == (
@@ -126,7 +126,7 @@ def test_action_space_flattened_discrete():
 
 def test_action_space_contains_sampled():
     env = PyTreeActionEnv()
-    w = FlattenActionWrapper(env=env)
+    w = FlattenActionWrapper(env)
     key = jax.random.key(0)
     action = w.action_space.sample(key)
     assert w.action_space.contains(action)
@@ -134,7 +134,7 @@ def test_action_space_contains_sampled():
 
 def test_observation_space_unchanged():
     env = PyTreeActionEnv()
-    w = FlattenActionWrapper(env=env)
+    w = FlattenActionWrapper(env)
     assert w.observation_space is env.observation_space
 
 
@@ -173,14 +173,14 @@ def test_mixed_space_types_raises_value_error():
 
     env = MixedActionEnv()
     with pytest.raises(ValueError, match="All spaces must be of the same type"):
-        w = FlattenActionWrapper(env=env)
+        w = FlattenActionWrapper(env)
         _ = w.action_space
 
 
 def test_jit_step():
     """Step produces correct output. Full JIT of step is not supported: unflatten_x uses jnp.split(..., indices) with space-derived indices, which triggers ConcretizationTypeError under jit."""
     env = PyTreeActionEnv()
-    w = FlattenActionWrapper(env=env)
+    w = FlattenActionWrapper(env)
     key = jax.random.key(0)
     state, _ = w.init(key)
     action = w.action_space.sample(key)
@@ -191,7 +191,7 @@ def test_jit_step():
 
 def test_composability_with_clip_action_wrapper():
     env = PyTreeActionEnv()
-    w = FlattenActionWrapper(env=ClipActionWrapper(env=env))
+    w = FlattenActionWrapper(ClipActionWrapper(env))
     key = jax.random.key(0)
     state, _ = w.init(key)
     # Out-of-bounds flat action
@@ -205,7 +205,7 @@ def test_composability_with_vmap_wrapper():
     # Vmap(FlattenAction(env)): flatten first then vmap so step receives (batch, 5) and vmap splits
     batch_size = 2
     env = PyTreeActionEnv()
-    w = VmapWrapper(env=FlattenActionWrapper(env=env), batch_size=batch_size)
+    w = VmapWrapper(FlattenActionWrapper(env), batch_size=batch_size)
     key = jax.random.key(0)
     state, _ = w.init(key)
     assert isinstance(w.action_space, BatchedSpace)
