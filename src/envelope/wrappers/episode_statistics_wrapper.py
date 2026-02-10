@@ -9,8 +9,8 @@ from envelope.wrappers.wrapper import WrappedState, Wrapper
 
 
 class EpisodeStatistics(FrozenPyTreeNode):
-    reward: jax.Array = field(default=0)
-    length: jax.Array = field(default=0)
+    reward: jax.Array = field(default=0.0)
+    length: jax.Array = field(default=0.0)
 
 
 class EpisodeStatisticsWrapper(Wrapper):
