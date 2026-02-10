@@ -1,28 +1,8 @@
 from functools import cached_property
-from typing import Any, override
+from typing import TYPE_CHECKING, Any, override
 
 import jax
 import jax.numpy as jnp
-from craftax.craftax.craftax_state import EnvParams as CraftaxEnvParams
-from craftax.craftax.envs.craftax_pixels_env import (
-    CraftaxPixelsEnv,
-    CraftaxPixelsEnvNoAutoReset,
-)
-from craftax.craftax.envs.craftax_symbolic_env import (
-    CraftaxSymbolicEnv,
-    CraftaxSymbolicEnvNoAutoReset,
-)
-from craftax.craftax_classic.envs.craftax_pixels_env import (
-    CraftaxClassicPixelsEnv,
-    CraftaxClassicPixelsEnvNoAutoReset,
-)
-from craftax.craftax_classic.envs.craftax_state import (
-    EnvParams as CraftaxClassicEnvParams,
-)
-from craftax.craftax_classic.envs.craftax_symbolic_env import (
-    CraftaxClassicSymbolicEnv,
-    CraftaxClassicSymbolicEnvNoAutoReset,
-)
 from craftax.craftax_env import make_craftax_env_from_name
 
 from envelope import spaces as envelope_spaces
@@ -31,17 +11,42 @@ from envelope.environment import Environment, Info, InfoContainer, State
 from envelope.struct import Container, static_field
 from envelope.typing import Key, PyTree, TypeAlias
 
-CraftaxEnvParams: TypeAlias = CraftaxEnvParams | CraftaxClassicEnvParams
-CraftaxEnv: TypeAlias = (
-    CraftaxPixelsEnv
-    | CraftaxSymbolicEnv
-    | CraftaxClassicPixelsEnv
-    | CraftaxClassicSymbolicEnv
-    | CraftaxPixelsEnvNoAutoReset
-    | CraftaxSymbolicEnvNoAutoReset
-    | CraftaxClassicPixelsEnvNoAutoReset
-    | CraftaxClassicSymbolicEnvNoAutoReset
-)
+if TYPE_CHECKING:
+    from craftax.craftax.craftax_state import EnvParams as CraftaxEnvParamsOriginal
+    from craftax.craftax.envs.craftax_pixels_env import (
+        CraftaxPixelsEnv,
+        CraftaxPixelsEnvNoAutoReset,
+    )
+    from craftax.craftax.envs.craftax_symbolic_env import (
+        CraftaxSymbolicEnv,
+        CraftaxSymbolicEnvNoAutoReset,
+    )
+    from craftax.craftax_classic.envs.craftax_pixels_env import (
+        CraftaxClassicPixelsEnv,
+        CraftaxClassicPixelsEnvNoAutoReset,
+    )
+    from craftax.craftax_classic.envs.craftax_state import (
+        EnvParams as CraftaxClassicEnvParams,
+    )
+    from craftax.craftax_classic.envs.craftax_symbolic_env import (
+        CraftaxClassicSymbolicEnv,
+        CraftaxClassicSymbolicEnvNoAutoReset,
+    )
+
+    CraftaxEnvParams: TypeAlias = CraftaxEnvParamsOriginal | CraftaxClassicEnvParams
+    CraftaxEnv: TypeAlias = (
+        CraftaxPixelsEnv
+        | CraftaxSymbolicEnv
+        | CraftaxClassicPixelsEnv
+        | CraftaxClassicSymbolicEnv
+        | CraftaxPixelsEnvNoAutoReset
+        | CraftaxSymbolicEnvNoAutoReset
+        | CraftaxClassicPixelsEnvNoAutoReset
+        | CraftaxClassicSymbolicEnvNoAutoReset
+    )
+else:
+    CraftaxEnvParams: TypeAlias = Any
+    CraftaxEnv: TypeAlias = Any
 
 
 class CraftaxEnvelope(Environment):
