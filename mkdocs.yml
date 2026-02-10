@@ -1,0 +1,70 @@
+site_name: 💌 Envelope
+site_description: A JAX-native environment interface
+site_url: https://envelope.readthedocs.io
+repo_url: https://github.com/keraJLi/envelope
+repo_name: keraJLi/envelope
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  language: en
+  palette:
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      primary: red
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      primary: red
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      primary: red
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+
+
+  features:
+    - navigation.instant
+    - navigation.sections
+    - header.autohide
+
+extra_css:
+  - stylesheets/extra.css
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: false
+            show_root_heading: true
+            show_docstring_attributes: true
+            group_by_category: true
+            show_category_heading: true
+            show_signature: true
+            separate_signature: false
+            show_if_no_docstring: false
+            heading_level: 3
+            filters:
+              - "!^_"
+          paths:
+            - src
+
+nav:
+  - Home: index.md
+  - Environments: api/environments.md
+  - Spaces: api/spaces.md
+  - Wrappers: api/wrappers.md
+  - Adapters: api/adapters.md
+  - Struct: api/struct.md

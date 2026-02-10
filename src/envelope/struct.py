@@ -11,8 +11,8 @@ __all__ = ["FrozenPyTreeNode", "field", "static_field", "Container"]
 
 def field(*, pytree_node: bool = True, **kwargs):
     """
-    Dataclass field helper.
-    Set pytree_node=False for static (non-transformed) fields.
+    Dataclass field helper. See `typing.FrozenPyTreeNode` for more details.
+    Set `pytree_node=False` for static (non-transformed) fields.
     """
     meta = dict(kwargs.pop("metadata", {}) or {})
     meta["pytree_node"] = pytree_node
@@ -20,22 +20,26 @@ def field(*, pytree_node: bool = True, **kwargs):
 
 
 def static_field(**kwargs):
-    """Shorthand for field(pytree_node=False, ...)."""
+    """Shorthand for `field(pytree_node=False, ...)`."""
     return field(pytree_node=False, **kwargs)
 
 
 @dataclass_transform()
 class FrozenPyTreeNode:
     """
-    Frozen dataclass base that is a JAX pytree node.
+    Frozen dataclass base that is a JAX pytree node. Fields can be declared as either
+    dynamic (pytree nodes) or static (not pytree nodes) using the `field` and
+    `static_field` helpers.
 
     Usage:
+        ```python
         class Foo(FrozenPyTreeNode):
             a: Any                      # pytree leaf
             b: int = static_field()     # static, not a leaf
 
         x = Foo(a={"w": 1.0}, b=0)
         y = x.replace(b=1)
+        ```
     """
 
     # Turn subclasses into frozen dataclasses and register with JAX.
@@ -62,6 +66,7 @@ class FrozenPyTreeNode:
 
     # convenience
     def replace(self, **changes):
+        """Shorthand for `dataclasses.replace(self, **changes)`."""
         return dataclasses.replace(self, **changes)
 
 
@@ -69,6 +74,22 @@ class FrozenPyTreeNode:
 @jax.tree_util.register_pytree_node_class
 @dataclasses.dataclass(frozen=True, eq=True, repr=True, slots=False)
 class Container:
+    """
+    This class implements a container for arbitrary PyTree-valued fields. While
+    subclasses can define arbitrary *core* fields, instances of this class can be
+    updated to hold any additional *extras* fields.
+
+    Usage example:
+        ```python
+        class Foo(Container):
+            bar: int
+
+        foo = Foo(bar=1)
+        foo = foo.update(bar=2, baz=3.0)
+        print(foo)  # Foo(bar=2, baz=3.0)
+        ```
+    """
+
     _: KW_ONLY
     _extras: Mapping[str, PyTree] = dataclasses.field(default_factory=dict, repr=False)
 
@@ -113,7 +134,16 @@ class Container:
         extras_str = f", {', '.join(f'{k}={v!r}' for k, v in self._extras.items())}"
         return f"{core_str[:-1]}{extras_str})"  # remove closing parenthesis from core
 
-    def update(self, **changes: PyTree) -> Self:
+    def update(self, **changes: dict[str, PyTree]) -> Self:
+        """Update the container with new values. The `changes` overwrite fields in the
+        container, both for core fields and extras.
+
+        Args:
+            **changes: A dictionary of field names and values to update.
+
+        Returns:
+            A new instance of the container with the updated values.
+        """
         core_names = {f.name for f in dataclasses.fields(self) if f.name != "_extras"}
         core_updates: dict[str, PyTree] = {}
         extras_updates: dict[str, PyTree] = {}

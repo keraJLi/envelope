@@ -16,10 +16,12 @@ class VmapEnvsWrapper(Wrapper):
     Vectorizes over a batched collection of environment instances (vmapping over 'self').
 
     Usage:
-        envs = jax.vmap(make_env)(params_batch)     # env pytree batched on leading axis
+        ```python
+        envs = jax.vmap(make_env)(params_batch)  # env pytree batched on leading axis
         wrapped = VmapEnvsWrapper(env=envs, batch_size=B)
-        state, info = wrapped.init(keys)             # keys shape (B, 2) or single key
+        state, info = wrapped.init(keys)  # keys shape (B, 2) or single key
         next_state, info = wrapped.step(state, action)
+        ```
     """
 
     batch_size: int = field(kw_only=True)
@@ -30,13 +32,12 @@ class VmapEnvsWrapper(Wrapper):
 
         if key.shape == ():
             return jax.random.split(key, self.batch_size)
-        elif key.shape == (self.batch_size,):
-            return jax.random.split(key, self.batch_size)
-        else:
-            raise ValueError(
-                f"reset key's leading dimension ({key.shape[0]}) must match "
-                f"batch_size ({self.batch_size})."
-            )
+        elif key.shape[0] == self.batch_size:
+            return key
+        raise ValueError(
+            f"reset key's leading dimension ({key.shape[0]}) must match "
+            f"batch_size ({self.batch_size})."
+        )
 
     @override
     def init(self, key: Key) -> tuple[WrappedState, Info]:

@@ -15,7 +15,15 @@ _NAVIX_DEFAULT_MAX_STEPS = 100
 
 
 class NavixEnvelope(Environment):
-    """Wrapper to convert a Navix environment to a envelope environment."""
+    """
+    Wrapper to convert a Navix environment to a envelope environment.
+
+    Navix uses a dataclass as the environment state, which we return in full as fields of
+    the `Info` object.
+
+    Args:
+        navix_env (NavixEnv): the Navix environment.
+    """
 
     navix_env: NavixEnv
 
@@ -23,6 +31,10 @@ class NavixEnvelope(Environment):
     def from_name(
         cls, env_name: str, env_kwargs: dict[str, Any] | None = None
     ) -> "NavixEnvelope":
+        """
+        Create a `NavixEnvelope` from a name and keyword arguments.
+        `env_kwargs` are passed to `navix.make`.
+        """
         env_kwargs = env_kwargs or {}
         if "max_steps" in env_kwargs:
             raise ValueError(

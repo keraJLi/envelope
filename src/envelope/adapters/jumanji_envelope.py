@@ -6,6 +6,7 @@ from typing import Any, override
 import jax
 import jax.numpy as jnp
 import jumanji
+from jumanji.env import Environment as JumanjiEnv
 from jumanji.specs import Array, BoundedArray, DiscreteArray, MultiDiscreteArray, Spec
 from jumanji.types import TimeStep as JumanjiTimeStep
 
@@ -18,15 +19,28 @@ _MAX_INT = jnp.iinfo(jnp.int32).max
 
 
 class JumanjiEnvelope(Environment):
-    """Wrapper to convert a Jumanji environment to a envelope environment."""
+    """
+    Wrapper to convert a Jumanji environment to a envelope environment.
 
-    jumanji_env: Any = static_field()
+    Some Jumanji environments support time limits via a `time_limit` attribute of the
+    environemnt. If this attribute exists, we overwrite it with the maximum integer
+    value and set `default_max_steps` to the original value.
+
+    Args:
+        jumanji_env (JumanjiEnv): the Jumanji environment.
+    """
+
+    jumanji_env: JumanjiEnv = static_field()
     _default_time_limit: int | None = static_field(default=None)
 
     @classmethod
     def from_name(
         cls, env_name: str, env_kwargs: dict[str, Any] | None = None
     ) -> "JumanjiEnvelope":
+        """
+        Create a `JumanjiEnvelope` from a name and keyword arguments.
+        `env_kwargs` are passed to `jumanji.make`.
+        """
         env_kwargs = env_kwargs or {}
         if "time_limit" in env_kwargs:
             raise ValueError(
@@ -35,13 +49,11 @@ class JumanjiEnvelope(Environment):
             )
 
         # Create env first with defaults to capture default time_limit
-        temp_env = jumanji.make(env_name, **env_kwargs)
-        default_time_limit = getattr(temp_env, "time_limit", None)
-
-        # Now create env with time_limit=_MAX_INT (if env supports it)
-        if default_time_limit is not None:
-            env_kwargs["time_limit"] = _MAX_INT
         env = jumanji.make(env_name, **env_kwargs)
+        default_time_limit = getattr(env, "time_limit", None)
+        if default_time_limit is not None:
+            env.time_limit = _MAX_INT
+
         return cls(jumanji_env=env, _default_time_limit=default_time_limit)
 
     @property

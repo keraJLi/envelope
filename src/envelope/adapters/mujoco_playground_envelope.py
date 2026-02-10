@@ -3,7 +3,7 @@ from functools import cached_property
 from typing import Any, override
 
 from jax import numpy as jnp
-from mujoco_playground import registry
+from mujoco_playground import MjxEnv, registry
 
 from envelope import spaces as envelope_spaces
 from envelope.environment import Environment, Info, InfoContainer, State
@@ -13,23 +13,34 @@ from envelope.typing import Key, PyTree
 _MAX_INT = int(jnp.iinfo(jnp.int32).max)
 
 
-_MUJOCO_PLAYGROUND_DEFAULT_EPISODE_LENGTH = 1000
-
-
 class MujocoPlaygroundEnvelope(Environment):
-    """Wrapper to convert a mujoco_playground environment to a envelope environment."""
+    """
+    Wrapper to convert a mujoco_playground environment to a envelope environment.
 
-    mujoco_playground_env: Any = static_field()
-    _default_max_steps: int = static_field(
-        default=_MUJOCO_PLAYGROUND_DEFAULT_EPISODE_LENGTH
-    )
+    Mujoco Playground uses a dataclass as the environment state, which we return in full
+    as fields of the `Info` object.
+
+    All Mujoco Playground environments have continuous actions and observations, which
+    range between `(-1, 1)` and `(-inf, inf)` respectively.
+
+    Args:
+        mujoco_playground_env (MjxEnv): the Mujoco Playground environment.
+    """
+
+    mujoco_playground_env: MjxEnv = static_field()
+    _default_max_steps: int | None = static_field(default=None)
 
     @classmethod
     def from_name(
-        cls, env_name: str, env_kwargs: dict[str, Any] | None = None
+        cls,
+        env_name: str,
+        env_kwargs: dict[str, Any] | None = None,
     ) -> "MujocoPlaygroundEnvelope":
-        """Creates a MujocoPlaygroundEnvelope from a name and keyword arguments.
-        env_kwargs are passed to config_overrides of mujoco_playground.registry.load."""
+        """
+        Create a `MujocoPlaygroundEnvelope` from a name and keyword arguments.
+        `env_kwargs` are passed to `config_overrides` of
+        `mujoco_playground.registry.load`.
+        """
         env_kwargs = env_kwargs or {}
         if "episode_length" in env_kwargs:
             raise ValueError(
@@ -46,9 +57,8 @@ class MujocoPlaygroundEnvelope(Environment):
         env_kwargs["episode_length"] = _MAX_INT
 
         # Pass all env_kwargs as config_overrides
-        env = registry.load(
-            env_name, config_overrides=env_kwargs if env_kwargs else None
-        )
+        config_overrides = env_kwargs if env_kwargs else None
+        env = registry.load(env_name, config_overrides=config_overrides)
         return cls(mujoco_playground_env=env, _default_max_steps=default_max_steps)
 
     @property
@@ -57,10 +67,10 @@ class MujocoPlaygroundEnvelope(Environment):
 
     @override
     def init(self, key: Key) -> tuple[State, Info]:
-        env_state = self.mujoco_playground_env.reset(key)
-        info = InfoContainer(obs=env_state.obs, reward=0.0, terminated=False)
-        info = info.update(**dataclasses.asdict(env_state))
-        return env_state, info
+        state = self.mujoco_playground_env.reset(key)
+        info = InfoContainer(obs=state.obs, reward=0.0, terminated=False)
+        info = info.update(**dataclasses.asdict(state))
+        return state, info
 
     @override
     def step(self, state: State, action: PyTree) -> tuple[State, Info]:

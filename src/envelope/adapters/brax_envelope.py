@@ -19,7 +19,18 @@ _BRAX_DEFAULT_EPISODE_LENGTH = 1000
 
 
 class BraxEnvelope(Environment):
-    """Wrapper to convert a Brax environment to a envelope environment."""
+    """
+    Wrapper to convert a Brax environment to a envelope environment.
+
+    Note that Brax' `create` function has a default value of `1000` for the episode
+    length. Thus, the `default_max_steps` property is set to `1000` for all Brax envs.
+
+    Brax uses a dataclass as the environment state, which we return in full as fields of
+    the `Info` object.
+
+    Args:
+        brax_env (BraxEnv): the Brax environment.
+    """
 
     brax_env: BraxEnv = static_field()
 
@@ -27,6 +38,10 @@ class BraxEnvelope(Environment):
     def from_name(
         cls, env_name: str, env_kwargs: dict[str, Any] | None = None
     ) -> "BraxEnvelope":
+        """
+        Create a `BraxEnvelope` from a name and keyword arguments.
+        `env_kwargs` arepassed to `brax.envs.create`.
+        """
         env_kwargs = env_kwargs or {}
         if "episode_length" in env_kwargs:
             raise ValueError(

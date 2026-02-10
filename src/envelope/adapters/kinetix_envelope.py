@@ -18,13 +18,10 @@ from typing import Any, Callable, Literal, override
 
 import jax
 import jax.numpy as jnp
-from kinetix.environment import (
-    ActionType,
-    EnvParams,
-    ObservationType,
-    StaticEnvParams,
-    make_kinetix_env,
-)
+from kinetix.environment import ActionType, ObservationType, make_kinetix_env
+from kinetix.environment.env import EnvParams as KinetixEnvEnvParams
+from kinetix.environment.env import KinetixEnv
+from kinetix.environment.env import StaticEnvParams as KinetixStaticEnvParams
 from kinetix.environment.ued.ued import make_reset_fn_sample_kinetix_level
 from kinetix.util.saving import load_from_json_file
 
@@ -42,8 +39,8 @@ def _normalize_level_id(level_id: str) -> str:
     """Normalize a path-like level id.
 
     Examples:
-        - ``"s/h4_thrust_aim"`` -> ``"s/h4_thrust_aim.json"``
-        - ``"/s/h4_thrust_aim.json"`` -> ``"s/h4_thrust_aim.json"``
+        - `"s/h4_thrust_aim"` -> `"s/h4_thrust_aim.json"`
+        - `"/s/h4_thrust_aim.json"` -> `"s/h4_thrust_aim.json"`
     """
     level_id = level_id.strip().lstrip("/")
     if not level_id:
@@ -67,42 +64,43 @@ def _warn_auto_reset(auto_reset: bool) -> None:
 class KinetixEnvelope(Environment):
     """Wrapper to convert a Kinetix environment to an envelope environment.
 
-    Kinetix environments are constructed via a ``reset_fn`` that produces a level
-    on each reset, rather than a simple environment name. Two creation modes are
-    provided:
+    Kinetix environments are constructed via a `reset_fn` that produces a level on each
+    reset, rather than a simple environment name. Two creation modes are provided:
+    `create_random` and `create_premade`.
 
-    - ``create_premade(env_name)``: loads a specific level from a packaged JSON
-      file. The level id has the form ``"{size}/{name}"`` (e.g.
-      ``"s/h4_thrust_aim"``); the ``.json`` suffix is added automatically.
-    - ``create_random()``: samples random levels on each reset using Kinetix's
-      ``make_reset_fn_sample_kinetix_level``.
+    Kinetix only produces the `env_info` dict on the first `step`, not on `reset`. To
+    keep structural equivalence between the `init` and `step` infos (required for
+    `jax.lax.scan`, `jax.vmap`, etc.), a NaN-filled placeholder with the same pytree
+    structure is returned on `init`.
 
-    ``from_name`` dispatches between the two: pass ``"random"`` to get random
-    level sampling, or any valid level id to load a premade level.
-
-    Kinetix only produces the ``env_info`` dict on the first ``step``, not on
-    ``reset``. To keep structural equivalence between the ``init`` and ``step``
-    infos (required for ``jax.lax.scan``, ``jax.vmap``, etc.), a NaN-filled
-    placeholder with the same pytree structure is returned on ``init``.
-
-    ``auto_reset`` and ``max_timesteps`` are disabled in favour of envelope's
-    ``AutoResetWrapper`` and ``TruncationWrapper`` respectively.
+    Args:
+        kinetix_env (KinetixEnv): the Kinetix environment, with baked-in
+            `static_env_params`.
+        env_params (KinetixEnvEnvParams): the environment parameters, which are passed
+            to the Kinetix environment's `reset` and `step` methods.
     """
 
-    kinetix_env: Any = static_field()
-    env_params: Any = field()
+    kinetix_env: KinetixEnv = static_field()
+    env_params: KinetixEnvEnvParams = field()
 
     @property
     def default_max_steps(self) -> int:
-        return int(EnvParams().max_timesteps)
+        return int(KinetixEnvEnvParams().max_timesteps)
 
     @classmethod
     def from_name(
         cls,
         env_name: str | Literal["random"],
-        env_params: EnvParams | None = None,
+        env_params: KinetixEnvEnvParams | None = None,
         env_kwargs: dict[str, Any] | None = None,
     ) -> "KinetixEnvelope":
+        """
+        The `from_name` method dispatches between the two creation modes:
+        - `"random"`: create a random levels on each reset using Kinetix's
+          `make_reset_fn_sample_kinetix_level` using `self.create_random`.
+        - Any other level id: load a specific level from a packaged JSON file using
+          `self.create_premade`.
+        """
         env_kwargs = env_kwargs or {}
         if "max_timesteps" in env_kwargs:
             raise ValueError(
@@ -138,6 +136,11 @@ class KinetixEnvelope(Environment):
         observation_type: ObservationType = ObservationType.SYMBOLIC_FLAT,
         auto_reset: bool = False,
     ) -> "KinetixEnvelope":
+        """
+        Load a specific level from a packaged JSON file. The level id has the form
+        `"{size}/{name}"` (e.g. `"s/h4_thrust_aim"`); the `.json` suffix is added
+        automatically.
+        """
         _warn_auto_reset(auto_reset)
 
         # Load level.
@@ -164,13 +167,17 @@ class KinetixEnvelope(Environment):
         cls,
         action_type: ActionType = ActionType.CONTINUOUS,
         observation_type: ObservationType = ObservationType.SYMBOLIC_FLAT,
-        env_params: EnvParams | None = None,
-        static_env_params: StaticEnvParams = StaticEnvParams(),
+        env_params: KinetixEnvEnvParams | None = None,
+        static_env_params: KinetixStaticEnvParams = KinetixStaticEnvParams(),
         auto_reset: bool = False,
     ) -> "KinetixEnvelope":
+        """
+        Create a random level on each reset using Kinetix's
+        `kinetix.environment.ued.ued.make_reset_fn_sample_kinetix_level`.
+        """
         _warn_auto_reset(auto_reset)
         if env_params is None:
-            env_params = EnvParams()
+            env_params = KinetixEnvEnvParams()
         env_params = env_params.replace(max_timesteps=jnp.inf)
 
         reset_fn = make_reset_fn_sample_kinetix_level(env_params, static_env_params)

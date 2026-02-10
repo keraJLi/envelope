@@ -4,8 +4,24 @@ from typing import Any, override
 import jax
 import jax.numpy as jnp
 from craftax.craftax.craftax_state import EnvParams as CraftaxEnvParams
+from craftax.craftax.envs.craftax_pixels_env import (
+    CraftaxPixelsEnv,
+    CraftaxPixelsEnvNoAutoReset,
+)
+from craftax.craftax.envs.craftax_symbolic_env import (
+    CraftaxSymbolicEnv,
+    CraftaxSymbolicEnvNoAutoReset,
+)
+from craftax.craftax_classic.envs.craftax_pixels_env import (
+    CraftaxClassicPixelsEnv,
+    CraftaxClassicPixelsEnvNoAutoReset,
+)
 from craftax.craftax_classic.envs.craftax_state import (
     EnvParams as CraftaxClassicEnvParams,
+)
+from craftax.craftax_classic.envs.craftax_symbolic_env import (
+    CraftaxClassicSymbolicEnv,
+    CraftaxClassicSymbolicEnvNoAutoReset,
 )
 from craftax.craftax_env import make_craftax_env_from_name
 
@@ -15,22 +31,48 @@ from envelope.environment import Environment, Info, InfoContainer, State
 from envelope.struct import Container, static_field
 from envelope.typing import Key, PyTree, TypeAlias
 
-EnvParams: TypeAlias = CraftaxEnvParams | CraftaxClassicEnvParams
+CraftaxEnvParams: TypeAlias = CraftaxEnvParams | CraftaxClassicEnvParams
+CraftaxEnv: TypeAlias = (
+    CraftaxPixelsEnv
+    | CraftaxSymbolicEnv
+    | CraftaxClassicPixelsEnv
+    | CraftaxClassicSymbolicEnv
+    | CraftaxPixelsEnvNoAutoReset
+    | CraftaxSymbolicEnvNoAutoReset
+    | CraftaxClassicPixelsEnvNoAutoReset
+    | CraftaxClassicSymbolicEnvNoAutoReset
+)
 
 
 class CraftaxEnvelope(Environment):
-    """Wrapper to convert a Craftax environment to a envelope environment."""
+    """
+    Wrapper to convert a Craftax environment to a envelope environment.
 
-    craftax_env: Any = static_field()
+    Craftax (mostly) uses the Gymnax interface, so the info object is only created on
+    the first `step`. To keep structural equivalence between the `init` and `step`
+    infos, we create a placeholder filled with `jnp.nan` that is returned on `init`.
+
+    Args:
+        craftax_env (CraftaxEnv): the Craftax environment, with baked-in
+            `static_env_params`.
+        env_params (CraftaxEnvParams): the environment parameters, which are passed to
+            the Craftax environment's `reset` and `step` methods.
+    """
+
+    craftax_env: CraftaxEnv = static_field()
     env_params: PyTree = static_field()  # TODO: remove static marker as soon as craftax merges https://github.com/MichaelTMatthews/Craftax/pull/48
 
     @classmethod
     def from_name(
         cls,
         env_name: str,
-        env_params: EnvParams | None = None,
+        env_params: CraftaxEnvParams | None = None,
         env_kwargs: dict[str, Any] | None = None,
     ) -> "CraftaxEnvelope":
+        """
+        Create a `CraftaxEnvelope` from a name and keyword arguments.
+        `env_kwargs` are passed to `craftax.craftax_env.make_craftax_env_from_name`.
+        """
         env_kwargs = env_kwargs or {}
         if "max_timesteps" in env_kwargs:
             raise ValueError(
@@ -68,8 +110,6 @@ class CraftaxEnvelope(Environment):
 
     @override
     def init(self, key: Key) -> tuple[State, Info]:
-        # TODO: this function does not add env_info (or comparable) to the info
-        # container. We should add tests for this (and all other envelopes) and fix it.
         key, subkey = jax.random.split(key)
         obs, env_state = self.craftax_env.reset(subkey, self.env_params)
         state = Container().update(key=key, env_state=env_state)
