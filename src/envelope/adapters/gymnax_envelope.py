@@ -24,7 +24,23 @@ _GymnaxStep = Callable[
 
 
 class GymnaxEnvelope(Environment):
-    """Wrapper to convert a Gymnax environment to a envelope environment."""
+    """
+    Wrapper to convert a Gymnax environment to a envelope environment.
+
+    Gymnax interface only creates the info object on the first `step`. To keep
+    structural equivalence between the `init` and `step` infos, we create a placeholder
+    filled with `jnp.nan` that is returned on `init`.
+
+    Gymnax implements `Tuple` and `Dict` spaces, which are converted to `PyTreeSpace`
+    of a `tuple` and `dict` PyTree respectively.
+
+    Args:
+        gymnax_env (GymnaxEnv): the Gymnax
+            environment.
+        env_params (GymnaxEnvParams): the environment
+            parameters, which are passed to the Gymnax environment's `reset` and `step`
+            methods.
+    """
 
     gymnax_env: GymnaxEnv = static_field()
     env_params: PyTree = field()
@@ -36,6 +52,9 @@ class GymnaxEnvelope(Environment):
         env_params: GymnaxEnvParams | None = None,
         env_kwargs: dict[str, Any] | None = None,
     ) -> "GymnaxEnvelope":
+        """Create a `GymnaxEnvelope` from a name and keyword arguments.
+        `env_kwargs` are passed to `gymnax.make`.
+        """
         env_kwargs = env_kwargs or {}
         if "max_steps_in_episode" in env_kwargs:
             raise ValueError(

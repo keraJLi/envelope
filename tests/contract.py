@@ -72,6 +72,34 @@ def assert_reset_step_contract(
     assert jnp.isfinite(jnp.asarray(next_info.reward))
     obs_check(next_info.obs, env.observation_space)
 
+    # Pytree structure and leaf shapes must match so that jax.lax.scan / jax.vmap
+    # work across init and step outputs without treedef or shape mismatches.
+    assert jax.tree.structure(info) == jax.tree.structure(next_info), (
+        f"Info pytree structure mismatch between init() and step():\n"
+        f"  init: {jax.tree.structure(info)}\n"
+        f"  step: {jax.tree.structure(next_info)}"
+    )
+    init_info_shapes = [jnp.asarray(x).shape for x in jax.tree.leaves(info)]
+    step_info_shapes = [jnp.asarray(x).shape for x in jax.tree.leaves(next_info)]
+    assert init_info_shapes == step_info_shapes, (
+        f"Info leaf shapes mismatch between init() and step():\n"
+        f"  init: {init_info_shapes}\n"
+        f"  step: {step_info_shapes}"
+    )
+
+    assert jax.tree.structure(state) == jax.tree.structure(next_state), (
+        f"State pytree structure mismatch between init() and step():\n"
+        f"  init: {jax.tree.structure(state)}\n"
+        f"  step: {jax.tree.structure(next_state)}"
+    )
+    init_state_shapes = [jnp.asarray(x).shape for x in jax.tree.leaves(state)]
+    step_state_shapes = [jnp.asarray(x).shape for x in jax.tree.leaves(next_state)]
+    assert init_state_shapes == step_state_shapes, (
+        f"State leaf shapes mismatch between init() and step():\n"
+        f"  init: {init_state_shapes}\n"
+        f"  step: {step_state_shapes}"
+    )
+
 
 def assert_jitted_rollout_contract(
     env,

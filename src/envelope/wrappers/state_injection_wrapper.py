@@ -13,6 +13,7 @@ class StateInjectionWrapper(Wrapper):
     (including auto-reset) return to that state until it's changed again.
 
     Usage:
+        ```python
         env = AutoResetWrapper(StateInjectionWrapper(env=base_env))
         state, info = env.init(key)
 
@@ -24,6 +25,7 @@ class StateInjectionWrapper(Wrapper):
             # Run episode - auto-resets return to task_state
             for inner_step in range(num_inner_steps):
                 state, info = env.step(state, policy(info.obs))
+        ```
     """
 
     class InjectedState(WrappedState):
