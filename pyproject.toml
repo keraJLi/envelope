@@ -67,6 +67,16 @@ dev = [
     "pytest-cov>=7.0.0",
     "ruff>=0.14.2",
 ]
+ppo = [
+    "distrax",
+    "flax",
+    "h5py>=3.15.1",
+    "numpy",
+    "optax",
+    "orbax-checkpoint",
+    "tyro",
+    "wandb",
+]
 
 [tool.uv]
 override-dependencies = [
