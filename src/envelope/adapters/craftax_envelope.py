@@ -103,6 +103,8 @@ class CraftaxEnvelope(Environment):
 
     @cached_property
     def _craftax_info_placeholder(self) -> PyTree:
+        # Note that the placeholder that is returned only has nan values where it's
+        # dtype is a subdtype of float. TODO: Should we use empty_like?
         key = jax.random.key(0)
         _, state = self.craftax_env.reset(key, self.env_params)
         _, _, _, _, info = self.craftax_env.step(
