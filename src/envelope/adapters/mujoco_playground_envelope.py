@@ -69,14 +69,15 @@ class MujocoPlaygroundEnvelope(Environment):
     def init(self, key: Key) -> tuple[State, Info]:
         state = self.mujoco_playground_env.reset(key)
         info = InfoContainer(obs=state.obs, reward=0.0, terminated=False)
-        info = info.update(**dataclasses.asdict(state))
+        info = info.update(metrics=state.metrics, info=state.info)
         return state, info
 
     @override
     def step(self, state: State, action: PyTree) -> tuple[State, Info]:
         state = self.mujoco_playground_env.step(state, action)
-        info = InfoContainer(obs=state.obs, reward=state.reward, terminated=state.done)
-        info = info.update(**dataclasses.asdict(state))
+        term = jnp.asarray(state.done, dtype=bool)
+        info = InfoContainer(obs=state.obs, reward=state.reward, terminated=term)
+        info = info.update(metrics=state.metrics, info=state.info)
         return state, info
 
     @override
