@@ -47,6 +47,8 @@ class AutoResetWrapper(Wrapper):
         key, subkey = jax.random.split(key)
         inner_state, info = self.env.init(key)
         # Initialize last_final with the reset info (no previous episode yet)
+        # Note that the placeholder that is returned only has nan values where it's
+        # dtype is a subdtype of float. TODO: Should we use empty_like?
         last_final = jax.tree.map(lambda x: jnp.full_like(x, jnp.nan), info)
         state = self.AutoResetState(
             inner_state=inner_state, reset_key=subkey, last_final=last_final

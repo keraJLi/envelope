@@ -25,9 +25,10 @@ class PooledInitVmapWrapper(Wrapper):
         keys = _split_or_keep_key(key, self.batch_size + 1)
         key_next, keys_pool = keys[0], keys[1:]
         inner_state, info = jax.vmap(self.env.init)(keys_pool)
-        pholder_info = jax.tree.map(
-            lambda x: jnp.full_like(x, jnp.nan, dtype=jnp.float32), info
-        )
+
+        # Note that the placeholder that is returned only has nan values where it's
+        # dtype is a subdtype of float. TODO: Should we use empty_like?
+        pholder_info = jax.tree.map(lambda x: jnp.full_like(x, jnp.nan), info)
         state = self.PooledInitVmapState(
             inner_state=inner_state,
             init_key=key_next,

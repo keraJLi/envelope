@@ -193,7 +193,8 @@ class KinetixEnvelope(Environment):
 
     @cached_property
     def _kinetix_info_placeholder(self) -> PyTree:
-        """NaN-filled placeholder matching the pytree structure of step's env_info."""
+        # Note that the placeholder that is returned only has nan values where it's
+        # dtype is a subdtype of float. TODO: Should we use empty_like?
         key = jax.random.key(0)
         obs, env_state = self.kinetix_env.reset(key, self.env_params)
         action = self.action_space.sample(key)

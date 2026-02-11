@@ -73,6 +73,8 @@ class GymnaxEnvelope(Environment):
 
     @cached_property
     def _gymnax_info_placeholder(self) -> PyTree:
+        # Note that the placeholder that is returned only has nan values where it's
+        # dtype is a subdtype of float. TODO: Should we use empty_like?
         reset_fn = cast(_GymnaxReset, self.gymnax_env.reset)
         step_fn = cast(_GymnaxStep, self.gymnax_env.step)
 
@@ -84,7 +86,7 @@ class GymnaxEnvelope(Environment):
             self.gymnax_env.action_space(self.env_params).sample(key),
             self.env_params,
         )
-        return jax.tree.map(lambda x: jnp.full_like(x, jnp.nan, dtype=float), info)
+        return jax.tree.map(lambda x: jnp.full_like(x, jnp.nan), info)
 
     @override
     def init(self, key: Key) -> tuple[State, Info]:
