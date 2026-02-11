@@ -18,6 +18,11 @@ class Identity(nnx.Module):
         return x
 
 
+def mish(x):
+    # Mish activation: x * tanh(softplus(x))
+    return x * nnx.tanh(nnx.softplus(x))
+
+
 def get_activation(name: str):
     name = name.lower()
     if name == "relu":
@@ -27,7 +32,7 @@ def get_activation(name: str):
     if name == "swish":
         return nnx.swish
     if name == "mish":
-        return nnx.mish
+        return mish
     raise ValueError(f"Unknown activation: {name}")
 
 

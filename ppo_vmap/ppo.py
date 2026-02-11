@@ -9,6 +9,7 @@ from flax import nnx
 
 import envelope
 from envelope.typing import PyTree
+from ppo_vmap.discretize_action_wrapper import DiscretizeActionWrapper
 from ppo_vmap.logger import Logger
 from ppo_vmap.networks import DiscretePolicy, GaussianPolicy, ValueFunction
 
@@ -20,7 +21,7 @@ class Args:
     policy_lr: float = 0.0003
     value_fn_lr: float = 0.0001
     epsilon: float = 0.2
-    entropy_coef: float = 0.005
+    entropy_coef: float = 0.01
     num_envs: int = 1000
     pool_size: int = 10
     num_minibatches: int = 5
@@ -28,9 +29,9 @@ class Args:
     num_steps: int = 100
     gamma: float = 0.995
     gae_lambda: float = 0.95
-    normalize_observations: bool = False
+    normalize_observations: bool = True
+    discretize_actions: bool = False
     activation: str = "swish"
-    layer_norm: bool = False
     seed: int = 0
 
     # logging
@@ -48,16 +49,21 @@ class Args:
 
 def make_env(args: Args):
     env = envelope.create(args.env_name)
-    env = envelope.ContinuousObservationWrapper(env=env)
-    env = envelope.FlattenObservationWrapper(env=env)
-    env = envelope.FlattenActionWrapper(env=env)
-    env = envelope.ClipActionWrapper(env=env)
-    env = envelope.EpisodeStatisticsWrapper(env=env)
+    env = envelope.ContinuousObservationWrapper(env)
+    env = envelope.FlattenObservationWrapper(env)
+    env = envelope.FlattenActionWrapper(env)
+    env = envelope.ClipActionWrapper(env)
+    env = envelope.EpisodeStatisticsWrapper(env)
+    if args.discretize_actions:
+        env = DiscretizeActionWrapper(env)
+
     vecenv = envelope.PooledInitVmapWrapper(
-        env=env, batch_size=args.num_envs, pool_size=args.pool_size
+        env,
+        batch_size=args.num_envs,
+        pool_size=args.pool_size,
     )
     if args.normalize_observations:
-        vecenv = envelope.ObservationNormalizationWrapper(env=vecenv)
+        vecenv = envelope.ObservationNormalizationWrapper(vecenv)
     return env, vecenv
 
 
