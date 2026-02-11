@@ -16,19 +16,21 @@ from ppo_vmap.networks import DiscretePolicy, GaussianPolicy, ValueFunction
 @dataclasses.dataclass(frozen=True)
 class Args:
     env_name: str = "gymnax::CartPole-v1"
-    total_timesteps: int = 1000000
-    policy_lr: float = 0.001
-    value_fn_lr: float = 0.001
+    total_timesteps: int = 100_000_000
+    policy_lr: float = 0.0003
+    value_fn_lr: float = 0.0001
     epsilon: float = 0.2
-    entropy_coef: float = 0.01
-    num_envs: int = 10
+    entropy_coef: float = 0.005
+    num_envs: int = 1000
     pool_size: int = 10
     num_minibatches: int = 5
-    num_epochs: int = 4
+    num_epochs: int = 5
     num_steps: int = 100
-    gamma: float = 0.99
+    gamma: float = 0.995
     gae_lambda: float = 0.95
     normalize_observations: bool = False
+    activation: str = "swish"
+    layer_norm: bool = False
     seed: int = 0
 
     # logging
@@ -80,8 +82,19 @@ class TrainState(nnx.Pytree):
         # Initialize policy and value function
         discrete = isinstance(env.action_space, envelope.Discrete)
         policy_cls = DiscretePolicy if discrete else GaussianPolicy
-        self.policy = policy_cls(env.observation_space, env.action_space, self.rngs)
-        self.value_fn = ValueFunction(env.observation_space, self.rngs)
+        self.policy = policy_cls(
+            env.observation_space,
+            env.action_space,
+            self.rngs,
+            activation=args.activation,
+            layer_norm=args.layer_norm,
+        )
+        self.value_fn = ValueFunction(
+            env.observation_space,
+            self.rngs,
+            activation=args.activation,
+            layer_norm=args.layer_norm,
+        )
 
         # Initialize optimizers
         self.policy_optimizer = nnx.Optimizer(
@@ -310,7 +323,7 @@ def make_pmap_vmap_step(graphdef, train_block, batched_state):
 
 
 if __name__ == "__main__":
-    args = tyro.cli(Args)
+    args = tyro.cli(Args, config=(tyro.conf.FlagConversionOff,))
     logger = Logger(args)
 
     # Compute block structure

@@ -13,18 +13,45 @@ def ortho_linear(in_dim, out_dim, rngs, scale=jnp.sqrt(2)):
     )
 
 
+class Identity(nnx.Module):
+    def __call__(self, x):
+        return x
+
+
+def get_activation(name: str):
+    name = name.lower()
+    if name == "relu":
+        return nnx.relu
+    if name == "tanh":
+        return nnx.tanh
+    if name == "swish":
+        return nnx.swish
+    if name == "mish":
+        return nnx.mish
+    raise ValueError(f"Unknown activation: {name}")
+
+
 class ValueFunction(nnx.Module):
     def __init__(
-        self, obs_space: envelope.Space, rngs: nnx.Rngs, layer_size: int = 256
+        self,
+        obs_space: envelope.Space,
+        rngs: nnx.Rngs,
+        layer_size: int = 256,
+        activation: str = "swish",
+        layer_norm: bool = False,
     ):
         in_dim = np.prod(obs_space.shape)
+        act = get_activation(activation)
         self.layers = nnx.Sequential(
             ortho_linear(in_dim, layer_size, rngs),
-            nnx.swish,
+            nnx.LayerNorm(layer_size, rngs=rngs) if layer_norm else Identity(),
+            act,
             ortho_linear(layer_size, layer_size, rngs),
-            nnx.swish,
+            nnx.LayerNorm(layer_size, rngs=rngs) if layer_norm else Identity(),
+            act,
             ortho_linear(layer_size, layer_size, rngs),
-            nnx.swish,
+            nnx.LayerNorm(layer_size, rngs=rngs) if layer_norm else Identity(),
+            act,
             ortho_linear(layer_size, 1, rngs, scale=1.0),
         )
 
@@ -39,17 +66,25 @@ class GaussianPolicy(nnx.Module):
         action_space: envelope.Space,
         rngs: nnx.Rngs,
         layer_size: int = 256,
+        activation: str = "swish",
+        layer_norm: bool = False,
     ):
         in_dim = np.prod(obs_space.shape)
         out_dim = np.prod(action_space.shape)
         self.action_low, self.action_high = action_space.low, action_space.high
+        self.std_min, self.std_max = -5, 2
+
+        act = get_activation(activation)
         self.layers = nnx.Sequential(
             ortho_linear(in_dim, layer_size, rngs),
-            nnx.swish,
+            nnx.LayerNorm(layer_size, rngs=rngs) if layer_norm else Identity(),
+            act,
             ortho_linear(layer_size, layer_size, rngs),
-            nnx.swish,
+            nnx.LayerNorm(layer_size, rngs=rngs) if layer_norm else Identity(),
+            act,
             ortho_linear(layer_size, layer_size, rngs),
-            nnx.swish,
+            nnx.LayerNorm(layer_size, rngs=rngs) if layer_norm else Identity(),
+            act,
         )
         self.action_mean = ortho_linear(layer_size, out_dim, rngs, scale=0.01)
         self.action_log_std = ortho_linear(layer_size, out_dim, rngs, scale=0.01)
@@ -58,6 +93,7 @@ class GaussianPolicy(nnx.Module):
         features = self.layers(obs)
         action_mean = self.action_mean(features)
         action_log_std = self.action_log_std(features)
+        action_log_std = jnp.clip(action_log_std, self.std_min, self.std_max)
         dist = distrax.Independent(
             distrax.Clipped(
                 distrax.Normal(loc=action_mean, scale=jnp.exp(action_log_std)),
@@ -113,15 +149,20 @@ class DiscretePolicy(nnx.Module):
         action_space: envelope.Space,
         rngs: nnx.Rngs,
         layer_size: int = 256,
+        activation: str = "swish",
+        layer_norm: bool = False,
     ):
         in_dim = jnp.prod(jnp.array(obs_space.shape))
         out_dim = jnp.prod(jnp.asarray(action_space.n))
         self.n = nnx.static(jnp.asarray(action_space.n).tolist())
+        act = get_activation(activation)
         self.layers = nnx.Sequential(
             ortho_linear(in_dim, layer_size, rngs),
-            nnx.swish,
+            nnx.LayerNorm(layer_size, rngs=rngs) if layer_norm else Identity(),
+            act,
             ortho_linear(layer_size, layer_size, rngs),
-            nnx.swish,
+            nnx.LayerNorm(layer_size, rngs=rngs) if layer_norm else Identity(),
+            act,
             ortho_linear(layer_size, out_dim, rngs, scale=0.01),
         )
 
