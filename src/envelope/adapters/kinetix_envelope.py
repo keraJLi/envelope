@@ -5,16 +5,16 @@ API. It mirrors envelope's adapters philosophy:
 - prefer *no* environment-side auto-reset (use `AutoResetWrapper` in envelope)
 - prefer *no* fixed episode time-limits (use `TruncationWrapper` in envelope)
 
-`from_name` supports premade level ids like `s/h4_thrust_aim` (optionally with
-`.json`). For maximum flexibility, users can bypass level handling entirely by
-passing a custom `reset_fn`.
+`from_name` supports size categories (`"s"`, `"m"`, `"l"`) that reset to a random
+level from that size on each reset, or `"random"` for fully procedural UED levels.
 """
 
 from __future__ import annotations
 
 import warnings
 from functools import cached_property
-from typing import Any, Callable, Literal, override
+from pathlib import Path
+from typing import Any, Literal, override
 
 import jax
 import jax.numpy as jnp
@@ -22,8 +22,11 @@ from kinetix.environment import ActionType, ObservationType, make_kinetix_env
 from kinetix.environment.env import EnvParams as KinetixEnvEnvParams
 from kinetix.environment.env import KinetixEnv
 from kinetix.environment.env import StaticEnvParams as KinetixStaticEnvParams
-from kinetix.environment.ued.ued import make_reset_fn_sample_kinetix_level
-from kinetix.util.saving import load_from_json_file
+from kinetix.environment.ued.ued import (
+    make_reset_fn_list_of_levels,
+    make_reset_fn_sample_kinetix_level,
+)
+from kinetix.util.saving import BASE_DIR, load_from_json_file
 
 from envelope import field
 from envelope import spaces as envelope_spaces
@@ -31,25 +34,6 @@ from envelope.adapters.gymnax_envelope import _convert_space as _convert_gymnax_
 from envelope.environment import Environment, Info, InfoContainer, State
 from envelope.struct import Container, static_field
 from envelope.typing import Key, PyTree
-
-LevelResetFn = Callable[[Key], Any]
-
-
-def _normalize_level_id(level_id: str) -> str:
-    """Normalize a path-like level id.
-
-    Examples:
-        - `"s/h4_thrust_aim"` -> `"s/h4_thrust_aim.json"`
-        - `"/s/h4_thrust_aim.json"` -> `"s/h4_thrust_aim.json"`
-    """
-    level_id = level_id.strip().lstrip("/")
-    if not level_id:
-        raise ValueError("level_id must be a non-empty string")
-    if level_id.endswith("/"):
-        raise ValueError("level_id must not end with '/'")
-    if not level_id.endswith(".json"):
-        level_id = f"{level_id}.json"
-    return level_id
 
 
 def _warn_auto_reset(auto_reset: bool) -> None:
@@ -61,12 +45,18 @@ def _warn_auto_reset(auto_reset: bool) -> None:
         )
 
 
+def _list_levels_for_size(size: str) -> list[str]:
+    """Return level path strings (e.g. ``"s/h4_thrust_aim.json"``) for a size category."""
+    path = Path(BASE_DIR) / size
+    return [f"{size}/{file.name}" for file in sorted(path.iterdir())]
+
+
 class KinetixEnvelope(Environment):
     """Wrapper to convert a Kinetix environment to an envelope environment.
 
     Kinetix environments are constructed via a `reset_fn` that produces a level on each
     reset, rather than a simple environment name. Two creation modes are provided:
-    `create_random` and `create_premade`.
+    `create_from_size` and `create_random`.
 
     Kinetix only produces the `env_info` dict on the first `step`, not on `reset`. To
     keep structural equivalence between the `init` and `step` infos (required for
@@ -90,68 +80,46 @@ class KinetixEnvelope(Environment):
     @classmethod
     def from_name(
         cls,
-        env_name: str | Literal["random"],
-        env_params: KinetixEnvEnvParams | None = None,
+        env_name: Literal["s", "m", "l", "random"],
         env_kwargs: dict[str, Any] | None = None,
     ) -> "KinetixEnvelope":
-        """
-        The `from_name` method dispatches between the two creation modes:
-        - `"random"`: create a random levels on each reset using Kinetix's
-          `make_reset_fn_sample_kinetix_level` using `self.create_random`.
-        - Any other level id: load a specific level from a packaged JSON file using
-          `self.create_premade`.
+        """Dispatch to the appropriate creation mode.
+
+        - ``"s"``, ``"m"``, ``"l"``: reset to a random level from that size category
+          via `create_from_size`.
+        - ``"random"``: fully procedural UED levels via `create_random`.
         """
         env_kwargs = env_kwargs or {}
-        if "max_timesteps" in env_kwargs:
-            raise ValueError(
-                "Cannot override 'max_timesteps' directly. "
-                "Use TruncationWrapper for episode length control."
-            )
-        if "auto_reset" in env_kwargs:
-            raise ValueError(
-                "Cannot override 'auto_reset' directly. "
-                "Use AutoResetWrapper for auto-reset behavior."
-            )
-
-        env_kwargs["auto_reset"] = False
+        if env_name in ("s", "m", "l"):
+            return cls.create_from_size(env_name, **env_kwargs)
         if env_name == "random":
-            return cls.create_random(env_params=env_params, **env_kwargs)
-
-        if (
-            env_params is not None
-            or "env_params" in env_kwargs
-            or "static_env_params" in env_kwargs
-        ):
-            raise ValueError(
-                "env_params and static_env_params cannot be passed when creating a "
-                "KinetixEnvelope from a premade level."
-            )
-        return cls.create_premade(env_name, **env_kwargs)
+            return cls.create_random(**env_kwargs)
+        raise ValueError(
+            f"Invalid env_name {env_name!r}. Expected one of 's', 'm', 'l', 'random'."
+        )
 
     @classmethod
-    def create_premade(
+    def create_from_size(
         cls,
-        env_name: str,
+        size: Literal["s", "m", "l"],
         action_type: ActionType = ActionType.CONTINUOUS,
         observation_type: ObservationType = ObservationType.SYMBOLIC_FLAT,
         auto_reset: bool = False,
     ) -> "KinetixEnvelope":
-        """
-        Load a specific level from a packaged JSON file. The level id has the form
-        `"{size}/{name}"` (e.g. `"s/h4_thrust_aim"`); the `.json` suffix is added
-        automatically.
+        """Reset to a random level from a size category on each reset.
+
+        Loads all packaged levels for the given *size* (``"s"``, ``"m"``, ``"l"``)
+        and builds a reset function that uniformly samples one on each call.
         """
         _warn_auto_reset(auto_reset)
 
-        # Load level.
-        level_id_json = _normalize_level_id(env_name)
-        level, static_env_params, env_params = load_from_json_file(level_id_json)
-        env_params = env_params.replace(max_timesteps=jnp.inf) if env_params else None
+        level_paths = _list_levels_for_size(size)
+        # Load one level to obtain static_env_params and env_params.
+        _, static_env_params, env_params = load_from_json_file(level_paths[0])
+        env_params = env_params.replace(max_timesteps=jnp.inf)
 
-        def reset_fn(_: Key) -> Any:
-            return level
+        reset_fn = make_reset_fn_list_of_levels(level_paths, static_env_params)
 
-        # Create environment.
         kinetix_env = make_kinetix_env(
             action_type=action_type,
             observation_type=observation_type,

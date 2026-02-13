@@ -37,11 +37,11 @@ env = envelope.wrappers.ObservationNormalizationWrapper(env)
 | [craftax](https://github.com/MichaelTMatthews/craftax)                    | 🕺      | 4       |
 | [gymnax](https://github.com/RobertTLange/gymnax)                          | 🕺      | 24      |
 | [jumanji](https://github.com/instadeepai/jumanji)                         | 🕺 / 👯 | 25 / 1  |
-| [kinetix](https://github.com/flairox/kinetix)                             | 🕺      | 74      |
+| [kinetix](https://github.com/flairox/kinetix)                             | 🕺      | 4       |
 | [mujoco_playground](https://github.com/google-deepmind/mujoco_playground) | 🕺      | 54      |
 | [navix](https://github.com/instadeepai/navix)                             | 🕺      | 41      |
 |                                                                           |         |         |
-| Total                                                                     | 🕺 / 👯 | 234 / 1 |
+| Total                                                                     | 🕺 / 👯 | 164 / 1 |
 
 
 ```python

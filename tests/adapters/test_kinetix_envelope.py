@@ -4,8 +4,6 @@
 
 from __future__ import annotations
 
-import pathlib
-
 import jax
 import jax.numpy as jnp
 import pytest
@@ -14,10 +12,7 @@ pytestmark = pytest.mark.adapters
 
 pytest.importorskip("kinetix")
 
-import kinetix
-from kinetix.environment import EnvParams, StaticEnvParams
-
-from envelope.adapters.kinetix_envelope import KinetixEnvelope, _normalize_level_id
+from envelope.adapters.kinetix_envelope import KinetixEnvelope
 from envelope.environment import Info
 from envelope.spaces import Continuous
 from tests.contract import (
@@ -53,54 +48,11 @@ def kinetix_random_env_warmup(kinetix_random_env, prng_key):
     jax.lax.scan(step_fn, state, actions)
 
 
-def _create_kinetix_env(level_id: str = "random", **kwargs):
+def _create_kinetix_env(name: str = "random", **kwargs):
     """Helper to create a KinetixEnvelope wrapper."""
-    if level_id == "random":
+    if name == "random":
         return KinetixEnvelope.create_random(**kwargs)
-    return KinetixEnvelope.from_name(level_id, env_kwargs=kwargs)
-
-
-def test_normalize_level_id_appends_json():
-    assert _normalize_level_id("s/h4_thrust_aim") == "s/h4_thrust_aim.json"
-
-
-def test_normalize_level_id_keeps_json():
-    assert _normalize_level_id("s/h4_thrust_aim.json") == "s/h4_thrust_aim.json"
-
-
-def test_normalize_level_id_strips_leading_slash_and_whitespace():
-    assert _normalize_level_id(" /s/h4_thrust_aim  ") == "s/h4_thrust_aim.json"
-
-
-@pytest.mark.parametrize("bad", ["", "   ", "/", "s/"])
-def test_normalize_level_id_rejects_empty_or_trailing_slash(bad: str):
-    with pytest.raises(ValueError):
-        _normalize_level_id(bad)
-
-
-def _first_packaged_level_id(size: str = "s") -> str:
-    """Return a packaged `{size}/{name}` level id, or skip if unavailable."""
-    pkg_dir = pathlib.Path(kinetix.__file__).resolve().parent
-    levels_dir = pkg_dir / "levels" / size
-    if not levels_dir.exists():
-        pytest.skip("kinetix package does not contain levels directory")
-    jsons = sorted(levels_dir.glob("*.json"))
-    if not jsons:
-        pytest.skip("kinetix package has no packaged JSON levels")
-    return f"{size}/{jsons[0].stem}"
-
-
-def _packaged_level_ids(sizes: tuple[str, ...] = ("s", "m", "l")) -> list[str]:
-    """Return all packaged `{size}/{name}` level ids."""
-    pkg_dir = pathlib.Path(kinetix.__file__).resolve().parent
-    out: list[str] = []
-    for size in sizes:
-        levels_dir = pkg_dir / "levels" / size
-        if not levels_dir.exists():
-            continue
-        for p in sorted(levels_dir.glob("*.json")):
-            out.append(f"{size}/{p.stem}")
-    return out
+    return KinetixEnvelope.create_from_size(name, **kwargs)
 
 
 def test_kinetix_contract_smoke(prng_key, kinetix_random_env):
@@ -120,9 +72,9 @@ def test_action_space_is_continuous_by_default(kinetix_random_env):
     assert isinstance(env.action_space, Continuous)
 
 
-def test_from_name_premade_level_smoke(prng_key):
-    level_id = _first_packaged_level_id("s")
-    env = _create_kinetix_env(level_id)
+@pytest.mark.parametrize("size", ["s", "m", "l"])
+def test_create_from_size_smoke(prng_key, size):
+    env = KinetixEnvelope.create_from_size(size)
 
     state, info = env.init(prng_key)
     assert state is not None
@@ -154,66 +106,29 @@ def test_key_splitting(kinetix_random_env, prng_key):
     assert not jnp.array_equal(next_state.key, state.key)
 
 
-def test_random_premade_kinetix_envs(prng_key):
-    """Smoke-test a few packaged `{size}/{name}` levels (skip if none are packaged)."""
-    level_ids = _packaged_level_ids()
-    if not level_ids:
-        pytest.skip("kinetix package has no packaged JSON levels")
+def test_from_size_step_produces_finite_reward(prng_key):
+    """Test that stepping a size-based env produces finite rewards."""
+    env = KinetixEnvelope.create_from_size("s")
+    reset_key, action_key = jax.random.split(prng_key, 2)
 
-    # Keep this deterministic and small (compile/runtime).
-    for level_id in level_ids[:3]:
-        env = _create_kinetix_env(level_id)
-        reset_key, action_key = jax.random.split(prng_key, 2)
+    state, info = env.init(reset_key)
+    assert state is not None
+    assert isinstance(info, Info)
+    assert info.obs.shape == env.observation_space.shape
 
-        state, info = env.init(reset_key)
-        assert state is not None
-        assert isinstance(info, Info)
-        # Skip expensive contains check - shape/dtype check is sufficient
-        assert info.obs.shape == env.observation_space.shape
-
-        action = env.action_space.sample(action_key)
-        next_state, next_info = env.step(state, action)
-        assert next_state is not None
-        assert isinstance(next_info, Info)
-        assert next_info.obs.shape == env.observation_space.shape
-        assert jnp.all(jnp.isfinite(jnp.asarray(next_info.reward)))
+    action = env.action_space.sample(action_key)
+    next_state, next_info = env.step(state, action)
+    assert next_state is not None
+    assert isinstance(next_info, Info)
+    assert next_info.obs.shape == env.observation_space.shape
+    assert jnp.all(jnp.isfinite(jnp.asarray(next_info.reward)))
 
 
 def test_from_name_rejects_unknown_env_kwargs():
     with pytest.raises(TypeError, match="unexpected keyword argument"):
-        KinetixEnvelope.from_name("s/h4_thrust_aim", env_kwargs={"unknown": 1})
+        KinetixEnvelope.from_name("s", env_kwargs={"unknown": 1})
 
 
-def test_from_name_allows_premade_state_none(monkeypatch: pytest.MonkeyPatch):
-    """Current implementation does not guard against missing premade state."""
-    from envelope.adapters import kinetix_envelope
-
-    def mock_load(_level_id: str):
-        return None, StaticEnvParams(), EnvParams()
-
-    monkeypatch.setattr(kinetix_envelope, "load_from_json_file", mock_load)
-    env = KinetixEnvelope.from_name("s/h4_thrust_aim")
-    assert env is not None
-
-
-def test_create_premade_replace_failure_raises(monkeypatch: pytest.MonkeyPatch):
-    """Premade path does not guard against replace() failures."""
-    ep = EnvParams()
-    if not hasattr(ep, "max_timesteps") or not hasattr(ep, "replace"):
-        pytest.skip("Kinetix EnvParams does not expose max_timesteps/.replace")
-
-    def failing_replace(self, **kwargs):
-        raise AttributeError("replace failed")
-
-    monkeypatch.setattr(EnvParams, "replace", failing_replace)
-    monkeypatch.setattr(
-        "envelope.adapters.kinetix_envelope.load_from_json_file",
-        lambda _level_id: (object(), StaticEnvParams(), ep),
-    )
-
-    with pytest.raises(AttributeError, match="replace failed"):
+def test_from_name_rejects_invalid_name():
+    with pytest.raises(ValueError, match="Invalid env_name"):
         KinetixEnvelope.from_name("s/h4_thrust_aim")
-
-
-# NOTE: Level-id normalization tests live in tests/adapters/test_kinetix_level_id.py
-# to keep this module focused on runtime wrapper behavior.
