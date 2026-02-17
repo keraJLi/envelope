@@ -172,20 +172,29 @@ class EnvPoolEnvelope(Environment):
 
     @override
     def init(self, key: Key) -> tuple[EnvPoolState, Info]:
-        # Reset the C++ backend (side effect — not traced by JAX)
-        self.envpool_env.reset()
-        # Receive initial observations via the XLA interface
-        handle, (obs, rew, term, trunc, env_info) = self._xla_recv(self._xla_handle0)
+        # Follow the documented synchronous XLA pattern:
+        #   states = env.reset()           (NumPy, side effect)
+        #   loop with step(handle, action) (XLA, pure)
+        # reset() returns the true initial observations; the base handle0 is
+        # used as the ordering token for the first step() call.
+        obs_np, env_info_np = self.envpool_env.reset()
+        batch = self.envpool_env.config["batch_size"]
+        obs = jnp.asarray(obs_np)
+        rew = jnp.zeros(batch, dtype=jnp.float32)
+        term = jnp.zeros(batch, dtype=jnp.bool_)
+        trunc = jnp.zeros(batch, dtype=jnp.bool_)
+        env_info = jax.tree.map(jnp.asarray, dict(sorted(env_info_np.items())))
         info = InfoContainer(obs=obs, reward=rew, terminated=term, truncated=trunc)
         info = info.update(**env_info)
         # NaN-filled placeholder for last_final (no episode has ended yet)
         last_final = jax.tree.map(lambda x: jnp.full_like(x, jnp.nan), info)
-        state = EnvPoolState(handle=handle, last_final=last_final)
+        state = EnvPoolState(handle=self._xla_handle0, last_final=last_final)
         return state, info.update(final=last_final)
 
     @override
     def step(self, state: EnvPoolState, action: PyTree) -> tuple[EnvPoolState, Info]:
         handle, (obs, rew, term, trunc, env_info) = self._xla_step(state.handle, action)
+        env_info = dict(sorted(env_info.items()))
         info = InfoContainer(obs=obs, reward=rew, terminated=term, truncated=trunc)
         info = info.update(**env_info)
 

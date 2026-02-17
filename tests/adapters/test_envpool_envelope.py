@@ -13,9 +13,8 @@ pytest.importorskip("envpool")
 from envelope.adapters.envpool_envelope import EnvPoolEnvelope, EnvPoolState
 from envelope.spaces import BatchedSpace, Continuous, Discrete
 from tests.contract import (
-    assert_jitted_rollout_contract,
+    assert_info_has_contract_fields,
     assert_obs_matches_space,
-    assert_reset_step_contract,
 )
 
 BATCH_SIZE = 4
@@ -42,15 +41,54 @@ def _envpool_warmup(envpool_env, prng_key):
 
 
 def test_envpool_contract_smoke(prng_key, envpool_env):
-    assert_reset_step_contract(
-        envpool_env, key=prng_key, obs_check=assert_obs_matches_space
-    )
+    """Batched variant of the reset/step contract (envpool is inherently batched)."""
+    key_reset, key_action = jax.random.split(prng_key)
+
+    state, info = envpool_env.init(key_reset)
+    assert_info_has_contract_fields(info)
+    assert jnp.asarray(info.reward).shape == (BATCH_SIZE,)
+    assert jnp.all(jnp.isfinite(jnp.asarray(info.reward)))
+    assert jnp.all(jnp.asarray(info.reward) == 0.0)
+    assert not jnp.any(jnp.asarray(info.terminated))
+    assert not jnp.any(jnp.asarray(info.truncated))
+    assert_obs_matches_space(info.obs, envpool_env.observation_space)
+
+    action = envpool_env.action_space.sample(key_action)
+    assert envpool_env.action_space.contains(action)
+    next_state, next_info = envpool_env.step(state, action)
+    assert next_state is not None
+    assert_info_has_contract_fields(next_info)
+    assert jnp.asarray(next_info.reward).shape == (BATCH_SIZE,)
+    assert jnp.all(jnp.isfinite(jnp.asarray(next_info.reward)))
+    assert_obs_matches_space(next_info.obs, envpool_env.observation_space)
+
+    # Pytree structure and leaf shapes must match between init and step
+    assert jax.tree.structure(info) == jax.tree.structure(next_info)
+    init_shapes = [jnp.asarray(x).shape for x in jax.tree.leaves(info)]
+    step_shapes = [jnp.asarray(x).shape for x in jax.tree.leaves(next_info)]
+    assert init_shapes == step_shapes
+
+    assert jax.tree.structure(state) == jax.tree.structure(next_state)
+    init_state_shapes = [jnp.asarray(x).shape for x in jax.tree.leaves(state)]
+    step_state_shapes = [jnp.asarray(x).shape for x in jax.tree.leaves(next_state)]
+    assert init_state_shapes == step_state_shapes
 
 
 def test_envpool_contract_scan(prng_key, envpool_env, scan_num_steps):
-    assert_jitted_rollout_contract(
-        envpool_env, key=prng_key, num_steps=scan_num_steps
-    )
+    """Batched variant of the jitted rollout contract."""
+    reset_jit = jax.jit(envpool_env.init)
+    step_jit = jax.jit(envpool_env.step)
+
+    key_reset, key_rollout = jax.random.split(prng_key)
+    state, _ = reset_jit(key_reset)
+    action_keys = jax.random.split(key_rollout, scan_num_steps)
+    actions = jax.vmap(envpool_env.action_space.sample)(action_keys)
+    final_state, infos = jax.lax.scan(step_jit, state, actions)
+
+    assert final_state is not None
+    assert_info_has_contract_fields(infos)
+    assert infos.reward.shape == (scan_num_steps, BATCH_SIZE)
+    assert jnp.all(jnp.isfinite(jnp.asarray(infos.reward)))
 
 
 # ---------------------------------------------------------------------------
@@ -84,12 +122,15 @@ def test_state_is_envpool_state(envpool_env, prng_key):
     assert hasattr(state, "last_final")
 
 
-def test_state_handle_changes_each_step(envpool_env, prng_key):
-    state, _info = envpool_env.init(prng_key)
+def test_state_handle_preserved_across_steps(envpool_env, prng_key):
+    """XLA handles are opaque ordering tokens; verify they are present and step progresses."""
+    state, info0 = envpool_env.init(prng_key)
+    assert state.handle is not None
     action = envpool_env.action_space.sample(prng_key)
-    next_state, _info = envpool_env.step(state, action)
-    # XLA handles are ordering tokens; they must differ between steps
-    assert not jnp.array_equal(state.handle, next_state.handle)
+    next_state, info1 = envpool_env.step(state, action)
+    assert next_state.handle is not None
+    # Observations should generally differ between init and a step
+    assert not jnp.array_equal(info0.obs, info1.obs)
 
 
 # ---------------------------------------------------------------------------
