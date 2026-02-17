@@ -60,7 +60,7 @@ adapters = [
     "jumanji>=1.0.1",
     "playground>=0.1.0",
     "gymnax",
-    "kinetix-env",
+    "envpool>=0.8.4",
 ]
 dev = [
     "hypothesis>=6.148.1",
