@@ -183,7 +183,7 @@ class EnvPoolEnvelope(Environment):
         rew = jnp.zeros(batch, dtype=jnp.float32)
         term = jnp.zeros(batch, dtype=jnp.bool_)
         trunc = jnp.zeros(batch, dtype=jnp.bool_)
-        env_info = jax.tree.map(jnp.asarray, dict(sorted(env_info_np.items())))
+        env_info = jax.tree.map(jnp.asarray, env_info_np)
         info = InfoContainer(obs=obs, reward=rew, terminated=term, truncated=trunc)
         info = info.update(**env_info)
         # NaN-filled placeholder for last_final (no episode has ended yet)
@@ -194,7 +194,6 @@ class EnvPoolEnvelope(Environment):
     @override
     def step(self, state: EnvPoolState, action: PyTree) -> tuple[EnvPoolState, Info]:
         handle, (obs, rew, term, trunc, env_info) = self._xla_step(state.handle, action)
-        env_info = dict(sorted(env_info.items()))
         info = InfoContainer(obs=obs, reward=rew, terminated=term, truncated=trunc)
         info = info.update(**env_info)
 
