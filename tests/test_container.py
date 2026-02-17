@@ -136,6 +136,19 @@ def test_container_treedef_and_leaf_order_behavior():
     assert jnp.allclose(rec2.y, c2.y)
 
 
+def test_extras_insertion_order_does_not_affect_treedef():
+    """Extras inserted in different order should produce the same pytree structure."""
+    c1 = SimpleContainer(x=jnp.array(1), y=jnp.array(0)).update(b=jnp.array(2), a=jnp.array(3))
+    c2 = SimpleContainer(x=jnp.array(1), y=jnp.array(0)).update(a=jnp.array(3), b=jnp.array(2))
+
+    children1, treedef1 = jax.tree_util.tree_flatten(c1)
+    children2, treedef2 = jax.tree_util.tree_flatten(c2)
+
+    assert treedef1 == treedef2
+    for l1, l2 in zip(children1, children2):
+        assert jnp.array_equal(l1, l2)
+
+
 # ============================================================================
 # Tests: JAX transformations (vmap, jit, tree.map)
 # ============================================================================
