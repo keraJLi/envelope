@@ -1,4 +1,4 @@
-from typing import override
+from typing_extensions import override
 
 from envelope.environment import Info, InfoContainer
 from envelope.struct import field

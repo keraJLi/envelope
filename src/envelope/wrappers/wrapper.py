@@ -1,6 +1,7 @@
 from dataclasses import KW_ONLY
 from functools import cached_property
-from typing import override
+
+from typing_extensions import override
 
 from envelope import spaces
 from envelope.environment import Environment, Info, State

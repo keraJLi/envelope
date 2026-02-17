@@ -2,12 +2,13 @@ import dataclasses
 import warnings
 from copy import copy
 from functools import cached_property
-from typing import Any, override
+from typing import Any
 
 from brax.envs import Env as BraxEnv
 from brax.envs import Wrapper as BraxWrapper
 from brax.envs import create as brax_create
 from jax import numpy as jnp
+from typing_extensions import override
 
 from envelope import spaces
 from envelope.environment import Environment, Info, InfoContainer, State

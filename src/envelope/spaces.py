@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from functools import cached_property
-from typing import override
 
 import jax
 from jax import numpy as jnp
+from typing_extensions import override
 
 from envelope.struct import FrozenPyTreeNode, static_field
 from envelope.typing import Key, PyTree

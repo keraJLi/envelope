@@ -1,9 +1,10 @@
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, Any
 
 import jax
 import jax.numpy as jnp
 from craftax.craftax_env import make_craftax_env_from_name
+from typing_extensions import override
 
 from envelope import spaces as envelope_spaces
 from envelope.adapters.gymnax_envelope import _convert_space as _convert_gymnax_space

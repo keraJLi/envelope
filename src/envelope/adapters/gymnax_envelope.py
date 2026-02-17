@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import Any, Callable, cast, override
+from typing import Any, Callable, cast
 
 import jax
 import jax.numpy as jnp
@@ -7,6 +7,7 @@ from gymnax import make as gymnax_create
 from gymnax.environments import spaces as gymnax_spaces
 from gymnax.environments.environment import Environment as GymnaxEnv
 from gymnax.environments.environment import EnvParams as GymnaxEnvParams
+from typing_extensions import override
 
 from envelope import spaces as envelope_spaces
 from envelope.environment import Environment, Info, InfoContainer, State

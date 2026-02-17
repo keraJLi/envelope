@@ -1,6 +1,5 @@
-from typing import override
-
 import jax
+from typing_extensions import override
 
 from envelope.environment import Info, State
 from envelope.struct import FrozenPyTreeNode, field

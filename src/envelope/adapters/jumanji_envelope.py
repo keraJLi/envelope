@@ -1,7 +1,7 @@
 import warnings
 from copy import copy
 from functools import cached_property
-from typing import Any, override
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -9,6 +9,7 @@ import jumanji
 from jumanji.env import Environment as JumanjiEnv
 from jumanji.specs import Array, BoundedArray, DiscreteArray, MultiDiscreteArray, Spec
 from jumanji.types import TimeStep as JumanjiTimeStep
+from typing_extensions import override
 
 from envelope import spaces as envelope_spaces
 from envelope.environment import Environment, Info, InfoContainer, State

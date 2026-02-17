@@ -14,7 +14,7 @@ from __future__ import annotations
 import warnings
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Literal, override
+from typing import Any, Literal
 
 import jax
 import jax.numpy as jnp
@@ -27,6 +27,7 @@ from kinetix.environment.ued.ued import (
     make_reset_fn_sample_kinetix_level,
 )
 from kinetix.util.saving import BASE_DIR, load_from_json_file
+from typing_extensions import override
 
 from envelope import field
 from envelope import spaces as envelope_spaces

@@ -1,7 +1,6 @@
-from typing import override
-
 import jax
 import jax.numpy as jnp
+from typing_extensions import override
 
 from envelope.environment import Info
 from envelope.struct import field

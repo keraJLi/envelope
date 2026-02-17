@@ -1,8 +1,8 @@
 from functools import cached_property
-from typing import override
 
 import jax
 import jax.numpy as jnp
+from typing_extensions import override
 
 from envelope import spaces
 from envelope.environment import Environment, Info

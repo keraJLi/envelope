@@ -1,9 +1,9 @@
-import dataclasses
 from functools import cached_property
-from typing import Any, override
+from typing import Any
 
 from jax import numpy as jnp
 from mujoco_playground import MjxEnv, registry
+from typing_extensions import override
 
 from envelope import spaces as envelope_spaces
 from envelope.environment import Environment, Info, InfoContainer, State
