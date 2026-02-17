@@ -6,16 +6,17 @@ from envelope.environment import Environment
 
 # Lazy imports to avoid requiring all dependencies at once
 _env_module_map = {
-    "gymnax": ("envelope.adapters.gymnax_envelope", "GymnaxEnvelope"),
     "brax": ("envelope.adapters.brax_envelope", "BraxEnvelope"),
-    "navix": ("envelope.adapters.navix_envelope", "NavixEnvelope"),
+    "craftax": ("envelope.adapters.craftax_envelope", "CraftaxEnvelope"),
+    "envpool": ("envelope.adapters.envpool_envelope", "EnvPoolEnvelope"),
+    "gymnax": ("envelope.adapters.gymnax_envelope", "GymnaxEnvelope"),
     "jumanji": ("envelope.adapters.jumanji_envelope", "JumanjiEnvelope"),
     "kinetix": ("envelope.adapters.kinetix_envelope", "KinetixEnvelope"),
-    "craftax": ("envelope.adapters.craftax_envelope", "CraftaxEnvelope"),
     "mujoco_playground": (
         "envelope.adapters.mujoco_playground_envelope",
         "MujocoPlaygroundEnvelope",
     ),
+    "navix": ("envelope.adapters.navix_envelope", "NavixEnvelope"),
 }
 
 
