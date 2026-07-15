@@ -18,6 +18,53 @@ from envelope.typing import PyTree
 __all__ = ["FrozenPyTreeNode", "field", "static_field", "Container"]
 
 
+def _register_pytree_dataclass(
+    cls: type[Any], data_fields: Iterable[str], static_fields: Iterable[str]
+) -> None:
+    """Register a dataclass without routing PyTree reconstruction through ``__init__``.
+
+    JAX may unflatten a PyTree with opaque sentinel objects while determining vmap
+    axes.  Those sentinels are structural bookkeeping rather than user-provided
+    field values, so constructor and ``__post_init__`` validation must not see them.
+    Static values remain PyTree auxiliary data and therefore retain the semantics of
+    ``register_dataclass``.
+    """
+    data_names = tuple(data_fields)
+    static_names = tuple(static_fields)
+
+    def flatten_with_keys(
+        node: Any,
+    ) -> tuple[tuple[tuple[Any, Any], ...], tuple[Any, ...]]:
+        children = tuple(
+            (jax.tree_util.GetAttrKey(name), getattr(node, name)) for name in data_names
+        )
+        static_values = tuple(getattr(node, name) for name in static_names)
+        return children, static_values
+
+    def flatten(node: Any) -> tuple[tuple[Any, ...], tuple[Any, ...]]:
+        children = tuple(getattr(node, name) for name in data_names)
+        static_values = tuple(getattr(node, name) for name in static_names)
+        return children, static_values
+
+    def unflatten(static_values: Iterable[Any], children: Iterable[Any]) -> Any:
+        # Bypass dataclass initialization only on JAX's reconstruction path. Normal
+        # calls to ``cls(...)`` still execute the generated initializer and all
+        # ``__post_init__`` validation.
+        node = object.__new__(cls)
+        for name, value in zip(data_names, children, strict=True):
+            object.__setattr__(node, name, value)
+        for name, value in zip(static_names, static_values, strict=True):
+            object.__setattr__(node, name, value)
+        return node
+
+    jax.tree_util.register_pytree_with_keys(
+        cls,
+        flatten_with_keys,
+        unflatten,
+        flatten_func=flatten,
+    )
+
+
 def field(*, pytree_node: bool = True, **kwargs: Any) -> Any:
     """
     Dataclass field helper. See `typing.FrozenPyTreeNode` for more details.
@@ -103,7 +150,7 @@ class FrozenPyTreeNode:
             else:
                 static.append(f.name)
 
-        jax.tree_util.register_dataclass(cls, data, static)
+        _register_pytree_dataclass(cls, data, static)
 
     def __post_init__(self):
         self._validate_static_fields()
