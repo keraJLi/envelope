@@ -43,14 +43,14 @@ class FlattenObservationWrapper(Wrapper):
     _batch_ndim: int = static_field(default=0, kw_only=True)
 
     def __post_init__(self):
-        if self._observation_treedef is not None:
-            return
-        batch_dims, base = peel_batched(self.env.observation_space)
-        treedef, shapes, dims = flatten_space(base)
-        object.__setattr__(self, "_observation_treedef", treedef)
-        object.__setattr__(self, "_observation_shapes", tuple(map(tuple, shapes)))
-        object.__setattr__(self, "_observation_dims", tuple(map(int, dims)))
-        object.__setattr__(self, "_batch_ndim", len(batch_dims))
+        if self._observation_treedef is None:
+            batch_dims, base = peel_batched(self.env.observation_space)
+            treedef, shapes, dims = flatten_space(base)
+            object.__setattr__(self, "_observation_treedef", treedef)
+            object.__setattr__(self, "_observation_shapes", tuple(map(tuple, shapes)))
+            object.__setattr__(self, "_observation_dims", tuple(map(int, dims)))
+            object.__setattr__(self, "_batch_ndim", len(batch_dims))
+        super().__post_init__()
 
     def _flatten_obs(self, obs: PyTree) -> jax.Array:
         _, treedef = jax.tree.flatten(obs)

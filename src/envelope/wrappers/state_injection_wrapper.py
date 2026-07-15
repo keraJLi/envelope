@@ -1,4 +1,4 @@
-from typing import override
+from typing import ClassVar, override
 
 import jax
 import jax.numpy as jnp
@@ -6,7 +6,7 @@ import jax.numpy as jnp
 from envelope.environment import Info
 from envelope.struct import field
 from envelope.typing import Key, PyTree
-from envelope.wrappers.wrapper import WrappedState, Wrapper, _find_wrapper
+from envelope.wrappers.wrapper import WrappedState, Wrapper, WrapperStackRule
 
 
 def _validate_leaf_metadata(candidate: PyTree, reference: PyTree, name: str) -> None:
@@ -53,23 +53,17 @@ class StateInjectionWrapper(Wrapper):
         ```
     """
 
+    wrapper_roles: ClassVar[frozenset[str]] = frozenset(
+        {"persistent", "state_injection"}
+    )
+    stack_rules: ClassVar[tuple[WrapperStackRule, ...]] = (
+        WrapperStackRule("lifecycle", "{outer} must be inside {inner}"),
+    )
+
     class InjectedState(WrappedState):
         reset_state: PyTree = field()
         reset_info: Info = field()
         active: jax.Array = field()
-
-    def __post_init__(self):
-        from envelope.wrappers.autoreset_wrapper import AutoResetWrapper
-        from envelope.wrappers.pooled_init_vmap_wrapper import PooledInitVmapWrapper
-
-        lifecycle_wrapper = _find_wrapper(
-            self.env, (AutoResetWrapper, PooledInitVmapWrapper)
-        )
-        if lifecycle_wrapper is not None:
-            raise ValueError(
-                "StateInjectionWrapper must be inside "
-                f"{type(lifecycle_wrapper).__name__}"
-            )
 
     @property
     @override

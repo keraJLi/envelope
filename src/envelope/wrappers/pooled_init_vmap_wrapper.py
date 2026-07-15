@@ -1,6 +1,6 @@
 from functools import cached_property
 from numbers import Integral
-from typing import override
+from typing import ClassVar, override
 
 import jax
 import jax.numpy as jnp
@@ -16,6 +16,10 @@ from envelope.wrappers.wrapper import WrappedState, Wrapper
 class PooledInitVmapWrapper(Wrapper):
     batch_size: int = static_field(kw_only=True)
     pool_size: int = static_field(kw_only=True)
+
+    wrapper_roles: ClassVar[frozenset[str]] = frozenset(
+        {"lifecycle", "pooled_init_vmap", "vectorization"}
+    )
 
     class PooledInitVmapState(WrappedState):
         init_key: Key = field()
@@ -40,6 +44,7 @@ class PooledInitVmapWrapper(Wrapper):
                 "PooledInitVmapWrapper requires an environment with "
                 "supports_init_pooling=True"
             )
+        super().__post_init__()
 
     @property
     @override

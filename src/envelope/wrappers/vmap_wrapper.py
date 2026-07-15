@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import override
+from typing import ClassVar, override
 
 import jax
 import jax.numpy as jnp
@@ -33,6 +33,7 @@ class VmapWrapper(Wrapper):
     """Does not wrap the state."""
 
     batch_size: int = static_field(kw_only=True)
+    wrapper_roles: ClassVar[frozenset[str]] = frozenset({"vectorization"})
 
     @property
     @override

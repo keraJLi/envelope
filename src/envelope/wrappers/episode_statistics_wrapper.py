@@ -1,4 +1,4 @@
-from typing import override
+from typing import ClassVar, override
 
 import jax
 import jax.numpy as jnp
@@ -6,7 +6,7 @@ import jax.numpy as jnp
 from envelope.environment import Info
 from envelope.struct import FrozenPyTreeNode, field
 from envelope.typing import Key, PyTree
-from envelope.wrappers.wrapper import WrappedState, Wrapper, _find_wrapper
+from envelope.wrappers.wrapper import WrappedState, Wrapper, WrapperStackRule
 
 
 class EpisodeStatistics(FrozenPyTreeNode):
@@ -18,18 +18,10 @@ class EpisodeStatisticsWrapper(Wrapper):
     class EpisodeStatisticsState(WrappedState):
         stats: EpisodeStatistics = field(default=EpisodeStatistics())
 
-    def __post_init__(self):
-        from envelope.wrappers.autoreset_wrapper import AutoResetWrapper
-        from envelope.wrappers.pooled_init_vmap_wrapper import PooledInitVmapWrapper
-
-        lifecycle_wrapper = _find_wrapper(
-            self.env, (AutoResetWrapper, PooledInitVmapWrapper)
-        )
-        if lifecycle_wrapper is not None:
-            raise ValueError(
-                "EpisodeStatisticsWrapper must be inside "
-                f"{type(lifecycle_wrapper).__name__}"
-            )
+    wrapper_roles: ClassVar[frozenset[str]] = frozenset({"episode_statistics"})
+    stack_rules: ClassVar[tuple[WrapperStackRule, ...]] = (
+        WrapperStackRule("lifecycle", "{outer} must be inside {inner}"),
+    )
 
     @staticmethod
     def _empty_stats(info: Info) -> EpisodeStatistics:
@@ -70,6 +62,10 @@ class EpisodeStatisticsWrapper(Wrapper):
 
 class CumulativeStatisticsWrapper(Wrapper):
     """Statistics variant that deliberately persists across episode resets."""
+
+    wrapper_roles: ClassVar[frozenset[str]] = frozenset(
+        {"cumulative_statistics", "persistent"}
+    )
 
     class CumulativeStatisticsState(WrappedState):
         cumulative_stats: EpisodeStatistics = field(default=EpisodeStatistics())

@@ -39,13 +39,13 @@ class FlattenActionWrapper(Wrapper):
     _action_dims: tuple[int, ...] = static_field(default=(), kw_only=True)
 
     def __post_init__(self):
-        if self._action_treedef is not None:
-            return
-        _, base = peel_batched(self.env.action_space)
-        treedef, shapes, dims = flatten_space(base)
-        object.__setattr__(self, "_action_treedef", treedef)
-        object.__setattr__(self, "_action_shapes", tuple(map(tuple, shapes)))
-        object.__setattr__(self, "_action_dims", tuple(map(int, dims)))
+        if self._action_treedef is None:
+            _, base = peel_batched(self.env.action_space)
+            treedef, shapes, dims = flatten_space(base)
+            object.__setattr__(self, "_action_treedef", treedef)
+            object.__setattr__(self, "_action_shapes", tuple(map(tuple, shapes)))
+            object.__setattr__(self, "_action_dims", tuple(map(int, dims)))
+        super().__post_init__()
 
     @override
     def step(self, state: State, action: PyTree) -> tuple[State, Info]:

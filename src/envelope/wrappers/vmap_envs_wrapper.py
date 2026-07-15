@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import override
+from typing import ClassVar, override
 
 import jax
 import jax.numpy as jnp
@@ -25,6 +25,7 @@ class VmapEnvsWrapper(Wrapper):
     """
 
     batch_size: int = field(kw_only=True)
+    wrapper_roles: ClassVar[frozenset[str]] = frozenset({"vectorization"})
 
     @property
     @override

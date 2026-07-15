@@ -1,7 +1,7 @@
 from dataclasses import InitVar
 from functools import cached_property
 from math import prod
-from typing import Any, override
+from typing import Any, ClassVar, override
 
 import jax
 from jax import numpy as jnp
@@ -15,6 +15,8 @@ from envelope.wrappers.wrapper import WrappedState, Wrapper
 
 
 class ObservationNormalizationWrapper(Wrapper):
+    wrapper_roles: ClassVar[frozenset[str]] = frozenset({"normalization", "persistent"})
+
     class ObservationNormalizationState(WrappedState):
         rmv_state: RunningMeanVar = field()
 
@@ -32,18 +34,19 @@ class ObservationNormalizationWrapper(Wrapper):
     def __post_init__(self, stats_spec: PyTree | None):
         # JAX reconstruction supplies the already-encoded static fields and leaves
         # the init-only public argument at its default.
-        if self._stats_treedef is not None:
-            return
-
-        if stats_spec is None:
-            stats_spec = _infer_stats_spec(self.env.observation_space)
-        leaves, treedef = jax.tree.flatten(stats_spec)
-        if not leaves or not all(
-            isinstance(leaf, jax.ShapeDtypeStruct) for leaf in leaves
-        ):
-            raise TypeError("stats_spec leaves must all be jax.ShapeDtypeStruct values")
-        object.__setattr__(self, "_stats_treedef", treedef)
-        object.__setattr__(self, "_stats_leaves", tuple(leaves))
+        if self._stats_treedef is None:
+            if stats_spec is None:
+                stats_spec = _infer_stats_spec(self.env.observation_space)
+            leaves, treedef = jax.tree.flatten(stats_spec)
+            if not leaves or not all(
+                isinstance(leaf, jax.ShapeDtypeStruct) for leaf in leaves
+            ):
+                raise TypeError(
+                    "stats_spec leaves must all be jax.ShapeDtypeStruct values"
+                )
+            object.__setattr__(self, "_stats_treedef", treedef)
+            object.__setattr__(self, "_stats_leaves", tuple(leaves))
+        super().__post_init__()
 
     def _get_stats_spec(self) -> PyTree:
         if self._stats_treedef is None:

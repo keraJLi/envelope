@@ -1,6 +1,6 @@
 from dataclasses import KW_ONLY
 from functools import cached_property
-from typing import Any, override
+from typing import Any, ClassVar, NamedTuple, override
 
 from envelope import spaces
 from envelope.environment import Environment, Info, State
@@ -19,10 +19,31 @@ class WrappedState(FrozenPyTreeNode):
         return self.inner_state
 
 
+class WrapperStackRule(NamedTuple):
+    """A construction-time rule against an inner wrapper role."""
+
+    inner_role: str
+    message: str
+
+
 class Wrapper(Environment):
     """Wrapper for environments."""
 
     env: Environment = field()
+    wrapper_roles: ClassVar[frozenset[str]] = frozenset()
+    stack_rules: ClassVar[tuple[WrapperStackRule, ...]] = ()
+
+    def __post_init__(self):
+        for rule in self.stack_rules:
+            inner_wrapper = _find_wrapper_by_role(self.env, rule.inner_role)
+            if inner_wrapper is not None:
+                raise ValueError(
+                    rule.message.format(
+                        outer=type(self).__name__,
+                        inner=type(inner_wrapper).__name__,
+                    )
+                )
+        super().__post_init__()
 
     @override
     def init(self, key: Key) -> tuple[State, Info]:
@@ -78,13 +99,11 @@ class Wrapper(Environment):
             return getattr(env, name)
 
 
-def _find_wrapper(
-    env: Environment, wrapper_types: tuple[type[Wrapper], ...]
-) -> Wrapper | None:
-    """Return the first matching wrapper in ``env``'s wrapper chain."""
+def _find_wrapper_by_role(env: Environment, role: str) -> Wrapper | None:
+    """Return the first wrapper in ``env``'s chain with ``role`` metadata."""
     current = env
     while isinstance(current, Wrapper):
-        if isinstance(current, wrapper_types):
+        if role in current.wrapper_roles:
             return current
         current = current.env
     return None

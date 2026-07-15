@@ -1,31 +1,27 @@
 from numbers import Integral
-from typing import override
+from typing import ClassVar, override
 
 import jax.numpy as jnp
 
 from envelope.environment import Info
 from envelope.struct import field
 from envelope.typing import Key, PyTree
-from envelope.wrappers.wrapper import WrappedState, Wrapper, _find_wrapper
+from envelope.wrappers.wrapper import WrappedState, Wrapper, WrapperStackRule
 
 
 class TruncationWrapper(Wrapper):
     max_steps: int = field(kw_only=True)
 
+    wrapper_roles: ClassVar[frozenset[str]] = frozenset({"truncation"})
+    stack_rules: ClassVar[tuple[WrapperStackRule, ...]] = (
+        WrapperStackRule("lifecycle", "{outer} must be inside {inner}"),
+    )
+
     class TruncationState(WrappedState):
         steps: jnp.ndarray | int = field(default=0)
 
     def __post_init__(self):
-        from envelope.wrappers.autoreset_wrapper import AutoResetWrapper
-        from envelope.wrappers.pooled_init_vmap_wrapper import PooledInitVmapWrapper
-
-        lifecycle_wrapper = _find_wrapper(
-            self.env, (AutoResetWrapper, PooledInitVmapWrapper)
-        )
-        if lifecycle_wrapper is not None:
-            raise ValueError(
-                f"TruncationWrapper must be inside {type(lifecycle_wrapper).__name__}"
-            )
+        super().__post_init__()
         if isinstance(self.max_steps, bool) or not isinstance(self.max_steps, Integral):
             raise TypeError("max_steps must be an integer")
         if self.max_steps <= 0:

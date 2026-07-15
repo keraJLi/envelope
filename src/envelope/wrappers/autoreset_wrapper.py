@@ -1,4 +1,4 @@
-from typing import override
+from typing import ClassVar, override
 
 import jax
 import jax.numpy as jnp
@@ -6,7 +6,7 @@ import jax.numpy as jnp
 from envelope.environment import Info
 from envelope.struct import field
 from envelope.typing import Key, PyTree
-from envelope.wrappers.wrapper import WrappedState, Wrapper, _find_wrapper
+from envelope.wrappers.wrapper import WrappedState, Wrapper, WrapperStackRule
 
 
 class AutoResetWrapper(Wrapper):
@@ -43,29 +43,23 @@ class AutoResetWrapper(Wrapper):
         last_final: Info = field()
         final_valid: jax.Array = field()
 
-    def __post_init__(self):
-        # Auto-reset makes a scalar branch decision.  Put vectorization outside
-        # this wrapper so each mapped instance makes that decision independently.
-        from envelope.wrappers.pooled_init_vmap_wrapper import PooledInitVmapWrapper
-        from envelope.wrappers.vmap_envs_wrapper import VmapEnvsWrapper
-        from envelope.wrappers.vmap_wrapper import VmapWrapper
-        from envelope.wrappers.episode_statistics_wrapper import (
-            CumulativeStatisticsWrapper,
-        )
-
-        vector_wrapper = _find_wrapper(
-            self.env, (VmapWrapper, VmapEnvsWrapper, PooledInitVmapWrapper)
-        )
-        if vector_wrapper is not None:
-            raise ValueError(
+    wrapper_roles: ClassVar[frozenset[str]] = frozenset({"autoreset", "lifecycle"})
+    stack_rules: ClassVar[tuple[WrapperStackRule, ...]] = (
+        WrapperStackRule(
+            "vectorization",
+            (
                 "AutoResetWrapper must be inside VmapWrapper/vectorization, "
                 "not outside it"
-            )
-        if _find_wrapper(self.env, (CumulativeStatisticsWrapper,)) is not None:
-            raise ValueError(
+            ),
+        ),
+        WrapperStackRule(
+            "cumulative_statistics",
+            (
                 "AutoResetWrapper cannot wrap CumulativeStatisticsWrapper; "
                 "CumulativeStatisticsWrapper must be outside AutoResetWrapper"
-            )
+            ),
+        ),
+    )
 
     @property
     @override
