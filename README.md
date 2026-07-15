@@ -28,7 +28,7 @@ env = envelope.wrappers.ObservationNormalizationWrapper(env)
 - **Carry state across episodes** to track running statistics, for example to normalize observations.
 - **Explicit wrapper composition** keeps episode boundaries correct. Stateless transforms
   are flexible, while autoreset, statistics, truncation, and pooling follow the
-  [supported ordering](https://jax-envelope.readthedocs.io/en/latest/api/wrappers/#wrapper-ordering).
+  [supported ordering](https://github.com/keraJLi/envelope/blob/main/docs/api/wrappers.md#wrapper-ordering).
 
 ## 🔌 Adapters for existing suites
 
@@ -70,9 +70,9 @@ pip install "jax-envelope[adapters]"    # all published adapter extras
 
 Gymnax and Kinetix currently rely on pinned upstream fixes and therefore remain
 source-backed development adapters. Their exact install commands are documented in the
-[adapter guide](https://jax-envelope.readthedocs.io/en/latest/api/adapters/#source-backed-adapters).
+[adapter guide](https://github.com/keraJLi/envelope/blob/main/docs/api/adapters.md#source-backed-adapters).
 
-See the [0.5 migration guide](https://jax-envelope.readthedocs.io/en/latest/migration-0.5/)
+See the [0.5 migration guide](https://github.com/keraJLi/envelope/blob/main/docs/migration-0.5.md)
 when upgrading from Envelope 0.4.
 
 ## 💞 Related projects

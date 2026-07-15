@@ -35,7 +35,9 @@ def test_publishable_adapter_extras_are_explicit_and_bounded() -> None:
     assert "kinetix" not in extras
     for name in publishable:
         assert extras[name]
-        assert all(">=" in requirement and "<" in requirement for requirement in extras[name])
+        assert all(
+            ">=" in requirement and "<" in requirement for requirement in extras[name]
+        )
 
 
 def test_source_backed_adapter_overrides_are_immutable() -> None:
@@ -63,8 +65,11 @@ def test_distribution_boundaries_exclude_experimental_ppo() -> None:
     assert "/examples/ppo" in sdist["exclude"]
     assert "/tests/ppo" in sdist["exclude"]
     assert "/examples/ppo" not in sdist["include"]
-    assert not project["tool"].get("hatch", {}).get("metadata", {}).get(
-        "allow-direct-references", False
+    assert (
+        not project["tool"]
+        .get("hatch", {})
+        .get("metadata", {})
+        .get("allow-direct-references", False)
     )
 
 
@@ -74,7 +79,7 @@ def test_docs_and_readme_links_have_release_safe_bounds() -> None:
     assert ",<2" in mkdocs
 
     readme = (ROOT / "README.md").read_text()
-    assert "https://jax-envelope.readthedocs.io/" in readme
+    assert "https://github.com/keraJLi/envelope/blob/main/docs/" in readme
     assert "](docs/" not in readme
 
 
@@ -100,5 +105,10 @@ def test_ci_and_tag_release_workflows_exist() -> None:
 
     assert "create_test:" in adapters
     assert "pytest ${{ matrix.create_test }}" in adapters
-    create_integration = (ROOT / "tests/adapters/test_create_integration.py").read_text()
+    assert "test_brax_regressions.py" in adapters
+    assert "test_gymnax_regressions.py" in adapters
+    assert "--group ${{ matrix.dependency_group }}" in adapters
+    create_integration = (
+        ROOT / "tests/adapters/test_create_integration.py"
+    ).read_text()
     assert "importorskip" not in create_integration

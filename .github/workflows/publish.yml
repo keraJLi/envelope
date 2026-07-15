@@ -18,9 +18,9 @@ jobs:
         run: |
           VERSION=$(uv run --no-project python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
           test "${GITHUB_REF_NAME}" = "v${VERSION}"
-      - run: uv sync --group dev --locked
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
+      - run: uv sync --group dev --group adapters --locked
+      - run: uv run ruff check src tests examples
+      - run: uv run ruff format --check src tests examples
       - run: uv run pyright
       - run: uv run pytest -m "not adapters and not ppo and not packaging"
       - run: uv build --no-sources

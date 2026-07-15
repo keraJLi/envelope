@@ -1111,6 +1111,12 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
 ]
+gymnax-adapter = [
+    { name = "gymnax" },
+]
+kinetix-adapter = [
+    { name = "kinetix-env" },
+]
 ppo = [
     { name = "distrax" },
     { name = "flax" },
@@ -1154,6 +1160,8 @@ dev = [
     { name = "pytest-cov", specifier = ">=7.0.0" },
     { name = "ruff", specifier = ">=0.14.2" },
 ]
+gymnax-adapter = [{ name = "gymnax", git = "https://github.com/RobertTLange/gymnax.git?rev=18f2e7f3cffafc7042c76fdc538c83957418a9a9" }]
+kinetix-adapter = [{ name = "kinetix-env", git = "https://github.com/FLAIROx/Kinetix.git?rev=df4de60cabd42dbd1c35fb5214fdc6728710e33d" }]
 ppo = [
     { name = "distrax", specifier = ">=0.1.7,<0.2" },
     { name = "flax", specifier = ">=0.10,<1" },

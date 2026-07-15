@@ -171,6 +171,9 @@ checkpoints/
 
 # Local interpreter/tool selections
 .python-version
+.claude/
+*.old
+*.aip2.isambard
 
 # ruff
 .ruff_cache/

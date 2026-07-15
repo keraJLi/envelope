@@ -16,7 +16,7 @@ jobs:
         include:
           - suite: brax
             import_name: brax
-            test: tests/adapters/test_brax_envelope.py
+            test: tests/adapters/test_brax_envelope.py tests/adapters/test_brax_regressions.py
             create_test: tests/adapters/test_create_integration.py::test_create_brax_smoke
           - suite: craftax
             import_name: craftax
@@ -61,10 +61,12 @@ jobs:
         include:
           - suite: gymnax
             import_name: gymnax
-            test: tests/adapters/test_gymnax_envelope.py
+            dependency_group: gymnax-adapter
+            test: tests/adapters/test_gymnax_envelope.py tests/adapters/test_gymnax_regressions.py
             create_test: tests/adapters/test_create_integration.py::test_create_gymnax_smoke
           - suite: kinetix
             import_name: kinetix
+            dependency_group: kinetix-adapter
             test: tests/adapters/test_kinetix_envelope.py
             create_test: tests/adapters/test_create_integration.py::test_create_kinetix_smoke
     steps:
@@ -73,7 +75,7 @@ jobs:
         with:
           enable-cache: true
           python-version: "3.12"
-      - run: uv sync --group dev --group adapters --locked
+      - run: uv sync --group dev --group ${{ matrix.dependency_group }} --locked
       - run: uv run python -c "import ${{ matrix.import_name }}"
       - run: uv run pytest ${{ matrix.test }} -m adapters
       - run: uv run pytest ${{ matrix.create_test }} -m adapters

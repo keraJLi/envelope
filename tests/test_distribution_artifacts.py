@@ -67,7 +67,9 @@ def test_built_artifacts_respect_the_release_boundary(
     assert not unexpected
     assert not any(name.startswith("examples/ppo") for name in relative_members)
     assert not any(name.startswith("tests/ppo") for name in relative_members)
-    assert not any(".claude" in name or "benchmarks" in name for name in relative_members)
+    assert not any(
+        ".claude" in name or "benchmarks" in name for name in relative_members
+    )
 
     with zipfile.ZipFile(wheel) as archive:
         wheel_members = set(archive.namelist())

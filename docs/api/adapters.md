@@ -25,7 +25,9 @@ creation.
 
 Caller-owned keyword mappings and backend parameter objects are copied rather than
 mutated. Raw suite metadata is available under `info.backend`, with stable attribute
-access such as `info.backend.metrics`.
+access such as `info.backend.metrics`. The metadata schema is fixed for the environment
+lifecycle. A reset-time zero placeholder is accompanied by `info.backend.valid=False`
+when the suite has no real metadata for that emission.
 
 ## Installation
 
@@ -46,6 +48,13 @@ pip install "gymnax @ git+https://github.com/RobertTLange/gymnax.git@18f2e7f3cff
 pip install "kinetix-env @ git+https://github.com/FLAIROx/Kinetix.git@df4de60cabd42dbd1c35fb5214fdc6728710e33d"
 pip install jax-envelope
 ```
+
+The Gymnax pin protects
+`tests/adapters/test_gymnax_regressions.py`, especially capture-before-disable of a
+caller-supplied horizon and a stable backend-info schema. The Kinetix pin protects
+`tests/adapters/test_kinetix_envelope.py`, including random and premade level loading,
+auto-reset rejection, and immutable horizon replacement. Move either adapter back to an
+indexed release only after that named regression suite passes unchanged.
 
 ## API Reference (`create`)
 
