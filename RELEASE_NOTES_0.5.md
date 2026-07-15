@@ -9,12 +9,12 @@ shims for behavior that contradicted the lifecycle contract.
   `step(state, action)`, with the same names and ordering for keyword calls.
 - Auto-reset returns the reset state and observation. The top-level reward and done
   flags still describe the action that completed the previous episode.
-- The complete terminal `Info` is available as `info.final`. Check `info.final_valid`
-  before treating it as a completed episode. Later non-terminal steps preserve the
-  latest valid final record; before the first completion it is a zero-like placeholder.
-- `EpisodeStatisticsWrapper` now resets per episode. Use
-  `CumulativeStatisticsWrapper` and `info.cumulative_stats` for totals that survive
-  manual and automatic resets.
+- The complete terminal `Info` is available as `info.final`. Before the first completion
+  it is a zero-like placeholder and `info.final_valid` is false; later non-terminal
+  steps preserve the latest valid record. Use `terminated | truncated`, not
+  `final_valid`, to identify a completion on the current step.
+- `EpisodeStatisticsWrapper` now resets per episode, including manual and automatic
+  resets.
 - `TruncationWrapper` requires `max_steps >= 1`, resets its counter correctly, and
   preserves truncation reported by its inner environment.
 - State injection now requires a complete reset `Info` via
@@ -23,9 +23,10 @@ shims for behavior that contradicted the lifecycle contract.
 ## Wrapper composition
 
 Vectorization belongs outside elementwise auto-reset. Episode statistics and truncation
-belong inside auto-reset; cumulative statistics belong outside it. Pooled initialization
-only accepts stacks that explicitly support initialization pooling and is incompatible
-with state injection or persistent normalization inside the pool.
+belong inside auto-reset. Environments support initialization pooling by default;
+wrappers whose reset semantics cannot be replaced by a fresh initialized state opt out.
+Pooled initialization is incompatible with state injection or persistent normalization
+inside the pool.
 
 ## Spaces and core structures
 
@@ -36,15 +37,16 @@ with state injection or persistent normalization inside the pool.
 - Continuous sampling supports finite, one-sided, and fully unbounded dimensions.
 - `Container` extra keys are ordered lexicographically. The set of keys still has to
   remain fixed across JAX branches.
-- Safe static fields reject arrays, mutable containers, and unhashable values. Audited
-  opaque third-party objects must use `static_field(unsafe=True)`.
+- Safe static fields must be hashable, which rejects arrays and ordinary mutable
+  containers. `static_field(unsafe=True)` permits caller-managed opaque metadata.
 
 ## Adapters and factory
 
 `create` now accepts `max_episode_steps="default"`, a positive integer, or `None`.
 Adapters disable native horizons and auto-reset, retain their captured default horizon,
 and expose raw suite metadata through a stable `info.backend` container. Backend fields
-that are unavailable on reset use zero-like placeholders with a validity flag.
+that are unavailable on reset use zero-like placeholders with `backend.valid=False`;
+real step metadata sets that flag to true.
 
 Brax rejects backend batching and unsupported episode wrapping or `action_repeat`
 configuration in favor of Envelope wrappers. Kinetix consistently rejects

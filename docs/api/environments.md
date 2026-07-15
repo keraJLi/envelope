@@ -11,8 +11,8 @@ method, splitting the traditional `reset` into two:
   resets, while only resetting the inner environment.
 - **`step(state, action)`** steps the environment.
 
-By default, `reset` simply calls `init`, which is correct for most environments where the
-starting state is sampled from a fixed distribution.
+By default, `reset` simply calls `init`, which is correct for most environments where
+the starting state is sampled from a fixed distribution.
 
 Environment methods return `State` and `Info` tuples. `Info` is a structural protocol;
 `InfoContainer` is its default implementation, built on `Container`. Wrappers extend the
@@ -30,6 +30,17 @@ pytree structures and leaf shapes.**
 
 This guarantees that you can map `jnp.where` on the `Info` they produce, or emit the
 `Info` as the output of `jax.lax.scan`.
+
+## Initialization pooling
+
+`Environment.supports_init_pooling` is `True` by default. It means a state sampled by
+`init` may be used in place of a later reset state, which matches the default
+implementation of `reset` and most environments with independently sampled episodes.
+
+An environment whose reset depends on its current state must override the property with
+`False`. Transparent and reset-equivalent wrappers propagate the inner capability;
+reset-persistent, lifecycle, and vectorization wrappers opt out.
+`PooledInitVmapWrapper` rejects an opted-out stack during construction.
 
 ## API Reference
 

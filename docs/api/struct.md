@@ -19,6 +19,14 @@ purposes in `envelope`:
   `Container`, and holds observation, reward and terminated/truncated flags. Wrappers
   can add information to this, such as current episode statistics.
 
+`Container` sorts additional field names lexicographically, so insertion order does not
+change the Container node definition. JAX control-flow branches must still emit the same
+field names and value pytrees.
+
+Safe `static_field()` values must be hashable, which rejects arrays and ordinary mutable
+containers. Caller-managed opaque metadata may opt out with
+`static_field(unsafe=True)`.
+
 
 ## API Reference
 
