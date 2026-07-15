@@ -345,6 +345,21 @@ def test_create_omitted_max_episode_steps_uses_captured_adapter_horizon(monkeypa
     )
 
 
+def test_create_explicit_default_uses_captured_adapter_horizon(monkeypatch):
+    adapter = _FakeAdapter(default_max_steps=9)
+    _import_calls, from_name_calls = _install_dummy_suite(
+        monkeypatch, return_value=adapter
+    )
+
+    env = create("dummy::Env", max_episode_steps="default")
+
+    assert isinstance(env, TruncationWrapper)
+    assert env.max_steps == 9
+    assert from_name_calls == [
+        {"env_name": "Env", "env_kwargs": None, "kwargs": {}}
+    ]
+
+
 @pytest.mark.parametrize("max_episode_steps", [1, 7, 100])
 def test_create_explicit_max_episode_steps_overrides_captured_horizon(
     monkeypatch, max_episode_steps
