@@ -33,3 +33,23 @@ def test_from_name_copies_kwargs_and_avoids_brax_episode_wrapper(monkeypatch):
         "episode_length": None,
         "auto_reset": False,
     }
+
+
+@pytest.mark.parametrize(
+    ("env_kwargs", "reserved_name"),
+    [
+        ({"batch_size": 2}, "batch_size"),
+        ({"action_repeat": 2}, "action_repeat"),
+        ({"action_repeat": True}, "action_repeat"),
+    ],
+)
+def test_from_name_rejects_backend_vectorization_and_action_repeat(
+    monkeypatch, env_kwargs, reserved_name
+):
+    def unexpected_create(*args, **kwargs):
+        raise AssertionError("invalid backend controls must be rejected before create")
+
+    monkeypatch.setattr(brax_envelope_module, "brax_create", unexpected_create)
+
+    with pytest.raises(ValueError, match=reserved_name):
+        BraxEnvelope.from_name("fast", env_kwargs=env_kwargs)

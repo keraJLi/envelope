@@ -11,6 +11,7 @@ pytestmark = pytest.mark.adapters
 pytest.importorskip("navix")
 
 import navix
+from navix.entities import EntityIds
 
 from envelope.adapters.navix_envelope import NavixEnvelope
 from envelope.spaces import Continuous, Discrete
@@ -74,6 +75,18 @@ def test_observation_space_contains_real_reset_observation(navix_env, prng_key):
     assert env.observation_space.dtype == env.navix_env.observation_space.dtype
 
 
+def test_observation_entity_cardinality_comes_from_authoritative_ids(
+    navix_env, prng_key
+):
+    _state, info = navix_env.init(prng_key)
+    entity_cardinality = (
+        max(int(value) for name, value in vars(EntityIds).items() if name.isupper()) + 1
+    )
+
+    assert jnp.all(navix_env.observation_space.n[..., 0] == entity_cardinality)
+    assert jnp.all(info.obs[..., 0] < navix_env.observation_space.n[..., 0])
+
+
 def test_container_conversion_reset(navix_env, prng_key):
     """Test convert_navix_to_envelope_info on reset timestep."""
     env = navix_env
@@ -93,7 +106,7 @@ def test_container_conversion_reset(navix_env, prng_key):
     assert not info.terminated
     assert not info.truncated
 
-    # Check that extra timestep fields are preserved via update()
+    # Check that extra timestep fields are preserved under the backend namespace.
     # (if navix timestep has extra fields beyond the standard ones)
     import dataclasses
 
@@ -102,7 +115,7 @@ def test_container_conversion_reset(navix_env, prng_key):
     standard_fields = {"observation", "reward", "step_type"}
     extra_fields = {k: v for k, v in timestep_dict.items() if k not in standard_fields}
     for field_name, field_value in extra_fields.items():
-        assert hasattr(info, field_name)
+        assert hasattr(info.backend, field_name)
 
 
 def test_container_conversion_step(navix_env, prng_key):
@@ -129,7 +142,11 @@ def test_container_conversion_step(navix_env, prng_key):
 
 def test_episode_truncation(prng_key):
     """Test that episode truncation is correctly detected."""
-    env = _create_navix_env(max_steps=5)  # Very short episode
+    from envelope.wrappers.truncation_wrapper import TruncationWrapper
+
+    adapter = _create_navix_env(max_steps=5)
+    assert adapter.default_max_steps == 5
+    env = TruncationWrapper(env=adapter, max_steps=adapter.default_max_steps)
     key = prng_key
 
     state, info = env.init(key)

@@ -10,15 +10,6 @@ pytestmark = pytest.mark.adapters
 
 pytest.importorskip("craftax")
 
-from craftax.craftax.envs.craftax_pixels_env import (
-    CraftaxPixelsEnv,
-    CraftaxPixelsEnvNoAutoReset,
-)
-from craftax.craftax_classic.envs.craftax_pixels_env import (
-    CraftaxClassicPixelsEnv,
-    CraftaxClassicPixelsEnvNoAutoReset,
-)
-
 from envelope.spaces import Continuous, Discrete
 from tests.contract import (
     assert_jitted_rollout_contract,
@@ -64,17 +55,6 @@ def _one_step(env, state, key):
 
 
 def test_craftax_contract_smoke(craftax_env, prng_key):
-    failing_envs = (
-        CraftaxPixelsEnv,
-        CraftaxClassicPixelsEnv,
-        CraftaxPixelsEnvNoAutoReset,
-        CraftaxClassicPixelsEnvNoAutoReset,
-    )
-    if isinstance(craftax_env.craftax_env, failing_envs):
-        pytest.xfail(
-            "Craftax currently returns the wrong observation space. "
-            "See https://github.com/MichaelTMatthews/Craftax/pull/49"
-        )
     assert_reset_step_contract(
         craftax_env, key=prng_key, obs_check=assert_obs_matches_space
     )

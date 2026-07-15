@@ -99,6 +99,9 @@ def test_backend_info_namespace_is_stable_between_init_and_step(
 
     assert hasattr(init_info, "backend")
     assert hasattr(step_info, "backend")
+    assert not bool(init_info.backend.valid)
+    assert bool(step_info.backend.valid)
+    assert float(init_info.backend.score) == 0.0
     assert init_info.backend.score.shape == step_info.backend.score.shape
     assert init_info.backend.score.dtype == step_info.backend.score.dtype
     assert jax.tree.structure(init_info.backend) == jax.tree.structure(

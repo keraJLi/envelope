@@ -63,8 +63,8 @@ def test_mujoco_playground_terminated_matches_done_on_step(
     state, _info = env.init(key_reset)
     action = env.action_space.sample(key_action)
     _next_state, info = env.step(state, action)
-    assert hasattr(info, "done")
-    assert info.terminated == info.done
+    assert hasattr(info.backend, "done")
+    assert info.terminated == info.backend.done
     assert not info.truncated  # mujoco_playground doesn't distinguish truncation
 
 

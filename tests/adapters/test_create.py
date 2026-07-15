@@ -9,7 +9,9 @@ These tests are dependency-free (no brax/gymnax/navix imports) and focus on:
 
 from functools import cached_property
 import importlib
+import inspect
 import types
+from typing import Literal, get_type_hints
 
 import jax
 import jax.numpy as jnp
@@ -53,6 +55,16 @@ class _FakeAdapter(Environment):
         del action
         state = state + 1
         return state, self._info(state, reward=1.0)
+
+
+def test_create_public_max_episode_steps_signature():
+    parameter = inspect.signature(create).parameters["max_episode_steps"]
+
+    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameter.default == "default"
+    assert get_type_hints(create)["max_episode_steps"] == (
+        Literal["default"] | int | None
+    )
 
 
 def _install_dummy_suite(
@@ -153,6 +165,22 @@ def test_create_wraps_import_error_and_chains_cause(monkeypatch):
     ("suite", "module_name", "class_name", "env_name", "dependency", "install_spec"),
     [
         (
+            "brax",
+            "envelope.adapters.brax_envelope",
+            "BraxEnvelope",
+            "fast",
+            "brax",
+            "jax-envelope[brax]",
+        ),
+        (
+            "craftax",
+            "envelope.adapters.craftax_envelope",
+            "CraftaxEnvelope",
+            "Craftax-Symbolic-v1",
+            "craftax",
+            "jax-envelope[craftax]",
+        ),
+        (
             "gymnax",
             "envelope.adapters.gymnax_envelope",
             "GymnaxEnvelope",
@@ -160,6 +188,14 @@ def test_create_wraps_import_error_and_chains_cause(monkeypatch):
             "gymnax",
             "gymnax @ git+https://github.com/RobertTLange/gymnax.git@"
             "18f2e7f3cffafc7042c76fdc538c83957418a9a9",
+        ),
+        (
+            "jumanji",
+            "envelope.adapters.jumanji_envelope",
+            "JumanjiEnvelope",
+            "Snake-v1",
+            "jumanji",
+            "jax-envelope[jumanji]",
         ),
         (
             "kinetix",
@@ -170,9 +206,25 @@ def test_create_wraps_import_error_and_chains_cause(monkeypatch):
             "kinetix-env @ git+https://github.com/FLAIROx/Kinetix.git@"
             "df4de60cabd42dbd1c35fb5214fdc6728710e33d",
         ),
+        (
+            "mujoco_playground",
+            "envelope.adapters.mujoco_playground_envelope",
+            "MujocoPlaygroundEnvelope",
+            "CartpoleBalance",
+            "mujoco_playground",
+            "jax-envelope[mujoco-playground]",
+        ),
+        (
+            "navix",
+            "envelope.adapters.navix_envelope",
+            "NavixEnvelope",
+            "Navix-Empty-5x5-v0",
+            "navix",
+            "jax-envelope[navix]",
+        ),
     ],
 )
-def test_create_import_error_includes_pinned_source_install_command(
+def test_create_import_error_includes_exact_install_command(
     monkeypatch,
     suite,
     module_name,
@@ -355,9 +407,7 @@ def test_create_explicit_default_uses_captured_adapter_horizon(monkeypatch):
 
     assert isinstance(env, TruncationWrapper)
     assert env.max_steps == 9
-    assert from_name_calls == [
-        {"env_name": "Env", "env_kwargs": None, "kwargs": {}}
-    ]
+    assert from_name_calls == [{"env_name": "Env", "env_kwargs": None, "kwargs": {}}]
 
 
 @pytest.mark.parametrize("max_episode_steps", [1, 7, 100])

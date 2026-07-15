@@ -130,16 +130,14 @@ def test_from_name_premade_level_smoke(prng_key):
     assert env.observation_space.contains(info.obs)
 
 
-def test_create_random_with_auto_reset_warning(prng_key):
-    with pytest.warns(
-        UserWarning,
-        match="Creating a KinetixEnvelope with auto_reset=True is not recommended",
-    ):
-        env = _create_kinetix_env("random", auto_reset=True)
+def test_create_random_rejects_auto_reset():
+    with pytest.raises(ValueError, match="auto_reset.*AutoResetWrapper"):
+        _create_kinetix_env("random", auto_reset=True)
 
-    state, info = env.init(prng_key)
-    assert state is not None
-    assert isinstance(info, Info)
+
+def test_create_premade_rejects_auto_reset_before_loading():
+    with pytest.raises(ValueError, match="auto_reset.*AutoResetWrapper"):
+        KinetixEnvelope.create_premade("s/not-loaded", auto_reset=True)
 
 
 def test_key_splitting(kinetix_random_env, prng_key):
@@ -184,16 +182,15 @@ def test_from_name_rejects_unknown_env_kwargs():
         KinetixEnvelope.from_name("s/h4_thrust_aim", env_kwargs={"unknown": 1})
 
 
-def test_from_name_allows_premade_state_none(monkeypatch: pytest.MonkeyPatch):
-    """Current implementation does not guard against missing premade state."""
+def test_from_name_rejects_missing_premade_state(monkeypatch: pytest.MonkeyPatch):
     from envelope.adapters import kinetix_envelope
 
     def mock_load(_level_id: str):
         return None, StaticEnvParams(), EnvParams()
 
     monkeypatch.setattr(kinetix_envelope, "load_from_json_file", mock_load)
-    env = KinetixEnvelope.from_name("s/h4_thrust_aim")
-    assert env is not None
+    with pytest.raises(ValueError, match="did not contain a level state"):
+        KinetixEnvelope.from_name("s/h4_thrust_aim")
 
 
 def test_create_premade_replace_failure_raises(monkeypatch: pytest.MonkeyPatch):
