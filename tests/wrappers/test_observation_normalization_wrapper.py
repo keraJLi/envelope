@@ -7,16 +7,19 @@ import pytest
 
 from envelope.environment import Environment, InfoContainer
 from envelope.spaces import Continuous, PyTreeSpace
+from envelope.wrappers.autoreset_wrapper import AutoResetWrapper
 from envelope.wrappers.normalization import RunningMeanVar, update_rmv
 from envelope.wrappers.observation_normalization_wrapper import (
     ObservationNormalizationWrapper,
 )
+from envelope.wrappers.pooled_init_vmap_wrapper import PooledInitVmapWrapper
 from envelope.wrappers.vmap_wrapper import VmapWrapper
 from tests.wrappers.helpers import (
     ConstantObsEnv,
     IntObsEnv,
     PyTreeObsEnv,
     RandomImageEnv,
+    StepCounterEnv,
     VectorObsEnv,
 )
 
@@ -192,6 +195,29 @@ def test_jit_compatibility_smoke():
     cnt, shape = run_once(key, action)
     # Only check shapes; count semantics differ under various compositions
     assert shape == (4, 3)
+
+
+@pytest.mark.parametrize("episode_boundary", ["autoreset", "pooled"])
+def test_shared_normalization_transforms_final_observation(episode_boundary):
+    base = StepCounterEnv(terminate_after=1)
+    if episode_boundary == "autoreset":
+        vectorized = VmapWrapper(AutoResetWrapper(base), batch_size=2)
+    else:
+        vectorized = PooledInitVmapWrapper(base, batch_size=2, pool_size=2)
+    wrapper = ObservationNormalizationWrapper(vectorized)
+    action = jnp.asarray([0.25, 0.75], dtype=jnp.float32)
+
+    state, _ = wrapper.init(jax.random.key(0))
+    state, info = jax.jit(wrapper.step)(state, action)
+
+    expected = wrapper._normalize_obs(
+        info.final.unnormalized_obs,
+        state.rmv_state,
+    )
+    assert jnp.all(info.final_valid)
+    assert jnp.allclose(info.final.unnormalized_obs, action)
+    assert jnp.allclose(info.final.obs, expected)
+    assert not jnp.allclose(info.final.obs, info.final.unnormalized_obs)
 
 
 def test_pickle_running_mean_var_in_state():
