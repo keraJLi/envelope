@@ -20,14 +20,43 @@ class WrappedState(FrozenPyTreeNode):
 
 
 class WrapperStackRule(NamedTuple):
-    """A construction-time rule against an inner wrapper role."""
+    """Reject a wrapper stack when a matching role appears inside this wrapper.
+
+    ``inner_role`` is compared with the ``wrapper_roles`` declared by every wrapper in
+    the wrapped ``env`` chain. ``message`` becomes the construction-time error and may
+    use ``{outer}`` for the wrapper being constructed and ``{inner}`` for the first
+    matching inner wrapper.
+    """
 
     inner_role: str
     message: str
 
 
 class Wrapper(Environment):
-    """Wrapper for environments."""
+    """Base class for environments that delegate to another environment.
+
+    Concrete wrappers may declare composition metadata through ``wrapper_roles`` and
+    ``stack_rules``:
+
+    - ``wrapper_roles`` names behavior provided by that wrapper, such as
+      ``"vectorization"``, ``"lifecycle"``, or ``"persistent"``. Roles describe the
+      wrapper itself; they do not include roles provided by its inner environment.
+      Envelope uses them for construction-time validation and for wrappers that need
+      to detect behavior elsewhere in their inner chain.
+    - ``stack_rules`` describes roles that must not occur inside the wrapper being
+      constructed. For each rule, construction walks through ``env`` and its nested
+      wrappers. Finding ``rule.inner_role`` raises ``ValueError`` with the rule's
+      message. A rule only examines inner wrappers; it does not constrain wrappers
+      that may later be placed outside this one.
+
+    For example, a wrapper with
+    ``WrapperStackRule("vectorization", "{outer} must be inside {inner}")`` cannot be
+    constructed around a vectorization wrapper. The formatted error identifies both
+    concrete wrapper classes.
+
+    These labels concern wrapper ordering only. Whether an ``init`` result may replace
+    a later ``reset`` result is the separate ``init_can_replace_reset`` capability.
+    """
 
     env: Environment = field()
     wrapper_roles: ClassVar[frozenset[str]] = frozenset()
