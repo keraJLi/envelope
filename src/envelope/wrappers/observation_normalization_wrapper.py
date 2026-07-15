@@ -96,18 +96,35 @@ class ObservationNormalizationWrapper(Wrapper):
     def _normalize_and_update(
         self, state: ObservationNormalizationState, info: Info
     ) -> tuple[ObservationNormalizationState, Info]:
+        raw_obs = info.obs
         reshaped_obs = jax.tree.map(
             _reshape_for_stats,
-            info.obs,
+            raw_obs,
             self._get_stats_spec(),
         )
         rmv_state = update_rmv(state.rmv_state, reshaped_obs)
-        norm_obs = self._normalize_obs(info.obs, rmv_state)
+        norm_obs = self._normalize_obs(raw_obs, rmv_state)
 
         state = self.ObservationNormalizationState(
             inner_state=state.inner_state, rmv_state=rmv_state
         )
-        info = info.update(obs=norm_obs, unnormalized_obs=info.obs)
+        info = info.update(obs=norm_obs, unnormalized_obs=raw_obs)
+
+        if hasattr(info, "final") and hasattr(info, "final_valid"):
+            final = getattr(info, "final")
+            raw_final_obs = final.obs
+            norm_final_obs = self._normalize_obs(raw_final_obs, rmv_state)
+            final_valid = jnp.asarray(getattr(info, "final_valid"), dtype=jnp.bool_)
+            final_obs = jax.tree.map(
+                lambda normalized, raw: _where_valid(final_valid, normalized, raw),
+                norm_final_obs,
+                raw_final_obs,
+            )
+            final = final.update(
+                obs=final_obs,
+                unnormalized_obs=raw_final_obs,
+            )
+            info = info.update(final=final)
         return state, info
 
     @override
@@ -176,6 +193,16 @@ def _reshape_for_stats(x: jax.Array, spec: jax.ShapeDtypeStruct) -> jax.Array:
         x = jnp.transpose(x, permutation)
     sample_count = prod(x.shape[: len(sample_axes)]) if sample_axes else 1
     return x.reshape((sample_count,) + spec_shape)
+
+
+def _where_valid(
+    valid: jax.Array, normalized: jax.Array, placeholder: jax.Array
+) -> jax.Array:
+    """Select normalized observations while preserving zero-like placeholders."""
+    normalized = jnp.asarray(normalized)
+    placeholder = jnp.asarray(placeholder)
+    mask = jnp.reshape(valid, valid.shape + (1,) * (normalized.ndim - valid.ndim))
+    return jnp.where(mask, normalized, placeholder)
 
 
 def _normalized_observation_space(space: Space, stats_spec: PyTree) -> Space:
