@@ -7,8 +7,13 @@ import pytest
 from envelope.spaces import BatchedSpace
 from envelope.wrappers.autoreset_wrapper import AutoResetWrapper
 from envelope.wrappers.episode_statistics_wrapper import EpisodeStatisticsWrapper
+from envelope.wrappers.observation_normalization_wrapper import (
+    ObservationNormalizationWrapper,
+)
 from envelope.wrappers.pooled_init_vmap_wrapper import PooledInitVmapWrapper
+from envelope.wrappers.state_injection_wrapper import StateInjectionWrapper
 from envelope.wrappers.truncation_wrapper import TruncationWrapper
+from envelope.wrappers.vmap_wrapper import VmapWrapper
 from tests.wrappers.helpers import ScalarToyEnv, StepCounterEnv
 
 
@@ -133,6 +138,21 @@ def test_nonpositive_pooling_capability_is_rejected(batch_size, pool_size):
         PooledInitVmapWrapper(
             ScalarToyEnv(), batch_size=batch_size, pool_size=pool_size
         )
+
+
+@pytest.mark.parametrize(
+    "env",
+    [
+        AutoResetWrapper(ScalarToyEnv()),
+        StateInjectionWrapper(ScalarToyEnv()),
+        ObservationNormalizationWrapper(ScalarToyEnv()),
+        VmapWrapper(ScalarToyEnv(), batch_size=2),
+    ],
+    ids=["autoreset", "state-injection", "normalization", "vmap"],
+)
+def test_non_pooling_wrappers_are_rejected(env):
+    with pytest.raises(ValueError, match="supports_init_pooling=True"):
+        PooledInitVmapWrapper(env, batch_size=2, pool_size=2)
 
 
 @pytest.mark.parametrize(

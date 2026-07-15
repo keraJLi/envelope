@@ -11,10 +11,7 @@ from envelope.wrappers.autoreset_wrapper import AutoResetWrapper
 from envelope.wrappers.continuous_observation_wrapper import (
     ContinuousObservationWrapper,
 )
-from envelope.wrappers.episode_statistics_wrapper import (
-    CumulativeStatisticsWrapper,
-    EpisodeStatisticsWrapper,
-)
+from envelope.wrappers.episode_statistics_wrapper import EpisodeStatisticsWrapper
 from envelope.wrappers.flatten_observation_wrapper import FlattenObservationWrapper
 from envelope.wrappers.pooled_init_vmap_wrapper import PooledInitVmapWrapper
 from envelope.wrappers.state_injection_wrapper import StateInjectionWrapper
@@ -157,10 +154,6 @@ def test_initial_final_is_a_type_preserving_zero_placeholder(
             ),
             r"(?i)StateInjectionWrapper.*inside.*PooledInitVmapWrapper",
         ),
-        (
-            lambda: AutoResetWrapper(CumulativeStatisticsWrapper(StepCounterEnv())),
-            r"(?i)(CumulativeStatisticsWrapper.*outside.*AutoResetWrapper|AutoResetWrapper.*CumulativeStatisticsWrapper)",
-        ),
     ],
     ids=[
         "episode-stats-outside-autoreset",
@@ -169,7 +162,6 @@ def test_initial_final_is_a_type_preserving_zero_placeholder(
         "truncation-outside-pooled",
         "state-injection-outside-autoreset",
         "state-injection-outside-pooled",
-        "cumulative-stats-inside-autoreset",
     ],
 )
 def test_invalid_wrapper_order_is_rejected_at_construction(
@@ -192,13 +184,8 @@ def test_invalid_wrapper_order_is_rejected_at_construction(
             batch_size=2,
             pool_size=2,
         ),
-        lambda: CumulativeStatisticsWrapper(
-            AutoResetWrapper(
-                TruncationWrapper(StateInjectionWrapper(StepCounterEnv()), max_steps=5)
-            )
-        ),
     ],
-    ids=["autoreset", "pooled", "cumulative-outside-autoreset"],
+    ids=["autoreset", "pooled"],
 )
 def test_canonical_wrapper_orders_remain_jittable(make_env: Callable[[], object]):
     env = make_env()

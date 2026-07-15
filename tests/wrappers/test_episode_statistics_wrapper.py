@@ -1,7 +1,6 @@
 import jax
 import jax.numpy as jnp
 
-import envelope.wrappers as wrappers
 from envelope.wrappers.episode_statistics_wrapper import (
     EpisodeStatistics,
     EpisodeStatisticsWrapper,
@@ -85,18 +84,6 @@ def test_stats_restart_after_reset():
         state, _ = w.step(state, jnp.asarray(0.1))
     assert jnp.allclose(state.stats.length, 2)
     assert jnp.allclose(state.stats.reward, 0.2)
-
-
-def test_cumulative_statistics_are_explicit_and_survive_reset():
-    cls = getattr(wrappers, "CumulativeStatisticsWrapper")
-    w = cls(StepCounterEnv())
-    state, _ = w.init(jax.random.key(0))
-    state, _ = w.step(state, jnp.asarray(0.2))
-    state, info = w.reset(state=state, key=jax.random.key(1))
-
-    assert jnp.allclose(state.cumulative_stats.reward, 0.2)
-    assert jnp.allclose(state.cumulative_stats.length, 1)
-    assert jnp.allclose(info.cumulative_stats.reward, 0.2)
 
 
 def test_negative_rewards_accumulate_correctly():

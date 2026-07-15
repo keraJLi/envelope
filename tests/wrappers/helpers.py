@@ -57,10 +57,6 @@ class StepCounterEnv(Environment):
 
     steps_dtype: jnp.dtype | None = None
 
-    @property
-    def supports_init_pooling(self) -> bool:
-        return True
-
     @cached_property
     def observation_space(self) -> Continuous:
         return Continuous(low=-jnp.inf, high=jnp.inf)
@@ -254,10 +250,6 @@ class AlternatingTerminationEnv(Environment):
 
 
 class ScalarToyEnv(Environment):
-    @property
-    def supports_init_pooling(self) -> bool:
-        return True
-
     @cached_property
     def observation_space(self) -> Continuous:
         return Continuous(low=-jnp.inf, high=jnp.inf)
@@ -286,10 +278,6 @@ class ScalarToyEnv(Environment):
 
 class NonzeroInitInfoEnv(Environment):
     """Reset-equivalent env whose initial info has nonzero leaves of varied dtypes."""
-
-    @property
-    def supports_init_pooling(self) -> bool:
-        return True
 
     @cached_property
     def observation_space(self) -> Continuous:
