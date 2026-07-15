@@ -9,7 +9,7 @@ from envelope.typing import PyTree
 __all__ = ["FrozenPyTreeNode", "field", "static_field", "Container"]
 
 
-def field(*, pytree_node: bool = True, **kwargs):
+def field(*, pytree_node: bool = True, **kwargs: Any) -> dataclasses.Field[Any]:
     """
     Dataclass field helper. See `typing.FrozenPyTreeNode` for more details.
     Set `pytree_node=False` for static (non-transformed) fields.
@@ -19,7 +19,9 @@ def field(*, pytree_node: bool = True, **kwargs):
     return dataclasses.field(metadata=meta, **kwargs)
 
 
-def static_field(*, unsafe: bool = False, **kwargs):
+def static_field(
+    *, unsafe: bool = False, **kwargs: Any
+) -> dataclasses.Field[Any]:
     """Declare a static (non-transformed) dataclass field.
 
     Static values become part of a JAX pytree definition, so they must normally be
@@ -34,7 +36,10 @@ def static_field(*, unsafe: bool = False, **kwargs):
     return field(pytree_node=False, metadata=meta, **kwargs)
 
 
-@dataclass_transform()
+@dataclass_transform(
+    field_specifiers=(field, static_field),
+    frozen_default=True,
+)
 class FrozenPyTreeNode:
     """
     Frozen dataclass base that is a JAX pytree node. Fields can be declared as either
@@ -72,8 +77,8 @@ class FrozenPyTreeNode:
         if declared_post_init is not None:
 
             def validated_post_init(self, *args, **kwargs):
-                self._validate_static_fields()
                 declared_post_init(self, *args, **kwargs)
+                self._validate_static_fields()
 
             cls.__post_init__ = validated_post_init
 
@@ -113,7 +118,7 @@ class FrozenPyTreeNode:
         return dataclasses.replace(self, **changes)
 
 
-@dataclass_transform()
+@dataclass_transform(frozen_default=True)
 @jax.tree_util.register_pytree_node_class
 @dataclasses.dataclass(frozen=True, eq=True, repr=True, slots=False)
 class Container:
