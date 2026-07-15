@@ -1,12 +1,12 @@
 import warnings
 from copy import copy
 from functools import cached_property
-from typing import Any, override
+from typing import Any, cast, override
 
 import jax
 import jax.numpy as jnp
-import jumanji
 from jumanji.env import Environment as JumanjiEnv
+from jumanji.registration import make as jumanji_make
 from jumanji.specs import Array, BoundedArray, DiscreteArray, MultiDiscreteArray, Spec
 from jumanji.types import TimeStep as JumanjiTimeStep
 
@@ -14,6 +14,7 @@ from envelope import spaces as envelope_spaces
 from envelope.adapters._common import backend_container
 from envelope.environment import Environment, Info, InfoContainer, State
 from envelope.struct import static_field
+from envelope.typing import Array as EnvelopeArray
 from envelope.typing import Key, PyTree
 
 _MAX_INT = int(jnp.iinfo(jnp.int32).max)
@@ -50,11 +51,11 @@ class JumanjiEnvelope(Environment):
             )
 
         # Create env first with defaults to capture default time_limit
-        env = jumanji.make(env_name, **env_kwargs)
+        env = jumanji_make(env_name, **env_kwargs)
         default_time_limit = getattr(env, "time_limit", None)
         if default_time_limit is not None:
             default_time_limit = int(default_time_limit)
-            env.time_limit = _MAX_INT
+            setattr(env, "time_limit", _MAX_INT)
 
         return cls(jumanji_env=env, _default_time_limit=default_time_limit)
 
@@ -103,7 +104,9 @@ def convert_jumanji_to_envelope_info(timestep: JumanjiTimeStep) -> InfoContainer
     term = jnp.asarray(timestep.last(), dtype=bool)
     observation = jax.tree.map(_normalize_observation_leaf, timestep.observation)
     info = InfoContainer(
-        obs=observation, reward=timestep.reward, terminated=term
+        obs=observation,
+        reward=cast(EnvelopeArray, timestep.reward),
+        terminated=term,
     ).update(backend=backend_container(timestep.extras))
     return info
 

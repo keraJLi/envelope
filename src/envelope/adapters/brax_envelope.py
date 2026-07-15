@@ -1,5 +1,6 @@
 import inspect
 import warnings
+from collections.abc import Mapping
 from copy import copy
 from functools import cached_property
 from typing import Any, override
@@ -132,8 +133,19 @@ class BraxEnvelope(Environment):
     @override
     def observation_space(self) -> spaces.Space:
         # All brax environments have observation limit of -inf to inf
+        observation_size = self.brax_env.observation_size
+        if isinstance(observation_size, Mapping):
+            tree = {
+                name: spaces.Continuous.from_shape(
+                    low=-jnp.inf,
+                    high=jnp.inf,
+                    shape=(size,) if isinstance(size, int) else size,
+                )
+                for name, size in observation_size.items()
+            }
+            return spaces.PyTreeSpace(tree)
         return spaces.Continuous.from_shape(
-            low=-jnp.inf, high=jnp.inf, shape=(self.brax_env.observation_size,)
+            low=-jnp.inf, high=jnp.inf, shape=(observation_size,)
         )
 
     def __deepcopy__(self, memo):

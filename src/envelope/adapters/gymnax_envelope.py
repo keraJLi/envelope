@@ -9,7 +9,11 @@ from gymnax.environments.environment import Environment as GymnaxEnv
 from gymnax.environments.environment import EnvParams as GymnaxEnvParams
 
 from envelope import spaces as envelope_spaces
-from envelope.adapters._common import backend_container, placeholder_like
+from envelope.adapters._common import (
+    backend_container,
+    placeholder_like,
+    replace_backend_params,
+)
 from envelope.environment import Environment, Info, InfoContainer, State
 from envelope.struct import Container, field, static_field
 from envelope.typing import Key, PyTree
@@ -84,7 +88,9 @@ class GymnaxEnvelope(Environment):
         gymnax_env, default_params = gymnax_create(env_name, **env_kwargs)
         selected_params = default_params if env_params is None else env_params
         default_max_steps = int(selected_params.max_steps_in_episode)
-        selected_params = selected_params.replace(max_steps_in_episode=jnp.inf)
+        selected_params = replace_backend_params(
+            selected_params, max_steps_in_episode=jnp.inf
+        )
         backend_placeholder = _probe_backend_placeholder(gymnax_env, selected_params)
         return cls(
             gymnax_env=gymnax_env,

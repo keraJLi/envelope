@@ -26,7 +26,11 @@ from kinetix.util.saving import load_from_json_file
 
 from envelope import field
 from envelope import spaces as envelope_spaces
-from envelope.adapters._common import backend_container, placeholder_like
+from envelope.adapters._common import (
+    backend_container,
+    placeholder_like,
+    replace_backend_params,
+)
 from envelope.adapters.gymnax_envelope import _convert_space as _convert_gymnax_space
 from envelope.environment import Environment, Info, InfoContainer, State
 from envelope.struct import Container, static_field
@@ -168,7 +172,7 @@ class KinetixEnvelope(Environment):
             )
         selected_params = KinetixEnvEnvParams() if env_params is None else env_params
         default_max_steps = int(selected_params.max_timesteps)
-        selected_params = selected_params.replace(max_timesteps=jnp.inf)
+        selected_params = replace_backend_params(selected_params, max_timesteps=jnp.inf)
 
         def reset_fn(_: Key) -> Any:
             return level
@@ -206,7 +210,7 @@ class KinetixEnvelope(Environment):
         _reject_auto_reset(auto_reset)
         selected_params = KinetixEnvEnvParams() if env_params is None else env_params
         default_max_steps = int(selected_params.max_timesteps)
-        selected_params = selected_params.replace(max_timesteps=jnp.inf)
+        selected_params = replace_backend_params(selected_params, max_timesteps=jnp.inf)
 
         reset_fn = make_reset_fn_sample_kinetix_level(
             selected_params, static_env_params

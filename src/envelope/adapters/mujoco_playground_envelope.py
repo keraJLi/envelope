@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import Any, override
+from typing import Any, cast, override
 
 from jax import numpy as jnp
 from mujoco_playground import MjxEnv, registry
@@ -50,7 +50,16 @@ class MujocoPlaygroundEnvelope(Environment):
 
         # Get default episode_length from registry config
         default_config = registry.get_default_config(env_name)
-        default_max_steps = int(default_config.episode_length)
+        default_episode_length = default_config.episode_length
+        if (
+            isinstance(default_episode_length, bool)
+            or not isinstance(default_episode_length, int)
+            or default_episode_length <= 0
+        ):
+            raise RuntimeError(
+                "MuJoCo Playground must expose a finite positive default horizon"
+            )
+        default_max_steps = cast(int, default_episode_length)
 
         # Set episode_length to a very large value
         # (mujoco_playground uses int for episode_length, so we use max int instead of inf)

@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import Any, cast, override
+from typing import Any, Callable, cast, override
 
 import jax
 import jax.numpy as jnp
@@ -26,7 +26,11 @@ from craftax.craftax_classic.envs.craftax_symbolic_env import (
 from craftax.craftax_env import make_craftax_env_from_name
 
 from envelope import spaces as envelope_spaces
-from envelope.adapters._common import backend_container, placeholder_like
+from envelope.adapters._common import (
+    backend_container,
+    placeholder_like,
+    replace_backend_params,
+)
 from envelope.adapters.gymnax_envelope import _convert_space as _convert_gymnax_space
 from envelope.environment import Environment, Info, InfoContainer, State
 from envelope.struct import Container, field, static_field
@@ -140,12 +144,18 @@ class CraftaxEnvelope(Environment):
         env = make_craftax_env_from_name(env_name, **env_kwargs)
         selected_params = env.default_params if env_params is None else env_params
         default_max_steps = int(selected_params.max_timesteps)
-        selected_params = selected_params.replace(max_timesteps=jnp.inf)
+        selected_params = replace_backend_params(selected_params, max_timesteps=jnp.inf)
         backend_placeholder, initial_observation = _probe_backend_placeholder(
             env, selected_params
         )
+        # The factory correlates each concrete environment with its matching modern
+        # or classic parameter class, but Craftax's published union types lose that
+        # relationship. Narrow only this backend call boundary.
+        observation_space = cast(
+            Callable[[CraftaxEnvParams], Any], env.observation_space
+        )
         declared_observation_space = _convert_gymnax_space(
-            env.observation_space(selected_params)
+            observation_space(selected_params)
         )
         observation_space = _normalize_observation_space(
             declared_observation_space, initial_observation

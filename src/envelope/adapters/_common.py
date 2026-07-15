@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Callable, TypeVar, cast
 
 import jax
 import jax.numpy as jnp
 
 from envelope.struct import Container
 from envelope.typing import PyTree
+
+_T = TypeVar("_T")
 
 
 def backend_container(metadata: Any) -> Container:
@@ -39,3 +41,15 @@ def placeholder_like(tree: PyTree) -> PyTree:
         return jnp.zeros_like(jnp.asarray(value))
 
     return jax.tree.map(placeholder_leaf, tree)
+
+
+def replace_backend_params(value: _T, **changes: Any) -> _T:
+    """Call a backend's immutable ``replace`` API without weakening its public type.
+
+    Several adapter dependencies provide dataclass-like parameter objects whose
+    runtime ``replace`` method is absent from their published type information.
+    Keep that dynamic boundary isolated here while preserving the concrete input type
+    for callers.
+    """
+    replace = cast(Callable[..., _T], getattr(value, "replace"))
+    return replace(**changes)
