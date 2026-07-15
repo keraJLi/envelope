@@ -193,4 +193,3 @@ def test_flatten_observation_outside_vmap_preserves_batch_prefix():
     assert w.observation_space.shape == (batch_size, 5)
     assert info.obs.shape == (batch_size, 5)
     assert step_info.obs.shape == (batch_size, 5)
-

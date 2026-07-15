@@ -11,8 +11,8 @@ from gymnax.environments.environment import EnvParams as GymnaxEnvParams
 from envelope import spaces as envelope_spaces
 from envelope.adapters._common import (
     backend_container,
-    zeros_like,
     replace_backend_params,
+    zeros_like,
 )
 from envelope.environment import Environment, Info, InfoContainer, State
 from envelope.struct import Container, field, static_field

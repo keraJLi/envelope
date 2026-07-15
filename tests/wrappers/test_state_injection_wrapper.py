@@ -201,6 +201,7 @@ class TestStateInjectionCoreFunctionality:
         assert jnp.allclose(reset_info.obs, 42.0)
         assert jnp.allclose(reset_state.inner_state.inner_state.env_state, 42.0)
 
+
 # ============================================================================
 # Tests: Composability with AutoResetWrapper
 # ============================================================================
