@@ -244,7 +244,8 @@ class Container:
 
     def update(self, **changes: PyTree) -> Self:
         """Update the container with new values. The `changes` overwrite fields in the
-        container, both for core fields and extras.
+        container, both for core fields and extras. The annotation describes each
+        keyword value; Python collects those values into the ``changes`` dictionary.
 
         Args:
             **changes: A dictionary of field names and values to update.
@@ -263,6 +264,8 @@ class Container:
                 extras_updates[k] = v
 
         new = dataclasses.replace(self, **core_updates)
+        # Dictionaries preserve insertion order. Rebuilding from sorted pairs gives
+        # equal schemas the same flattening order regardless of update order.
         new_extras = dict(sorted({**self._extras, **extras_updates}.items()))
         object.__setattr__(new, "_extras", new_extras)
         return new

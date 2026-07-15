@@ -28,7 +28,7 @@ from craftax.craftax_env import make_craftax_env_from_name
 from envelope import spaces as envelope_spaces
 from envelope.adapters._common import (
     backend_container,
-    placeholder_like,
+    zeros_like,
     replace_backend_params,
 )
 from envelope.adapters.gymnax_envelope import _convert_space as _convert_gymnax_space
@@ -61,7 +61,7 @@ def _probe_backend_placeholder(
         craftax_env.action_space(env_params).sample(key),
         env_params,
     )
-    placeholder = cast(Container, placeholder_like(backend_container(raw_backend)))
+    placeholder = cast(Container, zeros_like(backend_container(raw_backend)))
     return placeholder.update(valid=jnp.asarray(False)), observation
 
 

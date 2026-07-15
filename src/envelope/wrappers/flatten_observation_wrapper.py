@@ -1,27 +1,13 @@
 from functools import cached_property
-from math import prod
-from typing import Any, override
+from typing import override
 
 import jax
 import jax.numpy as jnp
 
 from envelope.environment import Info, State
 from envelope.spaces import BatchedSpace, Continuous, Discrete, Space, peel_batched
-from envelope.struct import static_field
 from envelope.typing import Key, PyTree
 from envelope.wrappers.wrapper import Wrapper
-
-
-def flatten_space(space: Space):
-    def is_leaf(x):
-        # Tuples containing only integers are shape tuples (leaves)
-        # PyTreeSpace can only have tuples that contain at least a Space, so
-        # tuples with only integers must be shape tuples from leaf spaces
-        return isinstance(x, tuple) and all(isinstance(i, int) for i in x)
-
-    shapes, treedef = jax.tree.flatten(space.shape, is_leaf=is_leaf)
-    dims = [prod(shape) for shape in shapes]
-    return treedef, shapes, dims
 
 
 def flatten_x(x: PyTree, batch_ndim: int = 0):
@@ -35,28 +21,9 @@ def flatten_x(x: PyTree, batch_ndim: int = 0):
 
 
 class FlattenObservationWrapper(Wrapper):
-    _observation_treedef: Any = static_field(default=None, kw_only=True)
-    _observation_shapes: tuple[tuple[int, ...], ...] = static_field(
-        default=(), kw_only=True
-    )
-    _observation_dims: tuple[int, ...] = static_field(default=(), kw_only=True)
-    _batch_ndim: int = static_field(default=0, kw_only=True)
-
-    def __post_init__(self):
-        if self._observation_treedef is None:
-            batch_dims, base = peel_batched(self.env.observation_space)
-            treedef, shapes, dims = flatten_space(base)
-            object.__setattr__(self, "_observation_treedef", treedef)
-            object.__setattr__(self, "_observation_shapes", tuple(map(tuple, shapes)))
-            object.__setattr__(self, "_observation_dims", tuple(map(int, dims)))
-            object.__setattr__(self, "_batch_ndim", len(batch_dims))
-        super().__post_init__()
-
     def _flatten_obs(self, obs: PyTree) -> jax.Array:
-        _, treedef = jax.tree.flatten(obs)
-        if treedef != self._observation_treedef:
-            raise ValueError("observation PyTree does not match observation_space")
-        return flatten_x(obs, batch_ndim=self._batch_ndim)
+        batch_dims, _ = peel_batched(self.env.observation_space)
+        return flatten_x(obs, batch_ndim=len(batch_dims))
 
     @override
     def init(self, key: Key) -> tuple[State, Info]:

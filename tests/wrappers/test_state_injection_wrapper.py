@@ -201,48 +201,6 @@ class TestStateInjectionCoreFunctionality:
         assert jnp.allclose(reset_info.obs, 42.0)
         assert jnp.allclose(reset_state.inner_state.inner_state.env_state, 42.0)
 
-    @pytest.mark.parametrize("compiled", [False, True], ids=["eager", "jit"])
-    @pytest.mark.parametrize(
-        "target,mismatch",
-        [
-            ("state", "shape"),
-            ("state", "dtype"),
-            ("info", "shape"),
-            ("info", "dtype"),
-        ],
-    )
-    def test_injection_rejects_leaf_shape_and_dtype_mismatches(
-        self, target, mismatch, compiled
-    ):
-        w = StateInjectionWrapper(StepCounterEnv())
-        state, info = w.init(jax.random.key(0))
-        reset_state = state.reset_state
-        reset_info = info
-
-        if target == "state" and mismatch == "shape":
-            reset_state = reset_state.replace(env_state=jnp.zeros((2,)))
-        elif target == "state":
-            reset_state = reset_state.replace(env_state=jnp.asarray(0, dtype=jnp.int32))
-        elif mismatch == "shape":
-            reset_info = reset_info.update(obs=jnp.zeros((2,)))
-        else:
-            reset_info = reset_info.update(obs=jnp.asarray(0, dtype=jnp.int32))
-
-        def inject(current_state, candidate_state, candidate_info):
-            return w.set_reset_state(
-                current_state,
-                candidate_state,
-                reset_info=candidate_info,
-            )
-
-        inject_fn = jax.jit(inject) if compiled else inject
-        with pytest.raises(
-            ValueError,
-            match=rf"reset_{target}.*{mismatch}",
-        ):
-            inject_fn(state, reset_state, reset_info)
-
-
 # ============================================================================
 # Tests: Composability with AutoResetWrapper
 # ============================================================================

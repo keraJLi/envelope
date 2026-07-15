@@ -43,34 +43,24 @@ class ObservationNormalizationWrapper(Wrapper):
     _stats_leaves: tuple[jax.ShapeDtypeStruct, ...] = static_field(
         default=(), kw_only=True
     )
-    _normalizes_final: bool = static_field(default=False, init=False)
 
     def __post_init__(self, stats_spec: PyTree | None):
-        # JAX reconstruction supplies the already-encoded static fields and leaves
-        # the init-only public argument at its default.
+        # A stats spec may itself be an unhashable PyTree. Store its hashable tree
+        # definition and leaves separately because wrapper configuration is JAX-static.
         if self._stats_treedef is None:
             if stats_spec is None:
                 stats_spec = _infer_stats_spec(self.env.observation_space)
             leaves, treedef = jax.tree.flatten(stats_spec)
-            if not leaves or not all(
-                isinstance(leaf, jax.ShapeDtypeStruct) for leaf in leaves
-            ):
-                raise TypeError(
-                    "stats_spec leaves must all be jax.ShapeDtypeStruct values"
-                )
             object.__setattr__(self, "_stats_treedef", treedef)
             object.__setattr__(self, "_stats_leaves", tuple(leaves))
-        object.__setattr__(
-            self,
-            "_normalizes_final",
-            _find_wrapper_by_role(self.env, "final_info") is not None,
-        )
         super().__post_init__()
 
     def _get_stats_spec(self) -> PyTree:
-        if self._stats_treedef is None:
-            raise RuntimeError("normalization statistics metadata is not initialized")
         return jax.tree.unflatten(self._stats_treedef, self._stats_leaves)
+
+    @property
+    def _normalizes_final(self) -> bool:
+        return _find_wrapper_by_role(self.env, "final_info") is not None
 
     def __getattribute__(self, name: str):
         # ``stats_spec`` remains the public constructor/view while its actual static
@@ -246,16 +236,6 @@ def _select_completed(done: jax.Array, new: jax.Array, old: jax.Array) -> jax.Ar
     """Select newly completed batch elements without crossing event dimensions."""
     done = jnp.asarray(done, dtype=jnp.bool_)
     new = jnp.asarray(new)
-    old = jnp.asarray(old)
-    if new.shape != old.shape:
-        raise ValueError(
-            "new and cached normalized final observations must have matching shapes"
-        )
-    if done.ndim > new.ndim or new.shape[: done.ndim] != done.shape:
-        raise ValueError(
-            f"completion flags with shape {done.shape} must be a batch prefix of "
-            f"final observations with shape {new.shape}"
-        )
     mask = done.reshape(done.shape + (1,) * (new.ndim - done.ndim))
     return jnp.where(mask, new, old)
 

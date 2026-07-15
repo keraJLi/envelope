@@ -8,7 +8,7 @@ from envelope.struct import FrozenPyTreeNode
 from envelope.typing import Array, PyTree
 
 
-class MeanVarCount(NamedTuple):
+class _MeanVarCount(NamedTuple):
     mean: Array
     var: Array
     sample_count: Array
@@ -33,7 +33,7 @@ def update_rmv(rmv_state: RunningMeanVar, x: PyTree) -> RunningMeanVar:
 
     def _update_arr(
         mean: Array, var: Array, global_count: Array, x_arr: Array
-    ) -> MeanVarCount:
+    ) -> _MeanVarCount:
         x_arr = jnp.asarray(x_arr, dtype=jnp.asarray(mean).dtype)
         global_count = jnp.asarray(global_count)
         batch_count = jnp.asarray(x_arr.shape[0], dtype=global_count.dtype)
@@ -49,10 +49,10 @@ def update_rmv(rmv_state: RunningMeanVar, x: PyTree) -> RunningMeanVar:
 
         new_mean = mean + delta * (batch_count / total_count)
         new_var = jnp.maximum(m2 / total_count, 0)
-        return MeanVarCount(mean=new_mean, var=new_var, sample_count=total_count)
+        return _MeanVarCount(mean=new_mean, var=new_var, sample_count=total_count)
 
     def is_result(z):
-        return isinstance(z, MeanVarCount)
+        return isinstance(z, _MeanVarCount)
 
     results = jax.tree.map(
         _update_arr, rmv_state.mean, rmv_state.var, rmv_state.count, x

@@ -9,26 +9,6 @@ from envelope.typing import Key, PyTree
 from envelope.wrappers.wrapper import WrappedState, Wrapper, WrapperStackRule
 
 
-def _validate_leaf_metadata(candidate: PyTree, reference: PyTree, name: str) -> None:
-    candidate_leaves = jax.tree.leaves(candidate)
-    reference_leaves = jax.tree.leaves(reference)
-    for index, (candidate_leaf, reference_leaf) in enumerate(
-        zip(candidate_leaves, reference_leaves)
-    ):
-        candidate_array = jnp.asarray(candidate_leaf)
-        reference_array = jnp.asarray(reference_leaf)
-        if candidate_array.shape != reference_array.shape:
-            raise ValueError(
-                f"{name} leaf {index} shape mismatch: expected "
-                f"{reference_array.shape}, got {candidate_array.shape}"
-            )
-        if candidate_array.dtype != reference_array.dtype:
-            raise ValueError(
-                f"{name} leaf {index} dtype mismatch: expected "
-                f"{reference_array.dtype}, got {candidate_array.dtype}"
-            )
-
-
 class StateInjectionWrapper(Wrapper):
     """Stores a state that all resets return to.
 
@@ -105,8 +85,6 @@ class StateInjectionWrapper(Wrapper):
                         "reset_info must have the same PyTree structure as the "
                         "environment's reset info"
                     )
-                _validate_leaf_metadata(reset_state, s.reset_state, "reset_state")
-                _validate_leaf_metadata(reset_info, s.reset_info, "reset_info")
                 return s.replace(
                     inner_state=reset_state,
                     reset_state=reset_state,

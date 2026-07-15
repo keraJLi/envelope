@@ -14,6 +14,12 @@ from envelope.wrappers.wrapper import WrappedState, Wrapper, WrapperStackRule
 
 
 class PooledInitVmapWrapper(Wrapper):
+    """Vectorize reset-equivalent environments using lazily generated init states.
+
+    Explicit ``reset`` calls still invoke the inner environment's vectorized ``reset``;
+    pooled ``init`` results are used only for automatic episode boundaries in ``step``.
+    """
+
     batch_size: int = static_field(kw_only=True)
     pool_size: int = static_field(kw_only=True)
 
@@ -76,6 +82,7 @@ class PooledInitVmapWrapper(Wrapper):
     def reset(
         self, state: PooledInitVmapState, key: Key
     ) -> tuple[PooledInitVmapState, Info]:
+        # Explicit resets are not pooled: reset every current inner state normally.
         keys = _split_or_keep_key(key, self.batch_size + 1)
         key_next, keys_pool = keys[0], keys[1:]
         inner_state, info = jax.vmap(self.env.reset)(state.inner_state, keys_pool)

@@ -1,4 +1,3 @@
-import inspect
 import warnings
 from collections.abc import Mapping
 from copy import copy
@@ -16,15 +15,7 @@ from envelope.environment import Environment, Info, InfoContainer, State
 from envelope.struct import static_field
 from envelope.typing import Key, PyTree
 
-_BRAX_DEFAULT_EPISODE_LENGTH = (
-    inspect.signature(brax_create).parameters["episode_length"].default
-)
-if (
-    isinstance(_BRAX_DEFAULT_EPISODE_LENGTH, bool)
-    or not isinstance(_BRAX_DEFAULT_EPISODE_LENGTH, int)
-    or _BRAX_DEFAULT_EPISODE_LENGTH <= 0
-):
-    raise RuntimeError("Brax create() must expose a finite positive default horizon")
+_BRAX_DEFAULT_EPISODE_LENGTH = 1000
 
 
 class BraxEnvelope(Environment):

@@ -34,8 +34,8 @@ def backend_container(metadata: Any) -> Container:
     return Container().update(**values)
 
 
-def placeholder_like(tree: PyTree) -> PyTree:
-    """Create a same-structure, same-shape/dtype placeholder for backend metadata."""
+def zeros_like(tree: PyTree) -> PyTree:
+    """Create a same-structure, same-shape/dtype zero tree."""
 
     def placeholder_leaf(value: Any):
         return jnp.zeros_like(jnp.asarray(value))

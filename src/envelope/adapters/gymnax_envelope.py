@@ -11,7 +11,7 @@ from gymnax.environments.environment import EnvParams as GymnaxEnvParams
 from envelope import spaces as envelope_spaces
 from envelope.adapters._common import (
     backend_container,
-    placeholder_like,
+    zeros_like,
     replace_backend_params,
 )
 from envelope.environment import Environment, Info, InfoContainer, State
@@ -40,7 +40,7 @@ def _probe_backend_placeholder(gymnax_env: GymnaxEnv, env_params: PyTree) -> Con
         gymnax_env.action_space(env_params).sample(key),
         env_params,
     )
-    placeholder = cast(Container, placeholder_like(backend_container(raw_backend)))
+    placeholder = cast(Container, zeros_like(backend_container(raw_backend)))
     return placeholder.update(valid=jnp.asarray(False))
 
 
