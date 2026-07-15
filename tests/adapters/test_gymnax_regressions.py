@@ -43,7 +43,7 @@ class _FakeGymnaxEnv:
         del key, params
         return jnp.asarray([0.0]), jnp.asarray(0, dtype=jnp.int32)
 
-    def step(self, key, state, action, params):
+    def step_env(self, key, state, action, params):
         del key, action, params
         next_state = state + 1
         obs = jnp.asarray([next_state], dtype=jnp.float32)

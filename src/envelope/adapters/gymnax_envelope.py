@@ -31,7 +31,7 @@ _GymnaxStep = Callable[
 def _probe_backend_placeholder(gymnax_env: GymnaxEnv, env_params: PyTree) -> Container:
     """Probe Gymnax's step-only info schema outside transformed execution."""
     reset_fn = cast(_GymnaxReset, gymnax_env.reset)
-    step_fn = cast(_GymnaxStep, gymnax_env.step)
+    step_fn = cast(_GymnaxStep, gymnax_env.step_env)
     key = jax.random.key(0)
     _, state = reset_fn(key, env_params)
     _, _, _, _, raw_backend = step_fn(
@@ -122,7 +122,9 @@ class GymnaxEnvelope(Environment):
     @override
     def step(self, state: State, action: PyTree) -> tuple[State, Info]:
         key, subkey = jax.random.split(state.key)
-        step_fn = cast(_GymnaxStep, self.gymnax_env.step)
+        # Gymnax's public ``step`` auto-resets on completion. Call the raw
+        # transition so Envelope remains the sole owner of reset semantics.
+        step_fn = cast(_GymnaxStep, self.gymnax_env.step_env)
         obs, env_state, reward, done, env_info = step_fn(
             subkey, state.env_state, action, self.env_params
         )
