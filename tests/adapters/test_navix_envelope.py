@@ -41,7 +41,6 @@ def _navix_env_warmup(navix_env, prng_key):
     env.step(state, action)
 
 
-@pytest.mark.xfail(reason="navix obs space declares n=9 but env emits values >= 9")
 def test_navix_contract_smoke(prng_key, navix_env):
     assert_reset_step_contract(
         navix_env, key=prng_key, obs_check=assert_obs_matches_space
@@ -63,20 +62,14 @@ def test_action_space_conversion(navix_env):
     assert env.action_space.dtype == env.navix_env.action_space.dtype
 
 
-@pytest.mark.xfail(reason="navix obs space declares n=9 but env emits values >= 9")
-def test_observation_space_conversion(navix_env):
-    """Test conversion of navix observation spaces to envelope spaces."""
+def test_observation_space_contains_real_reset_observation(navix_env, prng_key):
+    """The converted cardinalities must include values emitted by Navix."""
     env = navix_env
-
-    # Check that observation space is converted correctly
     assert isinstance(env.observation_space, Discrete)
-    # Navix n might be scalar, envelope n is array - check if all elements equal navix n
-    navix_n = env.navix_env.observation_space.n
-    envelope_n = env.observation_space.n
-    if jnp.ndim(navix_n) == 0:  # scalar
-        assert jnp.all(envelope_n == navix_n)
-    else:
-        assert jnp.array_equal(envelope_n, navix_n)
+
+    _state, info = env.init(prng_key)
+
+    assert env.observation_space.contains(info.obs)
     assert env.observation_space.shape == env.navix_env.observation_space.shape
     assert env.observation_space.dtype == env.navix_env.observation_space.dtype
 
