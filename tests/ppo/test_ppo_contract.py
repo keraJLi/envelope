@@ -85,3 +85,13 @@ def test_import_does_not_require_wandb() -> None:
     finally:
         sys.modules.pop("wandb", None)
 
+
+def test_tiny_cpu_training_update_without_wandb() -> None:
+    sys.modules.pop("wandb", None)
+
+    metrics = _ppo().tiny_cpu_train_step(seed=0)
+
+    assert int(metrics["updates"]) == 1
+    assert bool(jnp.isfinite(metrics["loss_before"]))
+    assert bool(jnp.isfinite(metrics["loss_after"]))
+    assert "wandb" not in sys.modules
