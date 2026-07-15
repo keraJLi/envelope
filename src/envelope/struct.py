@@ -19,9 +19,19 @@ def field(*, pytree_node: bool = True, **kwargs):
     return dataclasses.field(metadata=meta, **kwargs)
 
 
-def static_field(**kwargs):
-    """Shorthand for `field(pytree_node=False, ...)`."""
-    return field(pytree_node=False, **kwargs)
+def static_field(*, unsafe: bool = False, **kwargs):
+    """Declare a static (non-transformed) dataclass field.
+
+    Static values become part of a JAX pytree definition, so they must normally be
+    hashable. ``unsafe=True`` is an explicit escape hatch for opaque values whose
+    stability is managed by the caller.
+    """
+    if not isinstance(unsafe, bool):
+        raise TypeError("unsafe must be a bool")
+
+    meta = dict(kwargs.pop("metadata", {}) or {})
+    meta["static_field_unsafe"] = unsafe
+    return field(pytree_node=False, metadata=meta, **kwargs)
 
 
 @dataclass_transform()
@@ -48,11 +58,24 @@ class FrozenPyTreeNode:
         # Check if this specific class (not parent) has already been processed
         if "__is_envelope_pytreenode__" in cls.__dict__:
             return
+        declared_post_init = cls.__dict__.get("__post_init__")
+
         opts = dict(frozen=True, eq=True, repr=True, slots=False)
         if dataclass_kwargs:
             opts.update(dataclass_kwargs)
         dataclasses.dataclass(cls, **opts)  # modify in place
         cls.__is_envelope_pytreenode__ = True
+
+        # Dataclasses dispatch to ``self.__post_init__``. Wrap hooks declared by a
+        # subclass so validation cannot accidentally be skipped when that hook does
+        # not call ``super()``.
+        if declared_post_init is not None:
+
+            def validated_post_init(self, *args, **kwargs):
+                self._validate_static_fields()
+                declared_post_init(self, *args, **kwargs)
+
+            cls.__post_init__ = validated_post_init
 
         data = []
         static = []
@@ -63,6 +86,26 @@ class FrozenPyTreeNode:
                 static.append(f.name)
 
         jax.tree_util.register_dataclass(cls, data, static)
+
+    def __post_init__(self):
+        self._validate_static_fields()
+
+    def _validate_static_fields(self) -> None:
+        for dataclass_field in dataclasses.fields(self):
+            if dataclass_field.metadata.get("pytree_node", True):
+                continue
+            if dataclass_field.metadata.get("static_field_unsafe", False):
+                continue
+
+            value = getattr(self, dataclass_field.name)
+            try:
+                hash(value)
+            except TypeError as error:
+                raise TypeError(
+                    f"static field {dataclass_field.name!r} on "
+                    f"{type(self).__name__} must be hashable; use "
+                    "static_field(unsafe=True) for caller-managed opaque metadata"
+                ) from error
 
     # convenience
     def replace(self, **changes):
@@ -124,17 +167,17 @@ class Container:
                 continue
             yield (f.name, getattr(self, f.name))
         # extras
-        for k, v in self._extras.items():
-            yield (k, v)
+        for key in sorted(self._extras):
+            yield (key, self._extras[key])
 
     def __str__(self) -> str:
         core_str = super().__str__()
         if not self._extras:
             return core_str
-        extras_str = f", {', '.join(f'{k}={v!r}' for k, v in self._extras.items())}"
+        extras_str = f", {', '.join(f'{key}={self._extras[key]!r}' for key in sorted(self._extras))}"
         return f"{core_str[:-1]}{extras_str})"  # remove closing parenthesis from core
 
-    def update(self, **changes: dict[str, PyTree]) -> Self:
+    def update(self, **changes: PyTree) -> Self:
         """Update the container with new values. The `changes` overwrite fields in the
         container, both for core fields and extras.
 
@@ -155,7 +198,7 @@ class Container:
                 extras_updates[k] = v
 
         new = dataclasses.replace(self, **core_updates)
-        new_extras = {**self._extras, **extras_updates}
+        new_extras = dict(sorted({**self._extras, **extras_updates}.items()))
         object.__setattr__(new, "_extras", new_extras)
         return new
 
@@ -164,7 +207,7 @@ class Container:
         core_keys = tuple(f.name for f in core_fields)
         core_vals = tuple(getattr(self, name) for name in core_keys)
 
-        extras_keys = tuple(self._extras.keys())
+        extras_keys = tuple(sorted(self._extras))
         extras_vals = tuple(self._extras[k] for k in extras_keys)
 
         children = core_vals + extras_vals

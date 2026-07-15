@@ -23,8 +23,8 @@ class InfoContainer(Container):
 
     obs: PyTree
     reward: float | Array
-    terminated: bool
-    truncated: bool = field(default=False)
+    terminated: bool | Array
+    truncated: bool | Array = field(default=False)
 
 
 class Environment(ABC, FrozenPyTreeNode):
@@ -78,3 +78,8 @@ class Environment(ABC, FrozenPyTreeNode):
     @property
     def unwrapped(self) -> "Environment":
         return self
+
+    @property
+    def supports_init_pooling(self) -> bool:
+        """Whether cached ``init`` states are valid substitutes during reset."""
+        return False

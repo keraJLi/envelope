@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from functools import cached_property
+from numbers import Integral
 from typing import override
 
 import jax
@@ -27,7 +28,7 @@ class Space(ABC, FrozenPyTreeNode):
         """Sample a random element from the space."""
 
     @abstractmethod
-    def contains(self, x: PyTree) -> bool:
+    def contains(self, x: PyTree) -> jax.Array:
         """Check if `self` contains a sample `x`."""
 
 
@@ -41,6 +42,13 @@ class Discrete(Space):
     """
 
     n: int | jax.Array
+
+    def __post_init__(self):
+        n = jnp.asarray(self.n)
+        if not jnp.issubdtype(n.dtype, jnp.integer):
+            raise TypeError("n must have an integer dtype")
+        if not isinstance(n, jax.core.Tracer) and not bool(jnp.all(n > 0)):
+            raise ValueError("n must contain only positive values")
 
     @classmethod
     def from_shape(cls, n: int, shape: tuple[int, ...]) -> "Discrete":
@@ -61,8 +69,17 @@ class Discrete(Space):
     def sample(self, key: Key) -> jax.Array:
         return jax.random.randint(key, self.shape, 0, self.n, dtype=self.dtype)
 
-    def contains(self, x: int | jax.Array) -> bool:
-        return jnp.all(x >= 0) & jnp.all(x < self.n)
+    def contains(self, x: int | jax.Array) -> jax.Array:
+        try:
+            candidate = jnp.asarray(x)
+        except (TypeError, ValueError):
+            return jnp.asarray(False)
+
+        if candidate.shape != self.shape:
+            return jnp.asarray(False)
+        if not jnp.issubdtype(candidate.dtype, jnp.integer):
+            return jnp.asarray(False)
+        return jnp.all(candidate >= 0) & jnp.all(candidate < self.n)
 
     def __repr__(self) -> str:
         return f"Discrete(shape={self.shape}, dtype={self.dtype}, n={self.n})"
@@ -82,6 +99,30 @@ class Continuous(Space):
     low: float | jax.Array
     high: float | jax.Array
 
+    def __post_init__(self):
+        low = jnp.asarray(self.low)
+        high = jnp.asarray(self.high)
+
+        if low.shape != high.shape:
+            raise ValueError("low and high must have the same shape")
+        if low.dtype != high.dtype:
+            raise ValueError("low and high must have the same dtype")
+        if not jnp.issubdtype(low.dtype, jnp.floating):
+            raise TypeError("low and high must have a real floating dtype")
+
+        if isinstance(low, jax.core.Tracer) or isinstance(high, jax.core.Tracer):
+            return
+
+        invalid = (
+            jnp.isnan(low)
+            | jnp.isnan(high)
+            | (low > high)
+            | (jnp.isposinf(low) & jnp.isposinf(high))
+            | (jnp.isneginf(low) & jnp.isneginf(high))
+        )
+        if bool(jnp.any(invalid)):
+            raise ValueError("low and high must describe non-empty real intervals")
+
     @classmethod
     def from_shape(
         cls, low: float, high: float, shape: tuple[int, ...]
@@ -97,26 +138,57 @@ class Continuous(Space):
 
     @property
     def dtype(self) -> jnp.dtype:
-        if jnp.asarray(self.low).dtype != jnp.asarray(self.high).dtype:
-            raise ValueError("low and high must have the same dtype")
-
         return jnp.asarray(self.low).dtype
 
     @property
     def shape(self) -> tuple[int, ...]:
-        if jnp.asarray(self.low).shape != jnp.asarray(self.high).shape:
-            raise ValueError("low and high must have the same shape")
-
         return jnp.asarray(self.low).shape
 
     @override
     def sample(self, key: Key) -> jax.Array:
-        uniform_sample = jax.random.uniform(key, self.shape, self.dtype)
-        return self.low + uniform_sample * (self.high - self.low)
+        uniform_key, normal_key, exponential_key = jax.random.split(key, 3)
+        low = jnp.asarray(self.low)
+        high = jnp.asarray(self.high)
+        finite_low = jnp.isfinite(low)
+        finite_high = jnp.isfinite(high)
+
+        uniform = jax.random.uniform(uniform_key, self.shape, self.dtype)
+        normal = jax.random.normal(normal_key, self.shape, self.dtype)
+        exponential = jax.random.exponential(exponential_key, self.shape, self.dtype)
+
+        # A convex combination avoids overflow for wide but finite intervals.
+        bounded = (1 - uniform) * low + uniform * high
+        dtype_info = jnp.finfo(self.dtype)
+        lower_bounded = jnp.minimum(low + exponential, dtype_info.max)
+        upper_bounded = jnp.maximum(high - exponential, dtype_info.min)
+        unbounded = jnp.clip(normal, dtype_info.min, dtype_info.max)
+
+        return jnp.where(
+            finite_low & finite_high,
+            bounded,
+            jnp.where(
+                finite_low,
+                lower_bounded,
+                jnp.where(finite_high, upper_bounded, unbounded),
+            ),
+        )
 
     @override
-    def contains(self, x: jax.Array) -> bool:
-        return jnp.all((x >= jnp.asarray(self.low)) & (x <= jnp.asarray(self.high)))
+    def contains(self, x: jax.Array) -> jax.Array:
+        try:
+            candidate = jnp.asarray(x)
+        except (TypeError, ValueError):
+            return jnp.asarray(False)
+
+        if candidate.shape != self.shape:
+            return jnp.asarray(False)
+        is_integer = jnp.issubdtype(candidate.dtype, jnp.integer)
+        is_floating = jnp.issubdtype(candidate.dtype, jnp.floating)
+        if not (is_integer or is_floating):
+            return jnp.asarray(False)
+        return jnp.all(
+            (candidate >= jnp.asarray(self.low)) & (candidate <= jnp.asarray(self.high))
+        )
 
     def __repr__(self) -> str:
         dtype_str = getattr(self.dtype, "__name__", str(self.dtype))
@@ -159,15 +231,22 @@ class PyTreeSpace(Space):
         return jax.tree.unflatten(treedef, samples)
 
     @override
-    def contains(self, x: PyTree) -> bool:
-        # Use tree.map to check containment for each space-value pair
-        contains = jax.tree.map(
-            lambda space, xi: space.contains(xi),
-            self.tree,
-            x,
-            is_leaf=lambda node: isinstance(node, Space),
+    def contains(self, x: PyTree) -> jax.Array:
+        spaces, space_structure = jax.tree.flatten(
+            self.tree, is_leaf=lambda node: isinstance(node, Space)
         )
-        return jnp.all(jnp.array(jax.tree.leaves(contains)))
+        values, value_structure = jax.tree.flatten(
+            x, is_leaf=lambda node: isinstance(node, Space)
+        )
+        if space_structure != value_structure:
+            return jnp.asarray(False)
+
+        return jnp.all(
+            jnp.asarray(
+                [space.contains(value) for space, value in zip(spaces, values)],
+                dtype=jnp.bool_,
+            )
+        )
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.tree!r})"
@@ -214,6 +293,14 @@ class BatchedSpace(Space):
     space: Space
     batch_size: int = static_field()
 
+    def __post_init__(self):
+        if isinstance(self.batch_size, bool) or not isinstance(
+            self.batch_size, Integral
+        ):
+            raise TypeError("batch_size must be an integer")
+        if self.batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+
     @override
     def sample(self, key: Key) -> PyTree:
         """
@@ -236,12 +323,27 @@ class BatchedSpace(Space):
         return jax.vmap(self.space.sample)(keys)
 
     @override
-    def contains(self, x: PyTree) -> bool:
+    def contains(self, x: PyTree) -> jax.Array:
         """
         `BatchedSpace.contains` checks if each entry of `x` along the leading dimension
         is contained in the base (unbatched) `Space`.
         """
-        result = jax.vmap(self.space.contains)(x)
+        try:
+            leaves = jax.tree.leaves(x)
+        except (TypeError, ValueError):
+            return jnp.asarray(False)
+        if not leaves:
+            return jnp.asarray(self.space.contains(x), dtype=jnp.bool_)
+        if any(
+            not jnp.shape(leaf) or jnp.shape(leaf)[0] != self.batch_size
+            for leaf in leaves
+        ):
+            return jnp.asarray(False)
+
+        try:
+            result = jax.vmap(self.space.contains)(x)
+        except (TypeError, ValueError):
+            return jnp.asarray(False)
         return jnp.all(jnp.asarray(result))
 
     @override

@@ -1,6 +1,8 @@
-from typing import Any, Protocol, TypeAlias, runtime_checkable
+from typing import Any, Protocol, Self, TypeAlias, runtime_checkable
 
 import jax
+
+__all__ = ["Array", "Info", "Key", "PyTree", "State"]
 
 PyTree: TypeAlias = Any
 Key: TypeAlias = jax.Array  # with jnp.issubdtype(key.dtype, jax.dtypes.prng_key)
@@ -24,13 +26,11 @@ class Info(Protocol):
     """
 
     obs: PyTree
-    reward: float
-    terminated: bool
-    truncated: bool
+    reward: float | Array
+    terminated: bool | Array
+    truncated: bool | Array
 
-    def update(self, **changes: PyTree) -> "Info":
+    def update(self, **changes: PyTree) -> Self:
         """Update the info container with new values. This method should return
         a new instance with updated and potentially new values."""
         ...
-
-    def __getattr__(self, name: str) -> PyTree: ...
