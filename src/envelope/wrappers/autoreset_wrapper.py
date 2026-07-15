@@ -43,7 +43,9 @@ class AutoResetWrapper(Wrapper):
         last_final: Info = field()
         final_valid: jax.Array = field()
 
-    wrapper_roles: ClassVar[frozenset[str]] = frozenset({"autoreset", "lifecycle"})
+    wrapper_roles: ClassVar[frozenset[str]] = frozenset(
+        {"autoreset", "final_info", "lifecycle"}
+    )
     stack_rules: ClassVar[tuple[WrapperStackRule, ...]] = (
         WrapperStackRule(
             "vectorization",

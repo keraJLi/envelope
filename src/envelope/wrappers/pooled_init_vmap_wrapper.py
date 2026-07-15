@@ -18,7 +18,7 @@ class PooledInitVmapWrapper(Wrapper):
     pool_size: int = static_field(kw_only=True)
 
     wrapper_roles: ClassVar[frozenset[str]] = frozenset(
-        {"lifecycle", "pooled_init_vmap", "vectorization"}
+        {"final_info", "lifecycle", "pooled_init_vmap", "vectorization"}
     )
     stack_rules: ClassVar[tuple[WrapperStackRule, ...]] = (
         WrapperStackRule(

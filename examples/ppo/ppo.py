@@ -44,14 +44,11 @@ def make_env(args: Args):
     env = envelope.FlattenActionWrapper(env=env)
     env = envelope.ClipActionWrapper(env=env)
     env = envelope.EpisodeStatisticsWrapper(env=env)
+    vecenv = envelope.PooledInitVmapWrapper(
+        env=env, batch_size=args.num_envs, pool_size=args.pool_size
+    )
     if args.normalize_observations:
-        normalized_env = envelope.ObservationNormalizationWrapper(env=env)
-        autoreset_env = envelope.AutoResetWrapper(env=normalized_env)
-        vecenv = envelope.VmapWrapper(env=autoreset_env, batch_size=args.num_envs)
-    else:
-        vecenv = envelope.PooledInitVmapWrapper(
-            env=env, batch_size=args.num_envs, pool_size=args.pool_size
-        )
+        vecenv = envelope.ObservationNormalizationWrapper(env=vecenv)
     return env, vecenv
 
 

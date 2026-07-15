@@ -8,7 +8,7 @@ from envelope import spaces
 from envelope.environment import Environment, Info
 from envelope.struct import field
 from envelope.typing import Key, PyTree
-from envelope.wrappers.wrapper import Wrapper
+from envelope.wrappers.wrapper import Wrapper, WrapperStackRule
 
 
 class VmapEnvsWrapper(Wrapper):
@@ -26,6 +26,12 @@ class VmapEnvsWrapper(Wrapper):
 
     batch_size: int = field(kw_only=True)
     wrapper_roles: ClassVar[frozenset[str]] = frozenset({"vectorization"})
+    stack_rules: ClassVar[tuple[WrapperStackRule, ...]] = (
+        WrapperStackRule(
+            "normalization",
+            "ObservationNormalizationWrapper must wrap {outer}, not be inside it",
+        ),
+    )
 
     def _split_keys(self, key: Key) -> Key:
         if not jnp.issubdtype(key.dtype, jax.dtypes.prng_key):

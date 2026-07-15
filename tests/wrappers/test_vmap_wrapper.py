@@ -124,9 +124,7 @@ def test_normalization_must_wrap_vmap(batch_size):
             batch_size=batch_size,
         )
 
-    wrapper = ObservationNormalizationWrapper(
-        VmapWrapper(base, batch_size=batch_size)
-    )
+    wrapper = ObservationNormalizationWrapper(VmapWrapper(base, batch_size=batch_size))
     state, info = wrapper.init(jax.random.key(42))
 
     assert info.obs.shape == (batch_size, 3)

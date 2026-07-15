@@ -1,7 +1,7 @@
 from dataclasses import InitVar
 from functools import cached_property
 from math import prod
-from typing import Any, ClassVar, override
+from typing import Any, ClassVar, Protocol, cast, override
 
 import jax
 from jax import numpy as jnp
@@ -11,30 +11,20 @@ from envelope.spaces import BatchedSpace, Continuous, PyTreeSpace, Space
 from envelope.struct import field, static_field
 from envelope.typing import Key, PyTree
 from envelope.wrappers.normalization import RunningMeanVar, update_rmv
-from envelope.wrappers.wrapper import WrappedState, Wrapper, WrapperStackRule
+from envelope.wrappers.wrapper import WrappedState, Wrapper, _find_wrapper_by_role
+
+
+class _InfoWithFinal(Info, Protocol):
+    @property
+    def final(self) -> Info: ...
 
 
 class ObservationNormalizationWrapper(Wrapper):
     wrapper_roles: ClassVar[frozenset[str]] = frozenset({"normalization", "persistent"})
-    stack_rules: ClassVar[tuple[WrapperStackRule, ...]] = (
-        WrapperStackRule(
-            "pooled_init_vmap",
-            (
-                "ObservationNormalizationWrapper is incompatible with "
-                "PooledInitVmapWrapper"
-            ),
-        ),
-        WrapperStackRule(
-            "autoreset",
-            (
-                "ObservationNormalizationWrapper must be inside AutoResetWrapper, "
-                "not outside it"
-            ),
-        ),
-    )
 
     class ObservationNormalizationState(WrappedState):
         rmv_state: RunningMeanVar = field()
+        last_normalized_final_obs: PyTree | None = field(default=None)
 
     stats_spec: InitVar[Any] = None
     """Per-leaf normalization statistics spec as a pytree of jax.ShapeDtypeStruct.
@@ -46,6 +36,7 @@ class ObservationNormalizationWrapper(Wrapper):
     _stats_leaves: tuple[jax.ShapeDtypeStruct, ...] = static_field(
         default=(), kw_only=True
     )
+    _normalizes_final: bool = static_field(default=False, init=False)
 
     def __post_init__(self, stats_spec: PyTree | None):
         # JAX reconstruction supplies the already-encoded static fields and leaves
@@ -62,6 +53,11 @@ class ObservationNormalizationWrapper(Wrapper):
                 )
             object.__setattr__(self, "_stats_treedef", treedef)
             object.__setattr__(self, "_stats_leaves", tuple(leaves))
+        object.__setattr__(
+            self,
+            "_normalizes_final",
+            _find_wrapper_by_role(self.env, "final_info") is not None,
+        )
         super().__post_init__()
 
     def _get_stats_spec(self) -> PyTree:
@@ -110,7 +106,11 @@ class ObservationNormalizationWrapper(Wrapper):
         return jax.tree.map(norm_leaf, obs, rmv.mean, rmv.std, self._get_stats_spec())
 
     def _normalize_and_update(
-        self, state: ObservationNormalizationState, info: Info
+        self,
+        state: ObservationNormalizationState,
+        info: Info,
+        *,
+        update_final: bool,
     ) -> tuple[ObservationNormalizationState, Info]:
         raw_obs = info.obs
         reshaped_obs = jax.tree.map(
@@ -120,21 +120,59 @@ class ObservationNormalizationWrapper(Wrapper):
         )
         rmv_state = update_rmv(state.rmv_state, reshaped_obs)
         norm_obs = self._normalize_obs(raw_obs, rmv_state)
+        last_normalized_final_obs = state.last_normalized_final_obs
+
+        info = info.update(obs=norm_obs, unnormalized_obs=raw_obs)
+
+        if self._normalizes_final:
+            if last_normalized_final_obs is None:
+                raise RuntimeError(
+                    "normalized final-observation cache is not initialized"
+                )
+
+            info_with_final = cast(_InfoWithFinal, info)
+            raw_final_obs = info_with_final.final.obs
+            if update_final:
+                done = jnp.asarray(info.terminated, dtype=jnp.bool_) | jnp.asarray(
+                    info.truncated, dtype=jnp.bool_
+                )
+                candidate = self._normalize_obs(raw_final_obs, rmv_state)
+                last_normalized_final_obs = jax.tree.map(
+                    lambda new, old: _select_completed(done, new, old),
+                    candidate,
+                    last_normalized_final_obs,
+                )
+
+            final = info_with_final.final.update(
+                obs=last_normalized_final_obs,
+                unnormalized_obs=raw_final_obs,
+            )
+            info = info.update(final=final)
 
         state = self.ObservationNormalizationState(
-            inner_state=state.inner_state, rmv_state=rmv_state
+            inner_state=state.inner_state,
+            rmv_state=rmv_state,
+            last_normalized_final_obs=last_normalized_final_obs,
         )
-        info = info.update(obs=norm_obs, unnormalized_obs=raw_obs)
         return state, info
 
     @override
     def init(self, key: Key) -> tuple[ObservationNormalizationState, Info]:
         inner_state, info = self.env.init(key)
         rmv_state = self._init_rmv_state()
+        last_normalized_final_obs = None
+        if self._normalizes_final:
+            final = cast(_InfoWithFinal, info).final
+            normalized_template = self._normalize_obs(final.obs, rmv_state)
+            last_normalized_final_obs = jax.tree.map(
+                jnp.zeros_like, normalized_template
+            )
         next_state = self.ObservationNormalizationState(
-            inner_state=inner_state, rmv_state=rmv_state
+            inner_state=inner_state,
+            rmv_state=rmv_state,
+            last_normalized_final_obs=last_normalized_final_obs,
         )
-        return self._normalize_and_update(next_state, info)
+        return self._normalize_and_update(next_state, info, update_final=False)
 
     @override
     def reset(
@@ -143,9 +181,11 @@ class ObservationNormalizationWrapper(Wrapper):
         inner_state, info = self.env.reset(state.inner_state, key)
         # Preserve running statistics across resets
         next_state = self.ObservationNormalizationState(
-            inner_state=inner_state, rmv_state=state.rmv_state
+            inner_state=inner_state,
+            rmv_state=state.rmv_state,
+            last_normalized_final_obs=state.last_normalized_final_obs,
         )
-        return self._normalize_and_update(next_state, info)
+        return self._normalize_and_update(next_state, info, update_final=False)
 
     @override
     def step(
@@ -153,7 +193,7 @@ class ObservationNormalizationWrapper(Wrapper):
     ) -> tuple[ObservationNormalizationState, Info]:
         inner_state, info = self.env.step(state.inner_state, action)
         state = state.replace(inner_state=inner_state)
-        return self._normalize_and_update(state, info)
+        return self._normalize_and_update(state, info, update_final=True)
 
     @cached_property
     @override
@@ -193,6 +233,24 @@ def _reshape_for_stats(x: jax.Array, spec: jax.ShapeDtypeStruct) -> jax.Array:
         x = jnp.transpose(x, permutation)
     sample_count = prod(x.shape[: len(sample_axes)]) if sample_axes else 1
     return x.reshape((sample_count,) + spec_shape)
+
+
+def _select_completed(done: jax.Array, new: jax.Array, old: jax.Array) -> jax.Array:
+    """Select newly completed batch elements without crossing event dimensions."""
+    done = jnp.asarray(done, dtype=jnp.bool_)
+    new = jnp.asarray(new)
+    old = jnp.asarray(old)
+    if new.shape != old.shape:
+        raise ValueError(
+            "new and cached normalized final observations must have matching shapes"
+        )
+    if done.ndim > new.ndim or new.shape[: done.ndim] != done.shape:
+        raise ValueError(
+            f"completion flags with shape {done.shape} must be a batch prefix of "
+            f"final observations with shape {new.shape}"
+        )
+    mask = done.reshape(done.shape + (1,) * (new.ndim - done.ndim))
+    return jnp.where(mask, new, old)
 
 
 def _normalized_observation_space(space: Space, stats_spec: PyTree) -> Space:

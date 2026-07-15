@@ -300,9 +300,7 @@ def test_shared_normalization_preserves_final_across_manual_reset_and_scan():
 
 def test_terminal_placeholder_uses_normalized_dtype_and_fixed_schema():
     wrapper = ObservationNormalizationWrapper(
-        VmapWrapper(
-            AutoResetWrapper(StepCounterEnv(terminate_after=1)), batch_size=2
-        ),
+        VmapWrapper(AutoResetWrapper(StepCounterEnv(terminate_after=1)), batch_size=2),
         stats_spec=jax.ShapeDtypeStruct((), jnp.float16),
     )
 
@@ -322,9 +320,7 @@ def test_terminal_placeholder_uses_normalized_dtype_and_fixed_schema():
 
 def test_shared_normalization_can_wrap_pooled_initialization():
     wrapper = ObservationNormalizationWrapper(
-        PooledInitVmapWrapper(
-            ActionTerminationEnv(), batch_size=2, pool_size=2
-        )
+        PooledInitVmapWrapper(ActionTerminationEnv(), batch_size=2, pool_size=2)
     )
     state, initial = wrapper.init(jax.random.key(0))
 
@@ -341,9 +337,7 @@ def test_shared_normalization_can_wrap_pooled_initialization():
     assert first.final.unnormalized_obs[0] == 1.0
     assert first.final.obs[1] == 0
 
-    state, second = wrapper.step(
-        state, jnp.asarray([0.1, 1.0], dtype=jnp.float32)
-    )
+    state, second = wrapper.step(state, jnp.asarray([0.1, 1.0], dtype=jnp.float32))
 
     assert jnp.array_equal(second.terminated, jnp.asarray([False, True]))
     assert jnp.array_equal(second.final.obs[0], first_cached[0])
