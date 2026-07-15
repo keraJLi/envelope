@@ -488,6 +488,17 @@ class TestPyTreeNodeDefaults:
         node = Node(x=jnp.array(1.0), metadata=metadata)
         assert node.metadata is metadata
 
+    def test_static_field_validation_runs_after_subclass_post_init(self):
+        class Node(FrozenPyTreeNode):
+            x: jax.Array
+            metadata: object = static_field(default=None)
+
+            def __post_init__(self):
+                object.__setattr__(self, "metadata", {"mutable": []})
+
+        with pytest.raises(TypeError, match="static"):
+            Node(x=jnp.array(1.0))
+
     def test_mixed_required_and_default_fields(self):
         """Test nodes with mix of required and default fields."""
 
