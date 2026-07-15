@@ -6,7 +6,7 @@ import jax.numpy as jnp
 from envelope.environment import Info
 from envelope.struct import field
 from envelope.typing import Key, PyTree
-from envelope.wrappers.wrapper import WrappedState, Wrapper
+from envelope.wrappers.wrapper import WrappedState, Wrapper, _find_wrapper
 
 
 class AutoResetWrapper(Wrapper):
@@ -41,40 +41,100 @@ class AutoResetWrapper(Wrapper):
     class AutoResetState(WrappedState):
         reset_key: jax.Array = field()
         last_final: Info = field()
+        final_valid: jax.Array = field()
+
+    def __post_init__(self):
+        # Auto-reset makes a scalar branch decision.  Put vectorization outside
+        # this wrapper so each mapped instance makes that decision independently.
+        from envelope.wrappers.pooled_init_vmap_wrapper import PooledInitVmapWrapper
+        from envelope.wrappers.vmap_envs_wrapper import VmapEnvsWrapper
+        from envelope.wrappers.vmap_wrapper import VmapWrapper
+        from envelope.wrappers.episode_statistics_wrapper import (
+            CumulativeStatisticsWrapper,
+        )
+
+        vector_wrapper = _find_wrapper(
+            self.env, (VmapWrapper, VmapEnvsWrapper, PooledInitVmapWrapper)
+        )
+        if vector_wrapper is not None:
+            raise ValueError(
+                "AutoResetWrapper must be inside VmapWrapper/vectorization, "
+                "not outside it"
+            )
+        if _find_wrapper(self.env, (CumulativeStatisticsWrapper,)) is not None:
+            raise ValueError(
+                "AutoResetWrapper cannot wrap CumulativeStatisticsWrapper; "
+                "CumulativeStatisticsWrapper must be outside AutoResetWrapper"
+            )
+
+    @property
+    @override
+    def supports_init_pooling(self) -> bool:
+        return False
 
     @override
-    def init(self, key: Key) -> tuple[WrappedState, Info]:
-        key, subkey = jax.random.split(key)
-        inner_state, info = self.env.init(key)
-        # Initialize last_final with the reset info (no previous episode yet)
-        last_final = jax.tree.map(lambda x: jnp.full_like(x, jnp.nan), info)
+    def init(self, key: Key) -> tuple[AutoResetState, Info]:
+        inner_key, reset_key = jax.random.split(key)
+        inner_state, info = self.env.init(inner_key)
+        last_final = jax.tree.map(jnp.zeros_like, info)
+        final_valid = jnp.asarray(False)
         state = self.AutoResetState(
-            inner_state=inner_state, reset_key=subkey, last_final=last_final
+            inner_state=inner_state,
+            reset_key=reset_key,
+            last_final=last_final,
+            final_valid=final_valid,
         )
-        return state, info.update(final=state.last_final)
+        return state, info.update(final=state.last_final, final_valid=final_valid)
 
     @override
-    def reset(self, state: WrappedState, key: Key) -> tuple[WrappedState, Info]:
-        raise NotImplementedError("Reset is not implemented for AutoResetWrapper")
+    def reset(self, state: AutoResetState, key: Key) -> tuple[AutoResetState, Info]:
+        inner_key, reset_key = jax.random.split(key)
+        inner_state, info = self.env.reset(state.inner_state, inner_key)
+        state = state.replace(inner_state=inner_state, reset_key=reset_key)
+        return state, info.update(final=state.last_final, final_valid=state.final_valid)
 
     @override
-    def step(self, state: WrappedState, action: PyTree) -> tuple[WrappedState, Info]:
-        key, key_reset = jax.random.split(state.reset_key)
-        state = state.replace(reset_key=key)
+    def step(
+        self, state: AutoResetState, action: PyTree
+    ) -> tuple[AutoResetState, Info]:
+        next_reset_key, reset_key = jax.random.split(state.reset_key)
+        transition_state, transition_info = self.env.step(state.inner_state, action)
 
-        inner_state, info = self.env.step(state.inner_state, action)
-        reset_inner_state, reset_info = self.env.reset(inner_state, key_reset)
-
-        # Select next state and info based on done
-        done = info.terminated | info.truncated
-        state = jax.tree.map(
-            lambda reset, next: jax.lax.select(done, reset, next),
-            state.replace(inner_state=reset_inner_state),
-            state.replace(inner_state=inner_state),
+        done = jnp.asarray(transition_info.terminated) | jnp.asarray(
+            transition_info.truncated
         )
-        info = jax.tree.map(
-            lambda reset, next: jax.lax.select(done, reset, next),
-            reset_info.update(final=info),
-            info.update(final=state.last_final),
+
+        def reset_episode(_):
+            reset_state, reset_info = self.env.reset(transition_state, reset_key)
+            terminal_info = reset_info.update(
+                reward=transition_info.reward,
+                terminated=transition_info.terminated,
+                truncated=transition_info.truncated,
+                final=transition_info,
+                final_valid=jnp.asarray(True),
+            )
+            return reset_state, transition_info, jnp.asarray(True), terminal_info
+
+        def continue_episode(_):
+            continuing_info = transition_info.update(
+                final=state.last_final,
+                final_valid=state.final_valid,
+            )
+            return (
+                transition_state,
+                state.last_final,
+                state.final_valid,
+                continuing_info,
+            )
+
+        inner_state, last_final, final_valid, info = jax.lax.cond(
+            done, reset_episode, continue_episode, operand=None
+        )
+
+        state = state.replace(
+            inner_state=inner_state,
+            reset_key=next_reset_key,
+            last_final=last_final,
+            final_valid=final_valid,
         )
         return state, info

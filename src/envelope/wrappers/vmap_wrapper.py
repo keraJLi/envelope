@@ -8,7 +8,7 @@ from envelope import spaces
 from envelope.environment import Info
 from envelope.struct import static_field
 from envelope.typing import Key, PyTree
-from envelope.wrappers.wrapper import WrappedState, Wrapper
+from envelope.wrappers.wrapper import Wrapper
 
 
 def is_single_key(key):
@@ -34,32 +34,37 @@ class VmapWrapper(Wrapper):
 
     batch_size: int = static_field(kw_only=True)
 
+    @property
     @override
-    def init(self, key: Key) -> tuple[WrappedState, Info]:
+    def supports_init_pooling(self) -> bool:
+        return False
+
+    @override
+    def init(self, key: Key) -> tuple[PyTree, Info]:
         keys = _split_or_keep_key(key, self.batch_size)
         state, info = jax.vmap(self.env.init)(keys)
         return state, info
 
     @override
-    def reset(self, state: PyTree, key: Key) -> tuple[WrappedState, Info]:
+    def reset(self, state: PyTree, key: Key) -> tuple[PyTree, Info]:
         keys = _split_or_keep_key(key, self.batch_size)
         state, info = jax.vmap(self.env.reset)(state, keys)
         return state, info
 
     @override
-    def step(self, state: WrappedState, action: PyTree) -> tuple[WrappedState, Info]:
+    def step(self, state: PyTree, action: PyTree) -> tuple[PyTree, Info]:
         state, info = jax.vmap(self.env.step)(state, action)
         return state, info
 
-    @override
     @cached_property
+    @override
     def observation_space(self) -> spaces.Space:
         return spaces.BatchedSpace(
             space=self.env.observation_space, batch_size=self.batch_size
         )
 
-    @override
     @cached_property
+    @override
     def action_space(self) -> spaces.Space:
         return spaces.BatchedSpace(
             space=self.env.action_space, batch_size=self.batch_size

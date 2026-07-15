@@ -1,11 +1,13 @@
 from functools import cached_property
-from typing import override
+from math import prod
+from typing import Any, override
 
 import jax
 import jax.numpy as jnp
 
 from envelope.environment import Info, State
 from envelope.spaces import BatchedSpace, Continuous, Discrete, Space, peel_batched
+from envelope.struct import static_field
 from envelope.typing import PyTree
 from envelope.wrappers.wrapper import Wrapper
 
@@ -18,26 +20,45 @@ def flatten_space(space: Space):
         return isinstance(x, tuple) and all(isinstance(i, int) for i in x)
 
     shapes, treedef = jax.tree.flatten(space.shape, is_leaf=is_leaf)
-    dims = [jnp.prod(jnp.asarray(shape)) for shape in shapes]
+    dims = [prod(shape) for shape in shapes]
     return treedef, shapes, dims
 
 
 def unflatten_x(x: jax.Array, treedef, shapes, dims):
-    indices = jnp.cumsum(jnp.array(dims))[:-1]  # last split is the remainder
-    xs = jnp.split(x, indices)
-    xs = jax.tree.map(lambda x, shape: x.reshape(shape), xs, shapes)
+    indices = tuple(sum(dims[:i]) for i in range(1, len(dims)))
+    xs = jnp.split(x, indices, axis=-1)
+    xs = [
+        part.reshape(part.shape[:-1] + tuple(shape)) for part, shape in zip(xs, shapes)
+    ]
     return jax.tree.unflatten(treedef, xs)
 
 
 class FlattenActionWrapper(Wrapper):
-    @override
-    def step(self, state: State, action: PyTree) -> tuple[State, Info]:
-        treedef, shapes, dims = flatten_space(self.env.action_space)
-        action = unflatten_x(action, treedef, shapes, dims)
-        return self.env.step(state, action)
+    _action_treedef: Any = static_field(default=None, kw_only=True)
+    _action_shapes: tuple[tuple[int, ...], ...] = static_field(default=(), kw_only=True)
+    _action_dims: tuple[int, ...] = static_field(default=(), kw_only=True)
+
+    def __post_init__(self):
+        if self._action_treedef is not None:
+            return
+        _, base = peel_batched(self.env.action_space)
+        treedef, shapes, dims = flatten_space(base)
+        object.__setattr__(self, "_action_treedef", treedef)
+        object.__setattr__(self, "_action_shapes", tuple(map(tuple, shapes)))
+        object.__setattr__(self, "_action_dims", tuple(map(int, dims)))
 
     @override
+    def step(self, state: State, action: PyTree) -> tuple[State, Info]:
+        action = unflatten_x(
+            action,
+            self._action_treedef,
+            self._action_shapes,
+            self._action_dims,
+        )
+        return self.env.step(state, action)
+
     @cached_property
+    @override
     def action_space(self) -> Space:
         batch_dims, base = peel_batched(self.env.action_space)
 
@@ -48,7 +69,9 @@ class FlattenActionWrapper(Wrapper):
         act_cls = type(spaces[0])
 
         if not all(isinstance(space, act_cls) for space in spaces):
-            raise ValueError("All spaces must be of the same type")
+            raise ValueError(
+                "Mixed action trees are unsupported by FlattenActionWrapper"
+            )
 
         if act_cls == Continuous:
             lows = [jnp.asarray(s.low).reshape(-1) for s in spaces]
@@ -63,6 +86,6 @@ class FlattenActionWrapper(Wrapper):
         else:
             raise ValueError(f"Unsupported space type: {act_cls}")
 
-        for batch_dim in batch_dims:
+        for batch_dim in reversed(batch_dims):
             space = BatchedSpace(space, batch_dim)
         return space

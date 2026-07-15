@@ -1,6 +1,6 @@
 from dataclasses import KW_ONLY
 from functools import cached_property
-from typing import override
+from typing import Any, override
 
 from envelope import spaces
 from envelope.environment import Environment, Info, State
@@ -36,22 +36,55 @@ class Wrapper(Environment):
     def step(self, state: State, action: PyTree) -> tuple[State, Info]:
         return self.env.step(state, action)
 
-    @override
     @cached_property
+    @override
     def observation_space(self) -> spaces.Space:
         return self.env.observation_space
 
-    @override
     @cached_property
+    @override
     def action_space(self) -> spaces.Space:
         return self.env.action_space
 
-    @override
     @property
+    @override
     def unwrapped(self) -> Environment:
         return self.env.unwrapped
 
-    def __getattr__(self, name):
-        if name == "__setstate__":
-            raise AttributeError(name)
-        return getattr(self.env, name)
+    @property
+    @override
+    def supports_init_pooling(self) -> bool:
+        """Propagate reset-equivalence through transparent wrappers."""
+        return self.env.supports_init_pooling
+
+    def __getattribute__(self, name: str) -> Any:
+        """Forward genuinely missing attributes without hiding wrapper failures.
+
+        ``__getattr__`` is also invoked when a descriptor defined on the wrapper
+        raises ``AttributeError``.  Blind delegation in that situation masks the
+        original error and makes debugging wrapper properties needlessly hard.
+        Distinguish a genuinely absent attribute from a failing descriptor before
+        consulting the wrapped environment.
+        """
+        try:
+            return object.__getattribute__(self, name)
+        except AttributeError:
+            cls = object.__getattribute__(self, "__class__")
+            if any(name in ancestor.__dict__ for ancestor in cls.__mro__):
+                raise
+            if name == "__setstate__":
+                raise
+            env = object.__getattribute__(self, "env")
+            return getattr(env, name)
+
+
+def _find_wrapper(
+    env: Environment, wrapper_types: tuple[type[Wrapper], ...]
+) -> Wrapper | None:
+    """Return the first matching wrapper in ``env``'s wrapper chain."""
+    current = env
+    while isinstance(current, Wrapper):
+        if isinstance(current, wrapper_types):
+            return current
+        current = current.env
+    return None

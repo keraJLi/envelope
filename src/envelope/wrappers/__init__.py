@@ -3,7 +3,10 @@ from envelope.wrappers.clip_action_wrapper import ClipActionWrapper
 from envelope.wrappers.continuous_observation_wrapper import (
     ContinuousObservationWrapper,
 )
-from envelope.wrappers.episode_statistics_wrapper import EpisodeStatisticsWrapper
+from envelope.wrappers.episode_statistics_wrapper import (
+    CumulativeStatisticsWrapper,
+    EpisodeStatisticsWrapper,
+)
 from envelope.wrappers.flatten_action_wrapper import FlattenActionWrapper
 from envelope.wrappers.flatten_observation_wrapper import FlattenObservationWrapper
 from envelope.wrappers.observation_normalization_wrapper import (
@@ -24,6 +27,7 @@ __all__ = [
     "AutoResetWrapper",
     "ClipActionWrapper",
     "ContinuousObservationWrapper",
+    "CumulativeStatisticsWrapper",
     "EpisodeStatisticsWrapper",
     "FlattenActionWrapper",
     "FlattenObservationWrapper",

@@ -8,7 +8,7 @@ from envelope import spaces
 from envelope.environment import Environment, Info
 from envelope.struct import field
 from envelope.typing import Key, PyTree
-from envelope.wrappers.wrapper import WrappedState, Wrapper
+from envelope.wrappers.wrapper import Wrapper
 
 
 class VmapEnvsWrapper(Wrapper):
@@ -26,6 +26,11 @@ class VmapEnvsWrapper(Wrapper):
 
     batch_size: int = field(kw_only=True)
 
+    @property
+    @override
+    def supports_init_pooling(self) -> bool:
+        return False
+
     def _split_keys(self, key: Key) -> Key:
         if not jnp.issubdtype(key.dtype, jax.dtypes.prng_key):
             raise ValueError("key must be a (new-style) `jax.random.key`.")
@@ -40,40 +45,40 @@ class VmapEnvsWrapper(Wrapper):
         )
 
     @override
-    def init(self, key: Key) -> tuple[WrappedState, Info]:
+    def init(self, key: Key) -> tuple[PyTree, Info]:
         keys = self._split_keys(key)
         state, info = jax.vmap(lambda e, k: e.init(k))(self.env, keys)
         return state, info
 
     @override
-    def reset(self, state: PyTree, key: Key) -> tuple[WrappedState, Info]:
+    def reset(self, state: PyTree, key: Key) -> tuple[PyTree, Info]:
         keys = self._split_keys(key)
         state, info = jax.vmap(lambda e, s, k: e.reset(s, k))(self.env, state, keys)
         return state, info
 
     @override
-    def step(self, state: WrappedState, action: PyTree) -> tuple[WrappedState, Info]:
+    def step(self, state: PyTree, action: PyTree) -> tuple[PyTree, Info]:
         next_state, info = jax.vmap(lambda e, s, a: e.step(s, a))(
             self.env, state, action
         )
         return next_state, info
 
+    @cached_property
     @override
-    @property
     def observation_space(self) -> spaces.Space:
         env0 = _index_env(self.env, 0, self.batch_size)
         return spaces.BatchedSpace(
             space=env0.observation_space, batch_size=self.batch_size
         )
 
-    @override
     @cached_property
+    @override
     def action_space(self) -> spaces.Space:
         env0 = _index_env(self.env, 0, self.batch_size)
         return spaces.BatchedSpace(space=env0.action_space, batch_size=self.batch_size)
 
-    @override
     @property
+    @override
     def unwrapped(self) -> Environment:
         return self.env.unwrapped
 
