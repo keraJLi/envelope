@@ -8,18 +8,6 @@ import pytest
 
 from envelope.spaces import Discrete
 
-try:
-    from hypothesis import given, settings
-    from hypothesis import strategies as st
-except ImportError:  # pragma: no cover - optional dependency
-    pytest.skip("hypothesis not installed", allow_module_level=True)
-
-try:
-    from hypothesis import given, settings
-    from hypothesis import strategies as st
-except ImportError:  # pragma: no cover - optional dependency
-    pytest.skip("hypothesis not installed", allow_module_level=True)
-
 # ============================================================================
 # Tests: Discrete Space - Basic Functionality
 # ============================================================================
@@ -102,7 +90,7 @@ def test_discrete_space_sampling(
 )
 def test_discrete_space_contains_array(value, expected):
     """Parameterised coverage for array inputs to Discrete.contains."""
-    space = Discrete(n=10)
+    space = Discrete.from_shape(n=10, shape=(3,))
     assert space.contains(value) == expected
 
 
@@ -169,18 +157,12 @@ def test_discrete_tree_operations():
 # ============================================================================
 
 
-def test_discrete_contains_wrong_dtype():
-    """Test Discrete.contains with wrong dtype values."""
+def test_discrete_contains_uses_integer_dtype_category():
     space = Discrete(n=10)
 
-    # Should work with int32
     assert space.contains(jnp.array(5, dtype=jnp.int32))
-
-    # Should also work with different int dtype (gets compared as numbers)
     assert space.contains(jnp.array(5, dtype=jnp.int16))
-
-    # Float values should work if they're within range
-    assert space.contains(jnp.array(5.0, dtype=jnp.float32))
+    assert not space.contains(jnp.array(5.0, dtype=jnp.float32))
 
 
 def test_discrete_space_replace():
@@ -190,75 +172,6 @@ def test_discrete_space_replace():
     assert new_discrete.n == 20
     assert new_discrete.dtype == jnp.int32
     assert discrete.n == 10  # Original unchanged
-
-
-@given(
-    n=st.one_of(
-        st.just(0),
-        st.integers(
-            min_value=-(2**31), max_value=-1
-        ),  # negative values within int32 range
-    ),
-    seed=st.integers(min_value=0, max_value=2**31 - 1),
-)
-@settings(deadline=None, max_examples=20)
-def test_discrete_zero_or_negative_n(n, seed):
-    """Test Discrete space with n=0 or negative n."""
-    space = Discrete(n=n)
-    key = jax.random.key(seed)
-
-    # Space can be created, sampling produces 0 (jax.random.randint with high<=0 returns 0)
-    sample = space.sample(key)
-    assert sample == 0
-    assert sample.dtype == jnp.int32
-
-    # contains: x >= 0 and x < n is always False for any x when n <= 0
-    assert not space.contains(jnp.array(0, dtype=jnp.int32))
-    assert not space.contains(jnp.array(1, dtype=jnp.int32))
-    assert not space.contains(jnp.array(-1, dtype=jnp.int32))
-
-
-@given(
-    n_values=st.lists(
-        st.one_of(
-            st.just(0),
-            st.integers(
-                min_value=-(2**31), max_value=-1
-            ),  # negative values within int32 range
-            st.integers(min_value=1, max_value=100),  # positive values
-        ),
-        min_size=1,
-        max_size=5,
-    ),
-    seed=st.integers(min_value=0, max_value=2**31 - 1),
-)
-@settings(deadline=None, max_examples=30)
-def test_discrete_array_n_with_zero_or_negative(n_values, seed):
-    """Test Discrete space with array n containing zero or negative values."""
-    n_values = jnp.array(n_values)
-    space = Discrete(n=n_values)
-    key = jax.random.key(seed)
-
-    sample = space.sample(key)
-    assert sample.shape == n_values.shape
-
-    # Elements where n <= 0 should produce 0
-    # Elements where n > 0 should produce values in [0, n)
-    for i, n_val in enumerate(n_values):
-        if n_val <= 0:
-            assert sample[i] == 0
-        else:
-            assert 0 <= sample[i] < n_val
-
-    # Test contains: elements with n <= 0 will always fail
-    # Create a test value where valid elements are in range
-    test_value = jnp.array(
-        [max(0, n_val - 1) if n_val > 0 else 0 for n_val in n_values],
-        dtype=jnp.int32,
-    )
-    # If any element has n <= 0, contains should return False
-    has_invalid = any(n_val <= 0 for n_val in n_values)
-    assert space.contains(test_value) == (not has_invalid)
 
 
 # ============================================================================

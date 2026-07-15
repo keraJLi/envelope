@@ -174,42 +174,15 @@ def test_continuous_tree_operations():
 
 
 def test_continuous_space_validation():
-    """Test that Continuous space validates bounds at appropriate points."""
-    key = jax.random.key(0)
-
-    # Test 1: Shape mismatch - fails when accessing shape property
+    """Invalid bound structure is rejected at construction."""
     with pytest.raises(ValueError, match="low and high must have the same shape"):
-        space = Continuous(low=jnp.array([0.0]), high=jnp.array([1.0, 2.0]))
-        _ = space.shape  # Access shape property to trigger validation
+        Continuous(low=jnp.array([0.0]), high=jnp.array([1.0, 2.0]))
 
-    # Test 1b: Shape mismatch - also fails when calling sample() (which accesses shape)
-    with pytest.raises(ValueError, match="low and high must have the same shape"):
-        space = Continuous(low=jnp.array([0.0]), high=jnp.array([1.0, 2.0]))
-        space.sample(key)  # sample() accesses self.shape, triggering validation
-
-    # Test 2: Dtype mismatch - fails when accessing dtype property
-    # Note: JAX may auto-convert dtypes in some cases, so this might not always fail
-    # We test with explicit dtypes that JAX won't auto-convert
-    try:
-        space = Continuous(
+    with pytest.raises(ValueError, match="low and high must have the same dtype"):
+        Continuous(
             low=jnp.array([0.0], dtype=jnp.float32),
             high=jnp.array([1.0], dtype=jnp.float16),
         )
-        _ = space.dtype  # Access dtype property to trigger validation
-        # If we get here, JAX auto-converted the dtype, which is acceptable
-    except ValueError as e:
-        assert "low and high must have the same dtype" in str(e)
-
-    # Test 2b: Dtype mismatch - also fails when calling sample() (which accesses dtype)
-    try:
-        space = Continuous(
-            low=jnp.array([0.0], dtype=jnp.float32),
-            high=jnp.array([1.0], dtype=jnp.float16),
-        )
-        space.sample(key)  # sample() accesses self.dtype, triggering validation
-        # If we get here, JAX auto-converted the dtype, which is acceptable
-    except ValueError as e:
-        assert "low and high must have the same dtype" in str(e)
 
 
 # ============================================================================
@@ -217,15 +190,10 @@ def test_continuous_space_validation():
 # ============================================================================
 
 
-def test_continuous_contains_wrong_dtype():
-    """Test Continuous.contains with wrong dtype values."""
+def test_continuous_contains_accepts_real_numeric_dtypes():
     space = Continuous.from_shape(low=0.0, high=1.0, shape=(2,))
 
-    # Should work with float32
     assert space.contains(jnp.array([0.5, 0.5], dtype=jnp.float32))
-
-    # Should also work with int (gets converted/compared)
-    # Note: int array [0, 1] should be in range [0.0, 1.0]
     assert space.contains(jnp.array([0, 1], dtype=jnp.int32))
 
 

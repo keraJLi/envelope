@@ -136,6 +136,30 @@ def test_container_treedef_and_leaf_order_behavior():
     assert jnp.allclose(rec2.y, c2.y)
 
 
+def test_container_extras_use_canonical_key_order():
+    base = InfoLike(a=jnp.array(0), b=jnp.array(0))
+    xy = base.update(x=jnp.array(1), y=jnp.array(2))
+    yx = base.update(y=jnp.array(2), x=jnp.array(1))
+
+    xy_leaves, xy_def = jax.tree.flatten(xy)
+    yx_leaves, yx_def = jax.tree.flatten(yx)
+    assert xy_def == yx_def
+    assert all(jnp.array_equal(a, b) for a, b in zip(xy_leaves, yx_leaves))
+
+
+def test_same_container_extras_schema_composes_in_lax_cond():
+    base = InfoLike(a=jnp.array(0), b=jnp.array(0))
+    xy = base.update(x=jnp.array(1), y=jnp.array(2))
+    yx = base.update(y=jnp.array(20), x=jnp.array(10))
+
+    select = jax.jit(lambda pred: jax.lax.cond(pred, lambda: xy, lambda: yx))
+    selected = select(False)
+    assert selected.x == 10
+    assert selected.y == 20
+
+    assert jax.tree.structure(base.update(x=1)) != jax.tree.structure(base.update(y=1))
+
+
 # ============================================================================
 # Tests: JAX transformations (vmap, jit, tree.map)
 # ============================================================================

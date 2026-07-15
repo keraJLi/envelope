@@ -129,32 +129,27 @@ def test_pytree_space_tuple():
 
 
 @pytest.mark.parametrize(
-    ("candidate", "message"),
+    "candidate",
     [
         pytest.param(
             {"a": 5, "c": jnp.array([0.5, 0.5])},
-            "Dict key mismatch",
             id="extra-key",
         ),
         pytest.param(
             {"a": 5},
-            "Dict key mismatch",
             id="missing-key",
         ),
         pytest.param(
             {"a": 5, "b": jnp.array([0.5, 0.5]), "z": 10},
-            "Dict key mismatch",
             id="extra-and-missing",
         ),
         pytest.param(
             {"x": 5, "y": jnp.array([0.5, 0.5])},
-            "Dict key mismatch",
             id="wrong-keys",
         ),
     ],
 )
-def test_pytree_space_contains_structure_errors(candidate, message):
-    """Consolidated coverage for dict-based structure mismatches."""
+def test_pytree_space_contains_returns_false_for_structure_mismatch(candidate):
     space = PyTreeSpace(
         {
             "a": Discrete(n=10),
@@ -162,8 +157,7 @@ def test_pytree_space_contains_structure_errors(candidate, message):
         }
     )
 
-    with pytest.raises(ValueError, match=message):
-        space.contains(candidate)
+    assert not space.contains(candidate)
 
 
 def test_pytree_space_contains_list_structure_mismatch():
@@ -175,16 +169,9 @@ def test_pytree_space_contains_list_structure_mismatch():
         ]
     )
 
-    # Wrong list length - JAX catches arity mismatch
-    with pytest.raises(ValueError, match="arity mismatch"):
-        space.contains([5])  # Too short
-
-    with pytest.raises(ValueError, match="arity mismatch"):
-        space.contains([5, jnp.array([0.5, 0.5]), 10])  # Too long
-
-    # Wrong type (dict instead of list) - JAX catches this
-    with pytest.raises(ValueError):
-        space.contains({"a": 5, "b": jnp.array([0.5, 0.5])})
+    assert not space.contains([5])
+    assert not space.contains([5, jnp.array([0.5, 0.5]), 10])
+    assert not space.contains({"a": 5, "b": jnp.array([0.5, 0.5])})
 
 
 # ============================================================================
