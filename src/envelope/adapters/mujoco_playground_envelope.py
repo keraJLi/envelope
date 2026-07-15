@@ -1,4 +1,3 @@
-import dataclasses
 from functools import cached_property
 from typing import Any, override
 
@@ -6,6 +5,7 @@ from jax import numpy as jnp
 from mujoco_playground import MjxEnv, registry
 
 from envelope import spaces as envelope_spaces
+from envelope.adapters._common import backend_container
 from envelope.environment import Environment, Info, InfoContainer, State
 from envelope.struct import static_field
 from envelope.typing import Key, PyTree
@@ -17,17 +17,17 @@ class MujocoPlaygroundEnvelope(Environment):
     """
     Wrapper to convert a mujoco_playground environment to a envelope environment.
 
-    Mujoco Playground uses a dataclass as the environment state, which we return in full
-    as fields of the `Info` object.
+    Mujoco Playground uses a dataclass as its state. Its fields are preserved under
+    ``info.backend``.
 
     All Mujoco Playground environments have continuous actions and observations, which
     range between `(-1, 1)` and `(-inf, inf)` respectively.
 
-    Args:
+    Attributes:
         mujoco_playground_env (MjxEnv): the Mujoco Playground environment.
     """
 
-    mujoco_playground_env: MjxEnv = static_field()
+    mujoco_playground_env: MjxEnv = static_field(unsafe=True)
     _default_max_steps: int | None = static_field(default=None)
 
     @classmethod
@@ -41,7 +41,7 @@ class MujocoPlaygroundEnvelope(Environment):
         `env_kwargs` are passed to `config_overrides` of
         `mujoco_playground.registry.load`.
         """
-        env_kwargs = env_kwargs or {}
+        env_kwargs = {} if env_kwargs is None else dict(env_kwargs)
         if "episode_length" in env_kwargs:
             raise ValueError(
                 "Cannot override 'episode_length' directly. "
@@ -50,7 +50,7 @@ class MujocoPlaygroundEnvelope(Environment):
 
         # Get default episode_length from registry config
         default_config = registry.get_default_config(env_name)
-        default_max_steps = default_config.episode_length
+        default_max_steps = int(default_config.episode_length)
 
         # Set episode_length to a very large value
         # (mujoco_playground uses int for episode_length, so we use max int instead of inf)
@@ -62,33 +62,43 @@ class MujocoPlaygroundEnvelope(Environment):
         return cls(mujoco_playground_env=env, _default_max_steps=default_max_steps)
 
     @property
-    def default_max_steps(self) -> int:
+    def default_max_steps(self) -> int | None:
         return self._default_max_steps
+
+    @property
+    def supports_init_pooling(self) -> bool:
+        return True
 
     @override
     def init(self, key: Key) -> tuple[State, Info]:
         state = self.mujoco_playground_env.reset(key)
-        info = InfoContainer(obs=state.obs, reward=0.0, terminated=False)
-        info = info.update(**dataclasses.asdict(state))
+        info = InfoContainer(
+            obs=state.obs,
+            reward=state.reward,
+            terminated=jnp.asarray(state.done, dtype=bool),
+        ).update(backend=backend_container(state))
         return state, info
 
     @override
     def step(self, state: State, action: PyTree) -> tuple[State, Info]:
         state = self.mujoco_playground_env.step(state, action)
-        info = InfoContainer(obs=state.obs, reward=state.reward, terminated=state.done)
-        info = info.update(**dataclasses.asdict(state))
+        info = InfoContainer(
+            obs=state.obs,
+            reward=state.reward,
+            terminated=jnp.asarray(state.done, dtype=bool),
+        ).update(backend=backend_container(state))
         return state, info
 
-    @override
     @cached_property
+    @override
     def action_space(self) -> envelope_spaces.Space:
         # MuJoCo Playground actions are typically bounded [-1, 1]
         return envelope_spaces.Continuous.from_shape(
             low=-1.0, high=1.0, shape=(self.mujoco_playground_env.action_size,)
         )
 
-    @override
     @cached_property
+    @override
     def observation_space(self) -> envelope_spaces.Space:
         import jax
 

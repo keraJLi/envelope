@@ -11,11 +11,12 @@ from jumanji.specs import Array, BoundedArray, DiscreteArray, MultiDiscreteArray
 from jumanji.types import TimeStep as JumanjiTimeStep
 
 from envelope import spaces as envelope_spaces
+from envelope.adapters._common import backend_container
 from envelope.environment import Environment, Info, InfoContainer, State
 from envelope.struct import static_field
 from envelope.typing import Key, PyTree
 
-_MAX_INT = jnp.iinfo(jnp.int32).max
+_MAX_INT = int(jnp.iinfo(jnp.int32).max)
 
 
 class JumanjiEnvelope(Environment):
@@ -26,11 +27,11 @@ class JumanjiEnvelope(Environment):
     environemnt. If this attribute exists, we overwrite it with the maximum integer
     value and set `default_max_steps` to the original value.
 
-    Args:
+    Attributes:
         jumanji_env (JumanjiEnv): the Jumanji environment.
     """
 
-    jumanji_env: JumanjiEnv = static_field()
+    jumanji_env: JumanjiEnv = static_field(unsafe=True)
     _default_time_limit: int | None = static_field(default=None)
 
     @classmethod
@@ -41,7 +42,7 @@ class JumanjiEnvelope(Environment):
         Create a `JumanjiEnvelope` from a name and keyword arguments.
         `env_kwargs` are passed to `jumanji.make`.
         """
-        env_kwargs = env_kwargs or {}
+        env_kwargs = {} if env_kwargs is None else dict(env_kwargs)
         if "time_limit" in env_kwargs:
             raise ValueError(
                 "Cannot override 'time_limit' directly. "
@@ -52,6 +53,7 @@ class JumanjiEnvelope(Environment):
         env = jumanji.make(env_name, **env_kwargs)
         default_time_limit = getattr(env, "time_limit", None)
         if default_time_limit is not None:
+            default_time_limit = int(default_time_limit)
             env.time_limit = _MAX_INT
 
         return cls(jumanji_env=env, _default_time_limit=default_time_limit)
@@ -59,6 +61,10 @@ class JumanjiEnvelope(Environment):
     @property
     def default_max_steps(self) -> int | None:
         return self._default_time_limit
+
+    @property
+    def supports_init_pooling(self) -> bool:
+        return True
 
     @override
     def init(self, key: Key) -> tuple[State, Info]:
@@ -72,13 +78,13 @@ class JumanjiEnvelope(Environment):
         info = convert_jumanji_to_envelope_info(timestep)
         return env_state, info
 
-    @override
     @cached_property
+    @override
     def action_space(self) -> envelope_spaces.Space:
         return convert_jumanji_spec_to_envelope_space(self.jumanji_env.action_spec)
 
-    @override
     @cached_property
+    @override
     def observation_space(self) -> envelope_spaces.Space:
         return convert_jumanji_spec_to_envelope_space(self.jumanji_env.observation_spec)
 
@@ -95,10 +101,22 @@ class JumanjiEnvelope(Environment):
 
 def convert_jumanji_to_envelope_info(timestep: JumanjiTimeStep) -> InfoContainer:
     term = jnp.asarray(timestep.last(), dtype=bool)
+    observation = jax.tree.map(_normalize_observation_leaf, timestep.observation)
     info = InfoContainer(
-        obs=timestep.observation, reward=timestep.reward, terminated=term
-    ).update(**timestep.extras)
+        obs=observation, reward=timestep.reward, terminated=term
+    ).update(backend=backend_container(timestep.extras))
     return info
+
+
+def _normalize_observation_leaf(value: PyTree) -> PyTree:
+    """Represent boolean suite observations as integer-valued discrete samples."""
+    try:
+        array = jnp.asarray(value)
+    except (TypeError, ValueError):
+        return value
+    if jnp.issubdtype(array.dtype, jnp.bool_):
+        return array.astype(jnp.int32)
+    return value
 
 
 def convert_jumanji_spec_to_envelope_space(
@@ -121,6 +139,9 @@ def _spec_to_tree(spec: Spec | PyTree):
         return envelope_spaces.Discrete(n=n)
 
     if isinstance(spec, BoundedArray):
+        dtype = jnp.dtype(spec.dtype)
+        if jnp.issubdtype(dtype, jnp.bool_):
+            return envelope_spaces.Discrete.from_shape(2, shape=spec.shape)
         low = jnp.broadcast_to(jnp.asarray(spec.minimum, dtype=spec.dtype), spec.shape)
         high = jnp.broadcast_to(jnp.asarray(spec.maximum, dtype=spec.dtype), spec.shape)
         return envelope_spaces.Continuous(low=low, high=high)
