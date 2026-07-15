@@ -15,3 +15,10 @@ def test_typing_names_are_exported_from_package_root(name):
 
 def test_package_contains_pep561_marker_for_built_wheels():
     assert resources.files("envelope").joinpath("py.typed").is_file()
+
+
+def test_cumulative_statistics_wrapper_is_exported_from_package_root():
+    from envelope.wrappers import CumulativeStatisticsWrapper
+
+    assert envelope.CumulativeStatisticsWrapper is CumulativeStatisticsWrapper
+    assert "CumulativeStatisticsWrapper" in envelope.__all__
