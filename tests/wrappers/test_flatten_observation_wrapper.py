@@ -1,7 +1,10 @@
+from dataclasses import fields
+
 import jax
 import jax.numpy as jnp
 import pytest
 
+import envelope.wrappers.flatten_observation_wrapper as flatten_observation_module
 from envelope.environment import InfoContainer
 from envelope.spaces import BatchedSpace, Continuous
 from envelope.wrappers.continuous_observation_wrapper import (
@@ -193,3 +196,32 @@ def test_flatten_observation_outside_vmap_preserves_batch_prefix():
     assert w.observation_space.shape == (batch_size, 5)
     assert info.obs.shape == (batch_size, 5)
     assert step_info.obs.shape == (batch_size, 5)
+
+
+def test_flatten_observation_metadata_is_static_and_not_recomputed(monkeypatch):
+    batch_size = 2
+    w = FlattenObservationWrapper(
+        VmapWrapper(
+            PyTreeObsEnv(shapes={"a": (2,), "b": (3,)}),
+            batch_size=batch_size,
+        )
+    )
+    state, _ = w.init(jax.random.key(0))
+
+    config_fields = {item.name: item for item in fields(FlattenObservationWrapper)}
+    for name in (
+        "_observation_treedef",
+        "_observation_shapes",
+        "_observation_dims",
+        "_batch_ndim",
+    ):
+        assert config_fields[name].metadata["pytree_node"] is False
+
+    def fail_recomputation(*args, **kwargs):
+        raise AssertionError("flatten metadata was recomputed at runtime")
+
+    monkeypatch.setattr(flatten_observation_module, "flatten_space", fail_recomputation)
+    monkeypatch.setattr(flatten_observation_module, "peel_batched", fail_recomputation)
+    _, info = jax.jit(w.step)(state, jnp.zeros((batch_size,)))
+
+    assert info.obs.shape == (batch_size, 5)

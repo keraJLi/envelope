@@ -1,7 +1,10 @@
+from dataclasses import fields
+
 import jax
 import jax.numpy as jnp
 import pytest
 
+import envelope.wrappers.flatten_action_wrapper as flatten_action_module
 from envelope.spaces import BatchedSpace, Continuous, Discrete, PyTreeSpace
 from envelope.wrappers.clip_action_wrapper import ClipActionWrapper
 from envelope.wrappers.flatten_action_wrapper import (
@@ -226,3 +229,23 @@ def test_flatten_action_outside_vmap_preserves_batch_prefix_under_jit():
     assert action.shape == (batch_size, 5)
     assert next_state.shape == (batch_size, 5)
     assert info.obs.shape == (batch_size, 5)
+
+
+def test_flatten_action_metadata_is_static_and_not_recomputed_in_step(monkeypatch):
+    w = FlattenActionWrapper(VmapWrapper(PyTreeActionEnv(), batch_size=2))
+    key = jax.random.key(0)
+    state, _ = w.init(key)
+    action = w.action_space.sample(key)
+
+    config_fields = {item.name: item for item in fields(FlattenActionWrapper)}
+    for name in ("_action_treedef", "_action_shapes", "_action_dims"):
+        assert config_fields[name].metadata["pytree_node"] is False
+
+    def fail_recomputation(*args, **kwargs):
+        raise AssertionError("flatten metadata was recomputed during step")
+
+    monkeypatch.setattr(flatten_action_module, "flatten_space", fail_recomputation)
+    next_state, info = jax.jit(w.step)(state, action)
+
+    assert next_state.shape == (2, 5)
+    assert info.obs.shape == (2, 5)
