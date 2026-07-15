@@ -86,6 +86,52 @@ def test_bounded_gaussian_policy_is_jittable_and_respects_bounds() -> None:
     assert bool(jnp.all(jnp.isfinite(entropy)))
 
 
+def test_bounded_gaussian_transform_round_trip() -> None:
+    networks = _networks()
+    distribution = networks.BoundedGaussian(
+        loc=jnp.zeros((2, 2)),
+        log_std=jnp.zeros((2, 2)),
+        minimum=jnp.asarray([-2.0, -1.0]),
+        maximum=jnp.asarray([1.0, 3.0]),
+    )
+    latent = jnp.asarray([[0.0, 0.5], [-0.5, 1.0]])
+
+    actions = distribution.bijector.forward(latent)
+    restored = distribution.bijector.inverse(actions)
+
+    assert jnp.allclose(restored, latent, atol=1e-5)
+
+
+@pytest.mark.parametrize(
+    ("cardinalities", "expected_action_shape"),
+    [
+        (jnp.asarray(3), (4,)),
+        (jnp.asarray([2, 3]), (4, 2)),
+    ],
+)
+def test_discrete_policy_sample_and_log_prob_shapes(
+    cardinalities, expected_action_shape
+) -> None:
+    flax = pytest.importorskip("flax")
+    import envelope
+
+    networks = _networks()
+    policy = networks.DiscretePolicy(
+        envelope.Continuous.from_shape(-1.0, 1.0, shape=(4,)),
+        envelope.Discrete(n=cardinalities),
+        flax.nnx.Rngs(0),
+        layer_size=8,
+    )
+    distribution = policy(jnp.zeros((4, 4)))
+
+    actions = distribution.sample(seed=jax.random.key(2))
+    log_prob = distribution.log_prob(actions)
+
+    assert actions.shape == expected_action_shape
+    assert log_prob.shape == (4,)
+    assert bool(jnp.all(jnp.isfinite(log_prob)))
+
+
 @pytest.mark.parametrize(
     ("terminated", "truncated", "bootstrap", "expected"),
     [
