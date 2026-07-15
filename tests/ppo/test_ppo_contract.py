@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import sys
 
+import jax
 import jax.numpy as jnp
 import pytest
 
@@ -45,6 +46,44 @@ def test_diagonal_gaussian_entropy_sums_event_dimensions() -> None:
 
     assert entropy.shape == (2,)
     assert jnp.allclose(entropy, per_dimension.sum(axis=-1))
+
+
+def test_bounded_gaussian_policy_is_jittable_and_respects_bounds() -> None:
+    flax = pytest.importorskip("flax")
+    import envelope
+
+    networks = _networks()
+    obs_space = envelope.Continuous.from_shape(-1.0, 1.0, shape=(4,))
+    action_space = envelope.Continuous(
+        low=jnp.asarray([-2.0, -1.0]),
+        high=jnp.asarray([1.0, 3.0]),
+    )
+    policy = networks.GaussianPolicy(
+        obs_space,
+        action_space,
+        flax.nnx.Rngs(0),
+        layer_size=8,
+    )
+
+    @flax.nnx.jit
+    def sample_and_score(policy, observations, key):
+        distribution = policy(observations)
+        actions = distribution.sample(seed=key)
+        return actions, distribution.log_prob(actions), distribution.entropy()
+
+    actions, log_prob, entropy = sample_and_score(
+        policy,
+        jnp.zeros((3, 4)),
+        jax.random.key(1),
+    )
+
+    assert actions.shape == (3, 2)
+    assert log_prob.shape == (3,)
+    assert entropy.shape == (3,)
+    assert bool(jnp.all(actions >= action_space.low))
+    assert bool(jnp.all(actions <= action_space.high))
+    assert bool(jnp.all(jnp.isfinite(log_prob)))
+    assert bool(jnp.all(jnp.isfinite(entropy)))
 
 
 @pytest.mark.parametrize(
