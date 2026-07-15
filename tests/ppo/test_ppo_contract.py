@@ -153,6 +153,21 @@ def test_import_does_not_require_wandb() -> None:
         sys.modules.pop("wandb", None)
 
 
+def test_observation_normalization_uses_elementwise_autoreset(monkeypatch) -> None:
+    import envelope
+    from tests.wrappers.helpers import StepCounterEnv
+
+    ppo = _ppo()
+    monkeypatch.setattr(ppo.envelope, "create", lambda _name: StepCounterEnv())
+    args = ppo.Args(normalize_observations=True, num_envs=2)
+
+    _env, vecenv = ppo.make_env(args)
+
+    assert isinstance(vecenv, envelope.VmapWrapper)
+    assert isinstance(vecenv.env, envelope.AutoResetWrapper)
+    assert isinstance(vecenv.env.env, envelope.ObservationNormalizationWrapper)
+
+
 def test_tiny_cpu_training_update_without_wandb() -> None:
     flax = pytest.importorskip("flax")
     optax = pytest.importorskip("optax")

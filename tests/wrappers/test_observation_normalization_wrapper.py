@@ -197,27 +197,38 @@ def test_jit_compatibility_smoke():
     assert shape == (4, 3)
 
 
-@pytest.mark.parametrize("episode_boundary", ["autoreset", "pooled"])
-def test_shared_normalization_transforms_final_observation(episode_boundary):
+def test_normalization_inside_autoreset_transforms_final_observation():
     base = StepCounterEnv(terminate_after=1)
-    if episode_boundary == "autoreset":
-        vectorized = VmapWrapper(AutoResetWrapper(base), batch_size=2)
-    else:
-        vectorized = PooledInitVmapWrapper(base, batch_size=2, pool_size=2)
-    wrapper = ObservationNormalizationWrapper(vectorized)
+    wrapper = VmapWrapper(
+        AutoResetWrapper(ObservationNormalizationWrapper(base)),
+        batch_size=2,
+    )
     action = jnp.asarray([0.25, 0.75], dtype=jnp.float32)
 
     state, _ = wrapper.init(jax.random.key(0))
-    state, info = jax.jit(wrapper.step)(state, action)
+    _, info = jax.jit(wrapper.step)(state, action)
 
-    expected = wrapper._normalize_obs(
-        info.final.unnormalized_obs,
-        state.rmv_state,
-    )
     assert jnp.all(info.final_valid)
     assert jnp.allclose(info.final.unnormalized_obs, action)
-    assert jnp.allclose(info.final.obs, expected)
+    assert jnp.allclose(info.final.obs, jnp.ones(2), atol=1e-5)
     assert not jnp.allclose(info.final.obs, info.final.unnormalized_obs)
+
+
+@pytest.mark.parametrize(
+    "make_env",
+    [
+        lambda: ObservationNormalizationWrapper(
+            AutoResetWrapper(StepCounterEnv())
+        ),
+        lambda: ObservationNormalizationWrapper(
+            PooledInitVmapWrapper(StepCounterEnv(), batch_size=2, pool_size=2)
+        ),
+    ],
+    ids=["outside-autoreset", "outside-pooled"],
+)
+def test_normalization_outside_episode_boundary_is_rejected(make_env):
+    with pytest.raises(ValueError, match="(?i)normalization.*inside|pooled"):
+        make_env()
 
 
 def test_pickle_running_mean_var_in_state():

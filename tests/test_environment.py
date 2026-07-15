@@ -7,7 +7,7 @@ from envelope.environment import Environment, InfoContainer
 from envelope.spaces import Continuous
 
 
-class DefaultPoolingEnvironment(Environment):
+class InitCanReplaceResetEnvironment(Environment):
     @cached_property
     def observation_space(self) -> Continuous:
         return Continuous(low=-jnp.inf, high=jnp.inf)
@@ -43,5 +43,5 @@ def test_space_descriptors_remain_abstract() -> None:
         MissingSpaces()
 
 
-def test_environments_support_init_pooling_by_default() -> None:
-    assert DefaultPoolingEnvironment().supports_init_pooling is True
+def test_init_can_replace_reset_by_default() -> None:
+    assert InitCanReplaceResetEnvironment().init_can_replace_reset is True

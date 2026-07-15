@@ -134,7 +134,7 @@ def test_terminal_transition_semantics_match_scalar_autoreset():
 
 
 @pytest.mark.parametrize("batch_size,pool_size", [(0, 1), (-1, 1), (1, 0), (1, -1)])
-def test_nonpositive_pooling_capability_is_rejected(batch_size, pool_size):
+def test_nonpositive_pool_sizes_are_rejected(batch_size, pool_size):
     with pytest.raises(ValueError, match="batch_size|pool_size"):
         PooledInitVmapWrapper(
             ScalarToyEnv(), batch_size=batch_size, pool_size=pool_size
@@ -147,24 +147,29 @@ def test_nonpositive_pooling_capability_is_rejected(batch_size, pool_size):
         AutoResetWrapper(ScalarToyEnv()),
         StateInjectionWrapper(ScalarToyEnv()),
         ObservationNormalizationWrapper(ScalarToyEnv()),
+        PooledInitVmapWrapper(ScalarToyEnv(), batch_size=2, pool_size=2),
+    ],
+    ids=["autoreset", "state-injection", "normalization", "pooled-vmap"],
+)
+def test_non_equivalent_reset_wrappers_are_rejected(env):
+    with pytest.raises(ValueError, match="init_can_replace_reset=True"):
+        PooledInitVmapWrapper(env, batch_size=2, pool_size=2)
+
+
+@pytest.mark.parametrize(
+    "env",
+    [
         VmapWrapper(ScalarToyEnv(), batch_size=2),
         VmapEnvsWrapper(
             ParamEnv(offset=jnp.asarray([0.0, 1.0])),
             batch_size=2,
         ),
-        PooledInitVmapWrapper(ScalarToyEnv(), batch_size=2, pool_size=2),
     ],
-    ids=[
-        "autoreset",
-        "state-injection",
-        "normalization",
-        "vmap",
-        "vmap-envs",
-        "pooled-vmap",
-    ],
+    ids=["vmap", "vmap-envs"],
 )
-def test_non_pooling_wrappers_are_rejected(env):
-    with pytest.raises(ValueError, match="supports_init_pooling=True"):
+def test_vectorization_is_reset_equivalent_but_rejected_inside_pool(env):
+    assert env.init_can_replace_reset is True
+    with pytest.raises(ValueError, match="(?i)vectorization"):
         PooledInitVmapWrapper(env, batch_size=2, pool_size=2)
 
 
