@@ -57,6 +57,42 @@ class _FakeGymnaxEnv:
         return _ActionSpace()
 
 
+class _AutoResetGymnaxEnv(_FakeGymnaxEnv):
+    """Expose Gymnax's public auto-reset separately from its raw transition."""
+
+    def __init__(self):
+        super().__init__()
+        self.public_step_calls = 0
+        self.raw_step_calls = 0
+
+    def reset(self, key, params):
+        del key, params
+        return jnp.asarray([-1.0]), jnp.asarray(-1, dtype=jnp.int32)
+
+    def step_env(self, key, state, action, params):
+        del key, action, params
+        self.raw_step_calls += 1
+        next_state = state + 1
+        backend_info = Container().update(
+            score=jnp.asarray(next_state, dtype=jnp.float32)
+        )
+        return (
+            jnp.asarray([next_state], dtype=jnp.float32),
+            next_state,
+            jnp.asarray(1.0),
+            jnp.asarray(True),
+            backend_info,
+        )
+
+    def step(self, key, state, action, params):
+        self.public_step_calls += 1
+        _obs, _state, reward, done, backend_info = self.step_env(
+            key, state, action, params
+        )
+        reset_obs, reset_state = self.reset(key, params)
+        return reset_obs, reset_state, reward, done, backend_info
+
+
 def test_supplied_horizon_is_captured_then_removed_from_backend(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -113,3 +149,26 @@ def test_backend_info_namespace_is_stable_between_init_and_step(
     assert [x.dtype for x in jax.tree.leaves(init_info.backend)] == [
         x.dtype for x in jax.tree.leaves(step_info.backend)
     ]
+
+
+def test_step_bypasses_gymnax_public_auto_reset(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    fake_env = _AutoResetGymnaxEnv()
+    monkeypatch.setattr(
+        gymnax_envelope_module,
+        "gymnax_create",
+        lambda env_name, **kwargs: (fake_env, fake_env.default_params),
+    )
+    env = GymnaxEnvelope.from_name("Fake-v0")
+    fake_env.public_step_calls = 0
+    fake_env.raw_step_calls = 0
+
+    state, _ = env.init(jax.random.key(0))
+    state, info = env.step(state, jnp.asarray(0, dtype=jnp.int32))
+
+    assert fake_env.public_step_calls == 0
+    assert fake_env.raw_step_calls == 1
+    assert int(state.env_state) == 0
+    assert jnp.array_equal(info.obs, jnp.asarray([0.0]))
+    assert bool(info.terminated)
