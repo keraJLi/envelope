@@ -25,10 +25,17 @@ class Info(Protocol):
 
     """
 
-    obs: PyTree
-    reward: float | Array
-    terminated: bool | Array
-    truncated: bool | Array
+    @property
+    def obs(self) -> PyTree: ...
+
+    @property
+    def reward(self) -> float | Array: ...
+
+    @property
+    def terminated(self) -> bool | Array: ...
+
+    @property
+    def truncated(self) -> bool | Array: ...
 
     def update(self, **changes: PyTree) -> Self:
         """Update the info container with new values. This method should return

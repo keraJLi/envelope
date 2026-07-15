@@ -1,17 +1,17 @@
 from abc import ABC, abstractmethod
-from functools import cached_property
 from numbers import Integral
 from typing import override
 
 import jax
 from jax import numpy as jnp
+from jax.core import Tracer
 
 from envelope.struct import FrozenPyTreeNode, static_field
 from envelope.typing import Key, PyTree
 
 
 class Space(ABC, FrozenPyTreeNode):
-    """Base class for all spaces. Spaces are immutable and hashable."""
+    """Base class for immutable JAX-compatible spaces."""
 
     @property
     @abstractmethod
@@ -37,7 +37,7 @@ class Discrete(Space):
     A discrete space with a given number of elements. `n` can be a scalar or an array.
     The shape and dtype of the space are inferred from `n`.
 
-    Args:
+    Attributes:
         n (int | jax.Array): The number of elements in the space.
     """
 
@@ -47,7 +47,7 @@ class Discrete(Space):
         n = jnp.asarray(self.n)
         if not jnp.issubdtype(n.dtype, jnp.integer):
             raise TypeError("n must have an integer dtype")
-        if not isinstance(n, jax.core.Tracer) and not bool(jnp.all(n > 0)):
+        if not isinstance(n, Tracer) and not bool(jnp.all(n > 0)):
             raise ValueError("n must contain only positive values")
 
     @classmethod
@@ -91,7 +91,7 @@ class Continuous(Space):
     scalars or arrays. The shape and dtype of the space are inferred from `low` and
     `high`.
 
-    Args:
+    Attributes:
         low (float | jax.Array): The lower bound of the space.
         high (float | jax.Array): The upper bound of the space.
     """
@@ -110,7 +110,7 @@ class Continuous(Space):
         if not jnp.issubdtype(low.dtype, jnp.floating):
             raise TypeError("low and high must have a real floating dtype")
 
-        if isinstance(low, jax.core.Tracer) or isinstance(high, jax.core.Tracer):
+        if isinstance(low, Tracer) or isinstance(high, Tracer):
             return
 
         invalid = (
@@ -206,7 +206,7 @@ class PyTreeSpace(Space):
     and dtype of the `PyTreeSpace` are PyTrees of the same structure, containing the
     shape and dtype of the leaves.
 
-    Args:
+    Attributes:
         tree (PyTree): A PyTree with `Discrete` or `Continuous` leaves.
     """
 
@@ -270,7 +270,7 @@ class PyTreeSpace(Space):
         )
 
 
-def peel_batched(space: "BatchedSpace") -> tuple[tuple[int, ...], Space]:
+def peel_batched(space: Space) -> tuple[tuple[int, ...], Space]:
     """Collect batch dimensions and return (batch_dims_tuple, base_space)."""
     dims: list[int] = []
     s: Space = space
@@ -285,7 +285,7 @@ class BatchedSpace(Space):
     A view that adds a leading batch dimension to a base `Space` without
     materializing or broadcasting its parameters.
 
-    Args:
+    Attributes:
         space (Space): The underlying base space.
         batch_size (int): The leading batch dimension.
     """
@@ -346,8 +346,8 @@ class BatchedSpace(Space):
             return jnp.asarray(False)
         return jnp.all(jnp.asarray(result))
 
+    @property
     @override
-    @cached_property
     def shape(self) -> PyTree:
         batch_dims, base = peel_batched(self)
         if isinstance(base, PyTreeSpace):
@@ -358,8 +358,8 @@ class BatchedSpace(Space):
             )
         return batch_dims + base.shape
 
-    @override
     @property
+    @override
     def dtype(self) -> PyTree:
         _, base = peel_batched(self)
         return base.dtype

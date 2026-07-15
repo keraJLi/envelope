@@ -1,6 +1,15 @@
 import dataclasses
 from dataclasses import KW_ONLY
-from typing import Any, Iterable, Iterator, Mapping, Self, Tuple, dataclass_transform
+from typing import (
+    Any,
+    ClassVar,
+    Iterable,
+    Iterator,
+    Mapping,
+    Self,
+    Tuple,
+    dataclass_transform,
+)
 
 import jax
 
@@ -9,7 +18,7 @@ from envelope.typing import PyTree
 __all__ = ["FrozenPyTreeNode", "field", "static_field", "Container"]
 
 
-def field(*, pytree_node: bool = True, **kwargs: Any) -> dataclasses.Field[Any]:
+def field(*, pytree_node: bool = True, **kwargs: Any) -> Any:
     """
     Dataclass field helper. See `typing.FrozenPyTreeNode` for more details.
     Set `pytree_node=False` for static (non-transformed) fields.
@@ -19,9 +28,7 @@ def field(*, pytree_node: bool = True, **kwargs: Any) -> dataclasses.Field[Any]:
     return dataclasses.field(metadata=meta, **kwargs)
 
 
-def static_field(
-    *, unsafe: bool = False, **kwargs: Any
-) -> dataclasses.Field[Any]:
+def static_field(*, unsafe: bool = False, **kwargs: Any) -> Any:
     """Declare a static (non-transformed) dataclass field.
 
     Static values become part of a JAX pytree definition, so they must normally be
@@ -56,6 +63,12 @@ class FrozenPyTreeNode:
         y = x.replace(b=1)
         ```
     """
+
+    # Subclasses are converted into dataclasses dynamically in ``__init_subclass__``.
+    # Declaring this standard dataclass attribute lets static type checkers recognize
+    # instances as valid inputs to ``dataclasses.fields`` and ``dataclasses.replace``
+    # without creating a runtime marker that would interfere with that conversion.
+    __dataclass_fields__: ClassVar[dict[str, dataclasses.Field[Any]]]
 
     # Turn subclasses into frozen dataclasses and register with JAX.
     def __init_subclass__(cls, *, dataclass_kwargs: dict[str, Any] | None = None, **kw):

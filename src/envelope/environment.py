@@ -63,14 +63,14 @@ class Environment(ABC, FrozenPyTreeNode):
         """Step the environment given an action, returning the next state and info."""
         ...
 
-    @abstractmethod
     @cached_property
+    @abstractmethod
     def observation_space(self) -> spaces.Space:
         """The space of observations."""
         ...
 
-    @abstractmethod
     @cached_property
+    @abstractmethod
     def action_space(self) -> spaces.Space:
         """The space of actions."""
         ...

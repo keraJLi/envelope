@@ -31,7 +31,7 @@ jobs:
         with:
           enable-cache: true
           python-version: "3.12"
-      - run: uv sync --group dev --locked
+      - run: uv sync --group dev --group adapters --locked
       - run: uv run pyright
 
   minimum-jax:
