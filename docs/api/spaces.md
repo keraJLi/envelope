@@ -23,6 +23,14 @@ space.dtype  # {'foo': dtype('int32'), 'bar': dtype('float32')}
 Spaces can be batched using `BatchedSpace`, which returns a view that prepends a batch
 dimension and vectorizes `sample` and `contains`.
 
+`contains` is strict about pytree structure and every event/batch shape. Discrete
+candidates may use any non-boolean integer width. Continuous candidates may use any
+non-boolean real numeric dtype; their values still have to satisfy the declared bounds.
+Shape, structure, dtype-category, or bounds mismatches return a scalar JAX false value.
+
+Space constructors reject invalid concrete definitions eagerly. Continuous sampling
+supports finite, one-sided, and fully unbounded dimensions without producing NaNs.
+
 The constraints on the `PyTreeSpace`'s members imply a strict ordering on the
 construction of spaces:
 ```

@@ -1,6 +1,6 @@
 [project]
 name = "jax-envelope"
-version = "0.4.1"
+version = "0.5.0"
 description = "A JAX-native environment interface with powerful wrappers and adapters for popular RL environment suites"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -10,7 +10,6 @@ authors = [
 dependencies = [
     "jax>=0.5.0",
 ]
-
 license = {text = "MIT"}
 keywords = [
     "machine-learning",
@@ -41,6 +40,20 @@ Documentation = "https://github.com/keraJLi/envelope#readme"
 Issues = "https://github.com/keraJLi/envelope/issues"
 Changelog = "https://github.com/keraJLi/envelope/releases"
 
+[project.optional-dependencies]
+brax = ["brax>=0.13,<0.15"]
+craftax = ["craftax>=1.5,<2"]
+jumanji = ["jumanji>=1.0.1,<2"]
+mujoco-playground = ["playground>=0.1,<0.2"]
+navix = ["navix>=0.7,<0.8"]
+adapters = [
+    "brax>=0.13,<0.15",
+    "craftax>=1.5,<2",
+    "jumanji>=1.0.1,<2",
+    "playground>=0.1,<0.2",
+    "navix>=0.7,<0.8",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -50,6 +63,26 @@ allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/envelope"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/",
+    "tests/",
+    "docs/",
+    ".github/",
+    "README.md",
+    "LICENSE",
+    "pyproject.toml",
+    "mkdocs.yml",
+    ".readthedocs.yaml",
+]
+exclude = [
+    "examples/ppo",
+    "runs/",
+    "checkpoints/",
+    "wandb/",
+    "*.jsonl",
+]
 
 [dependency-groups]
 adapters = [
@@ -63,9 +96,19 @@ adapters = [
 ]
 dev = [
     "hypothesis>=6.148.1",
+    "pyright>=1.1.407",
     "pytest>=9.0.0",
     "pytest-cov>=7.0.0",
     "ruff>=0.14.2",
+]
+ppo = [
+    "distrax>=0.1.7,<0.2",
+    "flax>=0.10,<1",
+    "optax>=0.2.4,<0.3",
+    "tyro>=0.9,<1",
+]
+ppo-wandb = [
+    "wandb>=0.19,<1",
 ]
 
 [tool.uv]
@@ -74,11 +117,18 @@ override-dependencies = [
 ]
 
 [tool.uv.sources]
-gymnax = { git = "https://github.com/RobertTLange/gymnax.git" }
-kinetix-env = { git = "https://github.com/FLAIROx/Kinetix.git" }
+gymnax = { git = "https://github.com/RobertTLange/gymnax.git", rev = "18f2e7f3cffafc7042c76fdc538c83957418a9a9" }
+kinetix-env = { git = "https://github.com/FLAIROx/Kinetix.git", rev = "df4de60cabd42dbd1c35fb5214fdc6728710e33d" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
   "adapters: tests requiring optional adapters dependencies",
+  "ppo: tests requiring the repository-only PPO dependency group",
 ]
+
+[tool.pyright]
+include = ["src/envelope"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+reportMissingTypeStubs = false

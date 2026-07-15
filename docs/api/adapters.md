@@ -8,11 +8,14 @@ JAX-based environment suites, and automatically casts them into the envelope
 the format `SUITE::ENVIRONMENT`, and can pass arguments to the environment constructor:
 ```python
 env = create("brax::ant", env_kwargs={"backend": "positional"})
+short_env = create("brax::ant", max_episode_steps=200)
+unlimited_env = create("brax::ant", max_episode_steps=None)
 ```
 
-**Note**: Many suites natively support episode truncation and automatic resetting. When
-instantiating adapters, users are highly discouraged from using these features. Instead,
-they should use the envelope-native wrapper ecosystem. 
+Native time limits and automatic resetting are disabled by adapters. Envelope captures
+the backend's original finite horizon before disabling it. The generic factory then uses
+that value when `max_episode_steps="default"`, lets a positive integer override it, or
+disables outer truncation with `None`.
 
 Adapters implement the `HasFromNameInit` protocol, that ensures they can be created via
 a `from_name(cls, env_name: str, env_kwargs=None, **kwargs)` function. This is used by
@@ -20,9 +23,29 @@ a `from_name(cls, env_name: str, env_kwargs=None, **kwargs)` function. This is u
 `navix.make` or `brax.envs.create`), and the `kwargs` are passed to the adapter class on
 creation.
 
-Each adapter may have a `default_episode_length` property that is populated depending on
-the suite and specific environment. If it is not `None`, the `create` function will wrap
-the adapter in a `TruncationWrapper` before returning it.
+Caller-owned keyword mappings and backend parameter objects are copied rather than
+mutated. Raw suite metadata is available under `info.backend`, with stable attribute
+access such as `info.backend.metrics`.
+
+## Installation
+
+Published adapters have bounded extras:
+
+```bash
+pip install "jax-envelope[navix]"
+pip install "jax-envelope[adapters]"
+```
+
+### Source-backed adapters
+
+Gymnax and Kinetix depend on fixes that are not yet part of the supported indexed
+releases. Install the pinned revisions explicitly:
+
+```bash
+pip install "gymnax @ git+https://github.com/RobertTLange/gymnax.git@18f2e7f3cffafc7042c76fdc538c83957418a9a9"
+pip install "kinetix-env @ git+https://github.com/FLAIROx/Kinetix.git@df4de60cabd42dbd1c35fb5214fdc6728710e33d"
+pip install jax-envelope
+```
 
 ## API Reference (`create`)
 

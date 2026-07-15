@@ -782,6 +782,14 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/5a/3f/efeb7c6801c46e11bd666a5180f0d615f74f72264212f74f39586c6fda9d/glfw-2.10.0-py2.py27.py3.py30.py31.py32.py33.py34.py35.py36.py37.py38.py39.py310.py311.py312.py313.py314-none-manylinux_2_28_x86_64.whl", hash = "sha256:ce6724bb7cb3d0543dcba17206dce909f94176e68220b8eafee72e9f92bcf542", size = 243522, upload-time = "2026-01-28T05:58:03.517Z" },
     { url = "https://files.pythonhosted.org/packages/cf/b9/b04c3aa0aad2870cfe799f32f8b59789c98e1816bbce9e83f4823c5b840b/glfw-2.10.0-py2.py27.py3.py30.py31.py32.py33.py34.py35.py36.py37.py38.py39.py310.py311.py312.py313.py314-none-win32.whl", hash = "sha256:fca724a21a372731edb290841edd28a9fb1ee490f833392752844ac807c0086a", size = 552682, upload-time = "2026-01-28T05:58:05.649Z" },
     { url = "https://files.pythonhosted.org/packages/bd/e1/6d6816b296a529ac9b897ad228b1e084eb1f92319e96371880eebdc874a6/glfw-2.10.0-py2.py27.py3.py30.py31.py32.py33.py34.py35.py36.py37.py38.py39.py310.py311.py312.py313.py314-none-win_amd64.whl", hash = "sha256:823c0bd7770977d4b10e0ed0aef2f3682276b7c88b8b65cfc540afce5951392f", size = 559464, upload-time = "2026-01-28T05:58:07.261Z" },
+    { url = "https://files.pythonhosted.org/packages/8c/a8/d4dab8a58fc2e6981fc7a58c4e56ba9d777fb24931cec6a22152edbb3540/glfw-2.10.0-py2.py3-none-macosx_10_6_intel.whl", hash = "sha256:a0d1f29f206219cc291edfb6cace663a86da2470632551c998e3db82d48ea177", size = 105288, upload-time = "2026-03-10T17:21:19.929Z" },
+    { url = "https://files.pythonhosted.org/packages/14/61/68d35e001872a7705112418da236fa2418d4f2e5419f8b2837f9b81bb3da/glfw-2.10.0-py2.py3-none-macosx_11_0_arm64.whl", hash = "sha256:d28d6f3ef217e64e35dc6fd0a7acb4cec9bfe7cd14dd9b35a7228a87002de154", size = 102139, upload-time = "2026-03-10T17:21:21.645Z" },
+    { url = "https://files.pythonhosted.org/packages/4e/e1/ca5984081aaae07c9d371cb11dc4e4ff603510678ed9b73e58b6c351fe63/glfw-2.10.0-py2.py3-none-manylinux2014_aarch64.whl", hash = "sha256:f968b522bb6a0e04aaf4dcac30a476d7229308bb2bac406a60587debb5a61e29", size = 229998, upload-time = "2026-03-10T17:21:23.549Z" },
+    { url = "https://files.pythonhosted.org/packages/fa/c4/82ac75fdcfba2896da7a573c0fc7f8ceb8f77ead6866d500d06c32f1c464/glfw-2.10.0-py2.py3-none-manylinux2014_x86_64.whl", hash = "sha256:68cf3752bdadb6f4bc0a876247c28c88c7251ac39f8af076ed938fdfd71e72dd", size = 241944, upload-time = "2026-03-10T17:21:26.102Z" },
+    { url = "https://files.pythonhosted.org/packages/e3/96/9f691823cca5eb6a08f346bd0ff03b78032db9370b509a1e9c8976fb20a5/glfw-2.10.0-py2.py3-none-manylinux_2_28_aarch64.whl", hash = "sha256:44d98de5dbf8f727e0cb29f9b29d29528ea7570f2e6f42f8430a69df05f12b48", size = 231009, upload-time = "2026-03-10T17:21:28.481Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/93/977b9e679e356871d428ae7a1139ec767dd5177bed58a6344b4d2199e00f/glfw-2.10.0-py2.py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:cca5158d62189e08792b1ae54f92307a282921a0e7783315b467e21b0a381c88", size = 243480, upload-time = "2026-03-10T17:21:30.538Z" },
+    { url = "https://files.pythonhosted.org/packages/f9/bd/cea9569c8f2188b0a104472951420434a3e1f5cf26f5836ef9d7227a1a30/glfw-2.10.0-py2.py3-none-win32.whl", hash = "sha256:5e024509989740e8e7b86cc4aab508195495f79879072b0e1f68bd036a2916ad", size = 552641, upload-time = "2026-03-10T17:21:32.653Z" },
+    { url = "https://files.pythonhosted.org/packages/cc/9b/4366ad3e1c0688146c70aa6143584d6a8d88583b9390f106250e25a3d5cd/glfw-2.10.0-py2.py3-none-win_amd64.whl", hash = "sha256:7f787ee8645781f10e8800438ce4357ab38c573ffb191aba380c1e72eba6311c", size = 559423, upload-time = "2026-03-10T17:21:34.766Z" },
 ]
 
 [[package]]
@@ -802,7 +810,7 @@ wheels = [
 [[package]]
 name = "gymnax"
 version = "0.0.9"
-source = { git = "https://github.com/RobertTLange/gymnax.git#18f2e7f3cffafc7042c76fdc538c83957418a9a9" }
+source = { git = "https://github.com/RobertTLange/gymnax.git?rev=18f2e7f3cffafc7042c76fdc538c83957418a9a9#18f2e7f3cffafc7042c76fdc538c83957418a9a9" }
 dependencies = [
     { name = "flax" },
     { name = "gymnasium" },
@@ -1056,10 +1064,34 @@ wheels = [
 
 [[package]]
 name = "jax-envelope"
-version = "0.4.1"
+version = "0.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "jax" },
+]
+
+[package.optional-dependencies]
+adapters = [
+    { name = "brax" },
+    { name = "craftax" },
+    { name = "jumanji" },
+    { name = "navix" },
+    { name = "playground" },
+]
+brax = [
+    { name = "brax" },
+]
+craftax = [
+    { name = "craftax" },
+]
+jumanji = [
+    { name = "jumanji" },
+]
+mujoco-playground = [
+    { name = "playground" },
+]
+navix = [
+    { name = "navix" },
 ]
 
 [package.dev-dependencies]
@@ -1074,30 +1106,61 @@ adapters = [
 ]
 dev = [
     { name = "hypothesis" },
+    { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
 ]
+ppo = [
+    { name = "distrax" },
+    { name = "flax" },
+    { name = "optax" },
+    { name = "tyro" },
+]
+ppo-wandb = [
+    { name = "wandb" },
+]
 
 [package.metadata]
-requires-dist = [{ name = "jax", specifier = ">=0.5.0" }]
+requires-dist = [
+    { name = "brax", marker = "extra == 'adapters'", specifier = ">=0.13,<0.15" },
+    { name = "brax", marker = "extra == 'brax'", specifier = ">=0.13,<0.15" },
+    { name = "craftax", marker = "extra == 'adapters'", specifier = ">=1.5,<2" },
+    { name = "craftax", marker = "extra == 'craftax'", specifier = ">=1.5,<2" },
+    { name = "jax", specifier = ">=0.5.0" },
+    { name = "jumanji", marker = "extra == 'adapters'", specifier = ">=1.0.1,<2" },
+    { name = "jumanji", marker = "extra == 'jumanji'", specifier = ">=1.0.1,<2" },
+    { name = "navix", marker = "extra == 'adapters'", specifier = ">=0.7,<0.8" },
+    { name = "navix", marker = "extra == 'navix'", specifier = ">=0.7,<0.8" },
+    { name = "playground", marker = "extra == 'adapters'", specifier = ">=0.1,<0.2" },
+    { name = "playground", marker = "extra == 'mujoco-playground'", specifier = ">=0.1,<0.2" },
+]
+provides-extras = ["brax", "craftax", "jumanji", "mujoco-playground", "navix", "adapters"]
 
 [package.metadata.requires-dev]
 adapters = [
     { name = "brax", specifier = ">=0.13.0" },
     { name = "craftax", specifier = ">=1.4.3" },
-    { name = "gymnax", git = "https://github.com/RobertTLange/gymnax.git" },
+    { name = "gymnax", git = "https://github.com/RobertTLange/gymnax.git?rev=18f2e7f3cffafc7042c76fdc538c83957418a9a9" },
     { name = "jumanji", specifier = ">=1.0.1" },
-    { name = "kinetix-env", git = "https://github.com/FLAIROx/Kinetix.git" },
+    { name = "kinetix-env", git = "https://github.com/FLAIROx/Kinetix.git?rev=df4de60cabd42dbd1c35fb5214fdc6728710e33d" },
     { name = "navix", specifier = ">=0.7.0" },
     { name = "playground", specifier = ">=0.1.0" },
 ]
 dev = [
     { name = "hypothesis", specifier = ">=6.148.1" },
+    { name = "pyright", specifier = ">=1.1.407" },
     { name = "pytest", specifier = ">=9.0.0" },
     { name = "pytest-cov", specifier = ">=7.0.0" },
     { name = "ruff", specifier = ">=0.14.2" },
 ]
+ppo = [
+    { name = "distrax", specifier = ">=0.1.7,<0.2" },
+    { name = "flax", specifier = ">=0.10,<1" },
+    { name = "optax", specifier = ">=0.2.4,<0.3" },
+    { name = "tyro", specifier = ">=0.9,<1" },
+]
+ppo-wandb = [{ name = "wandb", specifier = ">=0.19,<1" }]
 
 [[package]]
 name = "jax-tqdm"
@@ -1247,7 +1310,7 @@ wheels = [
 [[package]]
 name = "kinetix-env"
 version = "2.0.4"
-source = { git = "https://github.com/FLAIROx/Kinetix.git#df4de60cabd42dbd1c35fb5214fdc6728710e33d" }
+source = { git = "https://github.com/FLAIROx/Kinetix.git?rev=df4de60cabd42dbd1c35fb5214fdc6728710e33d#df4de60cabd42dbd1c35fb5214fdc6728710e33d" }
 dependencies = [
     { name = "argparse" },
     { name = "chex" },
@@ -1799,6 +1862,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/83/f8/51569ac65d696c8ecbee95938f89d4abf00f47d58d48f6fbabfe8f0baefe/nest_asyncio-1.6.0.tar.gz", hash = "sha256:6f172d5449aca15afd6c646851f4e31e02c598d553a667e38cafa997cfec55fe", size = 7418, upload-time = "2024-01-21T14:25:19.227Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a0/c4/c2971a3ba4c6103a3d10c4b0f24f461ddc027f0f09763220cf35ca1401b3/nest_asyncio-1.6.0-py3-none-any.whl", hash = "sha256:87af6efd6b5e897c81050477ef65c62e2b2f35d51703cae01aff2905b1852e1c", size = 5195, upload-time = "2024-01-21T14:25:17.223Z" },
+]
+
+[[package]]
+name = "nodeenv"
+version = "1.10.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/24/bf/d1bda4f6168e0b2e9e5958945e01910052158313224ada5ce1fb2e1113b8/nodeenv-1.10.0.tar.gz", hash = "sha256:996c191ad80897d076bdfba80a41994c2b47c68e224c542b48feba42ba00f8bb", size = 55611, upload-time = "2025-12-20T14:08:54.006Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/88/b2/d0896bdcdc8d28a7fc5717c305f1a861c26e18c05047949fb371034d98bd/nodeenv-1.10.0-py2.py3-none-any.whl", hash = "sha256:5bb13e3eed2923615535339b3c620e76779af4cb4c6a90deccc9e36b274d3827", size = 23438, upload-time = "2025-12-20T14:08:52.782Z" },
 ]
 
 [[package]]
@@ -2418,6 +2490,19 @@ wheels = [
 ]
 
 [[package]]
+name = "pyright"
+version = "1.1.411"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "nodeenv" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7e/ab/265f7dc69d28113ebba19092e57b075f41543b2ed048429c5f56e2b88eac/pyright-1.1.411.tar.gz", hash = "sha256:d885a0551f2e763b089a02702174e7f4ba77548cddabc972ab86d1f7f1b0f998", size = 4112861, upload-time = "2026-06-25T02:14:06.37Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0a/49/385be530a6a5b78d1cbcd5c2e38debc8959a2fc6bdb716f4e581002979fc/pyright-1.1.411-py3-none-any.whl", hash = "sha256:dc7c72a8e2700c55baa127554040e067041ea53ccfd50bf96308cc4291c7d5d9", size = 6181526, upload-time = "2026-06-25T02:14:04.691Z" },
+]
+
+[[package]]
 name = "pytest"
 version = "9.0.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2748,6 +2833,15 @@ wheels = [
 ]
 
 [[package]]
+name = "shtab"
+version = "1.8.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/56/b3/b7c99318ba2b0d7d7e71b78318c162690dd5639cd06e2d3bca9292737e4e/shtab-1.8.1.tar.gz", hash = "sha256:3edaf857ba164a0d7bb64e958eab8d6756d5aee3949c7f36a7e779bf1ce3b897", size = 46449, upload-time = "2026-07-03T11:43:26.663Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9f/2f/35d4ec80d8ee39e792cd6e0d4f3dd84ea6783f13b7c47b4c319d9062aaf0/shtab-1.8.1-py3-none-any.whl", hash = "sha256:4fc418e0173e66385e4605044a26a4910e73dde2dc23e809acc2f0275e842426", size = 14905, upload-time = "2026-07-03T11:43:25.374Z" },
+]
+
+[[package]]
 name = "simplejson"
 version = "3.20.2"
 source = { registry = "https://pypi.org/simple" }
@@ -3009,16 +3103,19 @@ wheels = [
 
 [[package]]
 name = "tyro"
-version = "1.0.5"
+version = "0.9.35"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
     { name = "docstring-parser" },
+    { name = "rich" },
+    { name = "shtab" },
     { name = "typeguard" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8c/34/1e306bacd2917f694fef5aa21ccd9d39dfa6747ddbe7a0f5c9612c734259/tyro-1.0.5.tar.gz", hash = "sha256:5b28c23cc8e844f284286b1043d06be0e62f7acff6f2b1b5b5db75466c6802fc", size = 453403, upload-time = "2026-01-13T20:50:51.016Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4d/40/7a84e7652f75526b31f45c2565b5db9e9e21d37201fd44bc341ea90edc53/tyro-0.9.35.tar.gz", hash = "sha256:e38dd3528ae6f8fc74e21c7e21ac412d22d237739758d521f470e7a20eb46e92", size = 325648, upload-time = "2025-10-13T08:55:57.631Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/67/86/eef272685bc6c15a8f79178aa8c6e07d956f0f91d97fab5a4d8af707b21b/tyro-1.0.5-py3-none-any.whl", hash = "sha256:87fcba42a1136cdabef8776a456bb4a05c0d52b81ccc2529e65c75da059ff3cd", size = 181241, upload-time = "2026-01-13T20:50:49.597Z" },
+    { url = "https://files.pythonhosted.org/packages/bb/bc/943b35b1a139a602a730e56592a3639bf796a87c91eebcd40cc51043ee5b/tyro-0.9.35-py3-none-any.whl", hash = "sha256:82d656389d3041c04dd68542f8ba9b77baf91a4aaaa627cd5c88af3b3dc6a2cd", size = 132641, upload-time = "2025-10-13T08:55:56.54Z" },
 ]
 
 [[package]]

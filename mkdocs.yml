@@ -68,3 +68,4 @@ nav:
   - Wrappers: api/wrappers.md
   - Adapters: api/adapters.md
   - Struct: api/struct.md
+  - Migrating to 0.5: migration-0.5.md

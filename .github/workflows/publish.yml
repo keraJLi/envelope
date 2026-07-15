@@ -1,57 +1,38 @@
 name: Publish to PyPI
 
 on:
-  release:
-    types: [published, edited]
+  push:
+    tags:
+      - "v*"
 
 jobs:
-  test:
-    name: Test Python ${{ matrix.python-version }}
+  build-and-verify:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-
-      - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
-
-      - name: Install dependencies
+          python-version: "3.12"
+      - name: Verify tag matches project version
         run: |
-          test -f uv.lock
-          uv sync --group dev --locked
-
-      - name: Run tests
-        run: uv run pytest -m "not adapters"
-
-  build:
-    name: Build distribution
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Build package
-        run: uv build
-
-      - name: Store distribution packages
-        uses: actions/upload-artifact@v4
+          VERSION=$(uv run --no-project python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          test "${GITHUB_REF_NAME}" = "v${VERSION}"
+      - run: uv sync --group dev --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pyright
+      - run: uv run pytest -m "not adapters and not ppo"
+      - run: uv build --no-sources
+      - run: uv run --no-project --with dist/*.whl python -c "import envelope, importlib.resources; assert importlib.resources.files('envelope').joinpath('py.typed').is_file()"
+      - uses: actions/upload-artifact@v4
         with:
           name: python-package-distributions
           path: dist/
+          if-no-files-found: error
 
   publish:
-    name: Publish to PyPI
-    needs: build
+    needs: build-and-verify
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -59,11 +40,8 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - name: Download distribution packages
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: python-package-distributions
           path: dist/
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@release/v1

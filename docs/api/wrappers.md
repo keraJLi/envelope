@@ -14,8 +14,14 @@ property traverses the full nesting to return the base environment's state.
 
 Wrappers communicate additional data to user code by adding fields to the info via
 `info.update(...)`. For example, `EpisodeStatisticsWrapper` adds `stats`,
-`AutoResetWrapper` adds `final` (a snapshot of the terminal step's info, enabling value
-bootstrapping), and `ObservationNormalizationWrapper` adds `unnormalized_obs`.
+`AutoResetWrapper` adds `final` (the complete terminal step info) and `final_valid`, and
+`ObservationNormalizationWrapper` adds `unnormalized_obs`.
+
+On a completing transition, the returned state and `info.obs` are already reset. Reward,
+termination, and truncation still describe the action just taken. Other top-level
+metadata describes the reset state; terminal metadata remains in `info.final`. Before
+the first completion, `final` is a zero-like structural placeholder and
+`final_valid=False`.
 
 ## Vectorization
 
@@ -26,8 +32,8 @@ Three wrappers add batch dimensions:
   created via `jax.vmap(make_env)(params)`. This is useful when different instances have
   different configurations.
 - **`PooledInitVmapWrapper`** vmaps like `VmapWrapper`, but pre-computes a pool of initial
-  states and samples from them on reset. It also includes built-in autoreset logic, making
-  it an alternative to `AutoResetWrapper` + `VmapWrapper`.
+  states and samples from them on reset. It includes built-in autoreset logic and only
+  accepts environments whose `supports_init_pooling` capability is true.
 
 ## Wrapper Ordering
 
@@ -45,18 +51,21 @@ base env → Observation/action transforms → Episode logic → AutoReset → V
 A concrete example with all layers:
 ```
 VmapWrapper                              # outermost: adds batch dim
-└─ AutoResetWrapper                      # resets on done, adds `final`
-   └─ StateInjectionWrapper              # (optional) overrides reset target
-      └─ EpisodeStatisticsWrapper        # tracks reward/length
-         └─ TruncationWrapper            # caps episode length
-            └─ ObservationNormalizationWrapper
+└─ CumulativeStatisticsWrapper           # optional lifetime totals
+   └─ AutoResetWrapper                   # resets on done, adds `final`
+      └─ StateInjectionWrapper           # optional reset target
+         └─ EpisodeStatisticsWrapper     # per-episode reward/length
+            └─ TruncationWrapper         # caps episode length
                └─ ContinuousObservationWrapper
                   └─ ClipActionWrapper
-                     └─ base env         # innermost
+                     └─ base env          # innermost
 ```
 
-Not all wrappers are needed in every pipeline. The ordering between wrappers in the same
-layer (e.g. the observation/action transforms) is flexible.
+Not all wrappers are needed in every pipeline. `ObservationNormalizationWrapper` may be
+inside vectorization for per-environment statistics or outside it for shared statistics.
+Persistent normalization must remain outside `PooledInitVmapWrapper`; state injection is
+not compatible with pooled initialization. Invalid episode-boundary stacks raise during
+construction with the supported alternative.
 
 ## API Reference
 
@@ -71,6 +80,8 @@ layer (e.g. the observation/action transforms) is flexible.
 ::: envelope.wrappers.ContinuousObservationWrapper
 
 ::: envelope.wrappers.EpisodeStatisticsWrapper
+
+::: envelope.wrappers.CumulativeStatisticsWrapper
 
 ::: envelope.wrappers.FlattenActionWrapper
 

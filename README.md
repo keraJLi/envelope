@@ -26,7 +26,9 @@ env = envelope.wrappers.ObservationNormalizationWrapper(env)
 ## 💪 Powerful, composable wrappers!
 
 - **Carry state across episodes** to track running statistics, for example to normalize observations.
-- **Composable wrappers** can be stacked in any order. For example, `ObservationNormalizationWrapper` before vs. after `VmapWrapper` gives per-env vs. global normalization.
+- **Explicit wrapper composition** keeps episode boundaries correct. Stateless transforms
+  are flexible, while autoreset, statistics, truncation, and pooling follow the
+  [supported ordering](docs/api/wrappers.md#Wrapper-Ordering).
 
 ## 🔌 Adapters for existing suites
 
@@ -62,7 +64,15 @@ let's you create environments from any of the above!
 
 ```bash
 pip install jax-envelope
+pip install "jax-envelope[brax]"        # one published adapter extra
+pip install "jax-envelope[adapters]"    # all published adapter extras
 ```
+
+Gymnax and Kinetix currently rely on pinned upstream fixes and therefore remain
+source-backed development adapters. Their exact install commands are documented in the
+[adapter guide](docs/api/adapters.md#source-backed-adapters).
+
+See the [0.5 migration guide](docs/migration-0.5.md) when upgrading from Envelope 0.4.
 
 ## 💞 Related projects
 
