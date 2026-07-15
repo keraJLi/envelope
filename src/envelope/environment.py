@@ -91,5 +91,10 @@ class Environment(ABC, FrozenPyTreeNode):
 
     @property
     def supports_init_pooling(self) -> bool:
-        """Whether cached ``init`` states are valid substitutes during reset."""
-        return False
+        """Whether cached ``init`` states are valid substitutes during reset.
+
+        Environments are assumed to be reset-equivalent by default. Environments whose
+        ``reset`` depends on the current state must override this property with
+        ``False``.
+        """
+        return True

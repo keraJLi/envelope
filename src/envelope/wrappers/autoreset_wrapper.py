@@ -12,9 +12,9 @@ from envelope.wrappers.wrapper import WrappedState, Wrapper, WrapperStackRule
 class AutoResetWrapper(Wrapper):
     """Wrapper that automatically resets the environment when an episode ends.
 
-    When a step results in termination or truncation, this wrapper immediately
-    resets the environment. The returned info preserves critical information
-    from the terminal step while providing the new episode's initial observation.
+    When a step results in termination or truncation, this wrapper immediately resets
+    the environment. The returned info preserves critical information from the terminal
+    step while providing the new episode's initial observation.
 
     Info fields after a terminal step (terminated=True or truncated=True):
         obs: Initial observation from the new episode (after reset).
@@ -50,13 +50,6 @@ class AutoResetWrapper(Wrapper):
             (
                 "AutoResetWrapper must be inside VmapWrapper/vectorization, "
                 "not outside it"
-            ),
-        ),
-        WrapperStackRule(
-            "cumulative_statistics",
-            (
-                "AutoResetWrapper cannot wrap CumulativeStatisticsWrapper; "
-                "CumulativeStatisticsWrapper must be outside AutoResetWrapper"
             ),
         ),
     )

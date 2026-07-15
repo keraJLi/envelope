@@ -13,8 +13,9 @@ from envelope.wrappers.observation_normalization_wrapper import (
 from envelope.wrappers.pooled_init_vmap_wrapper import PooledInitVmapWrapper
 from envelope.wrappers.state_injection_wrapper import StateInjectionWrapper
 from envelope.wrappers.truncation_wrapper import TruncationWrapper
+from envelope.wrappers.vmap_envs_wrapper import VmapEnvsWrapper
 from envelope.wrappers.vmap_wrapper import VmapWrapper
-from tests.wrappers.helpers import ScalarToyEnv, StepCounterEnv
+from tests.wrappers.helpers import ParamEnv, ScalarToyEnv, StepCounterEnv
 
 
 def test_init_creates_batched_state():
@@ -147,8 +148,20 @@ def test_nonpositive_pooling_capability_is_rejected(batch_size, pool_size):
         StateInjectionWrapper(ScalarToyEnv()),
         ObservationNormalizationWrapper(ScalarToyEnv()),
         VmapWrapper(ScalarToyEnv(), batch_size=2),
+        VmapEnvsWrapper(
+            ParamEnv(offset=jnp.asarray([0.0, 1.0])),
+            batch_size=2,
+        ),
+        PooledInitVmapWrapper(ScalarToyEnv(), batch_size=2, pool_size=2),
     ],
-    ids=["autoreset", "state-injection", "normalization", "vmap"],
+    ids=[
+        "autoreset",
+        "state-injection",
+        "normalization",
+        "vmap",
+        "vmap-envs",
+        "pooled-vmap",
+    ],
 )
 def test_non_pooling_wrappers_are_rejected(env):
     with pytest.raises(ValueError, match="supports_init_pooling=True"):
