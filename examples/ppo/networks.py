@@ -32,12 +32,6 @@ class BoundedGaussian(distrax.Transformed):
     ) -> None:
         minimum = jnp.asarray(minimum, dtype=loc.dtype)
         maximum = jnp.asarray(maximum, dtype=loc.dtype)
-        if not bool(jnp.all(jnp.isfinite(minimum) & jnp.isfinite(maximum))):
-            raise ValueError("PPO Gaussian action bounds must be finite")
-        if not bool(jnp.all(maximum > minimum)):
-            raise ValueError(
-                "PPO Gaussian action upper bounds must exceed lower bounds"
-            )
 
         midpoint = (minimum + maximum) / 2
         half_range = (maximum - minimum) / 2
@@ -87,7 +81,16 @@ class GaussianPolicy(nnx.Module):
     ):
         in_dim = math.prod(obs_space.shape)
         out_dim = math.prod(action_space.shape)
-        self.action_low, self.action_high = action_space.low, action_space.high
+        action_low = np.asarray(action_space.low)
+        action_high = np.asarray(action_space.high)
+        if not np.all(np.isfinite(action_low) & np.isfinite(action_high)):
+            raise ValueError("PPO Gaussian action bounds must be finite")
+        if not np.all(action_high > action_low):
+            raise ValueError(
+                "PPO Gaussian action upper bounds must exceed lower bounds"
+            )
+        self.action_low = jnp.asarray(action_low)
+        self.action_high = jnp.asarray(action_high)
         self.layers = nnx.Sequential(
             ortho_linear(in_dim, layer_size, rngs),
             nnx.swish,
