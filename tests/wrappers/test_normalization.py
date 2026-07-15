@@ -16,7 +16,8 @@ def _init_rmv_from_example(x_like, dtype=jnp.float32, count=0) -> RunningMeanVar
 
     mean0 = jax.tree.map(zeros_no_batch, x_like)
     var0 = jax.tree.map(ones_no_batch, x_like)
-    return RunningMeanVar(mean=mean0, var=var0, count=count)
+    count0 = jax.tree.map(lambda _: jnp.asarray(count), x_like)
+    return RunningMeanVar(mean=mean0, var=var0, count=count0)
 
 
 @pytest.mark.parametrize(
@@ -108,7 +109,9 @@ def test_update_rmv_pytree_leaves():
     assert jnp.allclose(rmv1.var["a"], exp_var_a, atol=1e-6, rtol=1e-6)
     assert jnp.allclose(rmv1.mean["b"], exp_mean_b, atol=1e-6, rtol=1e-6)
     assert jnp.allclose(rmv1.var["b"], exp_var_b, atol=1e-6, rtol=1e-6)
-    assert rmv1.count == 32
+    assert rmv1.count.keys() == x.keys()
+    assert rmv1.count["a"] == 32
+    assert rmv1.count["b"] == 32
 
 
 def test_update_rmv_jit_compatibility():

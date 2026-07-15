@@ -1,3 +1,5 @@
+from dataclasses import fields
+
 import jax
 import jax.numpy as jnp
 import pytest
@@ -125,12 +127,42 @@ def test_terminal_transition_semantics_match_scalar_autoreset():
     assert bool(jnp.asarray(pooled_info.final_valid[0])) is True
 
 
-@pytest.mark.parametrize("batch_size,pool_size", [(0, 1), (1, 0)])
+@pytest.mark.parametrize("batch_size,pool_size", [(0, 1), (-1, 1), (1, 0), (1, -1)])
 def test_nonpositive_pooling_capability_is_rejected(batch_size, pool_size):
     with pytest.raises(ValueError, match="batch_size|pool_size"):
         PooledInitVmapWrapper(
             ScalarToyEnv(), batch_size=batch_size, pool_size=pool_size
         )
+
+
+@pytest.mark.parametrize(
+    "field_name,value",
+    [
+        ("batch_size", True),
+        ("batch_size", 2.0),
+        ("batch_size", jnp.asarray(2)),
+        ("pool_size", True),
+        ("pool_size", 2.0),
+        ("pool_size", jnp.asarray(2)),
+    ],
+)
+def test_pool_sizes_must_be_concrete_static_python_ints(field_name, value):
+    kwargs = {"batch_size": 2, "pool_size": 2, field_name: value}
+    with pytest.raises(
+        TypeError,
+        match=rf"{field_name}.*positive concrete static int",
+    ):
+        PooledInitVmapWrapper(ScalarToyEnv(), **kwargs)
+
+
+def test_pool_sizes_are_static_pytree_metadata():
+    config_fields = {
+        dataclass_field.name: dataclass_field
+        for dataclass_field in fields(PooledInitVmapWrapper)
+    }
+
+    assert config_fields["batch_size"].metadata["pytree_node"] is False
+    assert config_fields["pool_size"].metadata["pytree_node"] is False
 
 
 def test_reset_vmaps_inner_reset():
@@ -294,15 +326,13 @@ def test_jax_lax_scan_multi_step_loop():
     assert obs_stack.shape == (5, 2)
 
 
-def test_composability_with_episode_statistics_wrapper():
+def test_episode_statistics_outside_pooled_is_rejected():
     env = StepCounterEnv(terminate_after=2)
-    w = EpisodeStatisticsWrapper(PooledInitVmapWrapper(env, batch_size=2, pool_size=2))
-    key = jax.random.key(0)
-    state, _ = w.init(key)
-    for _ in range(4):
-        state, _ = w.step(state, jnp.array([0.1, 0.1]))
-    # Stats accumulate across pool resets; reward is batched
-    assert jnp.asarray(state.stats.reward).shape == (2,)
+    with pytest.raises(
+        ValueError,
+        match=r"(?i)EpisodeStatisticsWrapper.*inside.*PooledInitVmapWrapper",
+    ):
+        EpisodeStatisticsWrapper(PooledInitVmapWrapper(env, batch_size=2, pool_size=2))
 
 
 def test_composability_with_truncation_wrapper():

@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import pytest
 
 from envelope.environment import Environment, InfoContainer
-from envelope.spaces import Continuous
+from envelope.spaces import Continuous, PyTreeSpace
 from envelope.wrappers.normalization import RunningMeanVar, update_rmv
 from envelope.wrappers.observation_normalization_wrapper import (
     ObservationNormalizationWrapper,
@@ -15,6 +15,7 @@ from envelope.wrappers.vmap_wrapper import VmapWrapper
 from tests.wrappers.helpers import (
     ConstantObsEnv,
     IntObsEnv,
+    PyTreeObsEnv,
     RandomImageEnv,
     VectorObsEnv,
 )
@@ -32,8 +33,40 @@ class RowStructuredObsEnv(Environment):
         return Continuous(low=-1.0, high=1.0)
 
     def init(self, key):
-        obs = jnp.asarray(
-            [[[0.0], [0.0], [0.0]], [[10.0], [10.0], [10.0]]]
+        obs = jnp.asarray([[[0.0], [0.0], [0.0]], [[10.0], [10.0], [10.0]]])
+        return obs, InfoContainer(
+            obs=obs, reward=0.0, terminated=False, truncated=False
+        )
+
+    def reset(self, state, key):
+        return self.init(key)
+
+    def step(self, state, action):
+        return state, InfoContainer(
+            obs=state, reward=0.0, terminated=False, truncated=False
+        )
+
+
+class HeterogeneousStatsEnv(Environment):
+    """Leaves whose broadcast statistics consume different sample counts."""
+
+    @cached_property
+    def observation_space(self):
+        return PyTreeSpace(
+            (
+                Continuous.from_shape(-jnp.inf, jnp.inf, (2,)),
+                Continuous.from_shape(-jnp.inf, jnp.inf, (2, 3)),
+            )
+        )
+
+    @cached_property
+    def action_space(self):
+        return Continuous(low=-1.0, high=1.0)
+
+    def init(self, key):
+        obs = (
+            jnp.asarray([1.0, 3.0]),
+            jnp.asarray([[0.0, 2.0, 4.0], [10.0, 12.0, 14.0]]),
         )
         return obs, InfoContainer(
             obs=obs, reward=0.0, terminated=False, truncated=False
@@ -46,6 +79,7 @@ class RowStructuredObsEnv(Environment):
         return state, InfoContainer(
             obs=state, reward=0.0, terminated=False, truncated=False
         )
+
 
 # -----------------------------------------------------------------------------
 # Core: stats_spec inference and dtype validation
@@ -68,6 +102,25 @@ def test_non_floating_observation_raises():
     env = IntObsEnv()
     with pytest.raises(ValueError):
         _ = ObservationNormalizationWrapper(env)
+
+
+@pytest.mark.parametrize("spec_source", ["inferred", "provided"])
+def test_pytree_stats_metadata_is_hashable_static_state(spec_source):
+    env = PyTreeObsEnv(shapes={"a": (2,), "b": (3,)})
+    expected_spec = {
+        "a": jax.ShapeDtypeStruct((2,), jnp.float32),
+        "b": jax.ShapeDtypeStruct((3,), jnp.float32),
+    }
+    stats_spec = None if spec_source == "inferred" else expected_spec
+
+    wrapper = ObservationNormalizationWrapper(env, stats_spec=stats_spec)
+
+    assert jax.tree.structure(wrapper.stats_spec) == jax.tree.structure(expected_spec)
+    wrapper._validate_static_fields()
+    _, treedef = jax.tree.flatten(wrapper)
+    hash(treedef)
+    rebuilt = jax.tree.map(lambda leaf: leaf, wrapper)
+    assert jax.tree.structure(rebuilt.stats_spec) == jax.tree.structure(expected_spec)
 
 
 # -----------------------------------------------------------------------------
@@ -270,6 +323,26 @@ def test_broadcast_stats_spec_reduces_the_broadcast_axes():
 
     assert jnp.allclose(state.rmv_state.mean[:, 0, 0], jnp.asarray([0.0, 10.0]))
     assert jnp.allclose(info.obs, jnp.zeros((2, 3, 1)), atol=1e-6)
+
+
+def test_broadcast_statistics_track_per_leaf_effective_counts_under_jit():
+    stats_spec = (
+        jax.ShapeDtypeStruct((2,), jnp.float32),
+        jax.ShapeDtypeStruct((1, 3), jnp.float32),
+    )
+    wrapper = ObservationNormalizationWrapper(
+        HeterogeneousStatsEnv(), stats_spec=stats_spec
+    )
+
+    state, _ = wrapper.init(jax.random.key(0))
+
+    assert jax.tree.structure(state.rmv_state.count) == jax.tree.structure(stats_spec)
+    assert state.rmv_state.count[0] == 1
+    assert state.rmv_state.count[1] == 2
+
+    state, _ = jax.jit(wrapper.step)(state, jnp.asarray(0.0))
+    assert state.rmv_state.count[0] == 2
+    assert state.rmv_state.count[1] == 4
 
 
 def test_constant_float16_observations_remain_finite():

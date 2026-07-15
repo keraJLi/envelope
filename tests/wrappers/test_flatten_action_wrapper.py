@@ -172,7 +172,7 @@ def test_mixed_space_types_raises_value_error():
             )
 
     env = MixedActionEnv()
-    with pytest.raises(ValueError, match="All spaces must be of the same type"):
+    with pytest.raises(ValueError, match=r"(?i)mixed.*action.*trees?.*unsupported"):
         w = FlattenActionWrapper(env)
         _ = w.action_space
 

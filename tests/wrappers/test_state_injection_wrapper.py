@@ -9,6 +9,15 @@ from envelope.wrappers.episode_statistics_wrapper import EpisodeStatisticsWrappe
 from envelope.wrappers.state_injection_wrapper import StateInjectionWrapper
 from tests.wrappers.helpers import StepCounterEnv, StepState
 
+
+def _reset_info_with_obs(state, obs):
+    if hasattr(state, "reset_info"):
+        return state.reset_info.update(obs=obs)
+    if hasattr(state, "inner_state"):
+        return _reset_info_with_obs(state.inner_state, obs)
+    raise ValueError("Could not find injected reset info in state")
+
+
 # ============================================================================
 # Tests: Core Functionality
 # ============================================================================
@@ -48,7 +57,11 @@ class TestStateInjectionCoreFunctionality:
         # Set a custom reset state
         custom_state = StepState(env_state=jnp.array(42.0), steps=0)
         custom_obs = jnp.array(42.0)
-        state = w.set_reset_state(state, custom_state, custom_obs)
+        state = w.set_reset_state(
+            state,
+            custom_state,
+            reset_info=_reset_info_with_obs(state, custom_obs),
+        )
 
         # Verify the state was updated
         assert jnp.allclose(state.reset_state.env_state, jnp.array(42.0))
@@ -67,7 +80,11 @@ class TestStateInjectionCoreFunctionality:
         state, _ = w.init(key)
         custom_state = StepState(env_state=jnp.array(42.0), steps=0)
         custom_obs = jnp.array(42.0)
-        state = w.set_reset_state(state, custom_state, custom_obs)
+        state = w.set_reset_state(
+            state,
+            custom_state,
+            reset_info=_reset_info_with_obs(state, custom_obs),
+        )
 
         # Reset again, passing the current state (simulates auto-reset)
         key2 = jax.random.key(1)
@@ -88,14 +105,14 @@ class TestStateInjectionCoreFunctionality:
         state = w.set_reset_state(
             state,
             StepState(env_state=jnp.array(1.0), steps=0),
-            jnp.array(1.0),
+            reset_info=_reset_info_with_obs(state, jnp.array(1.0)),
         )
 
         # Set new reset state
         state = w.set_reset_state(
             state,
             StepState(env_state=jnp.array(99.0), steps=0),
-            jnp.array(99.0),
+            reset_info=_reset_info_with_obs(state, jnp.array(99.0)),
         )
 
         # Should have new injected state
@@ -112,7 +129,11 @@ class TestStateInjectionCoreFunctionality:
         state, _ = w.init(key)
         custom_state = StepState(env_state=jnp.array(0.0), steps=0)
         custom_obs = jnp.array(0.0)
-        state = w.set_reset_state(state, custom_state, custom_obs)
+        state = w.set_reset_state(
+            state,
+            custom_state,
+            reset_info=_reset_info_with_obs(state, custom_obs),
+        )
 
         # Take a step
         state, info = w.step(state, jnp.array(0.5))
@@ -149,12 +170,17 @@ class TestStateInjectionCoreFunctionality:
         """Verify that set_reset_state raises when InjectedState not found."""
         env = StepCounterEnv()
         w = StateInjectionWrapper(env)
+        _, info = w.init(jax.random.key(0))
 
         # Create a state that doesn't contain InjectedState
         invalid_state = StepState(env_state=jnp.array(0.0), steps=0)
 
         with pytest.raises(ValueError, match="Could not find InjectedState"):
-            w.set_reset_state(invalid_state, invalid_state, jnp.array(0.0))
+            w.set_reset_state(
+                invalid_state,
+                invalid_state,
+                reset_info=info.update(obs=jnp.array(0.0)),
+            )
 
     def test_full_reset_info_preserves_structure_and_inner_extras(self):
         w = StateInjectionWrapper(EpisodeStatisticsWrapper(StepCounterEnv()))
@@ -166,9 +192,7 @@ class TestStateInjectionCoreFunctionality:
             inner_state=StepState(env_state=jnp.asarray(42.0), steps=0)
         )
         injected_info = info.update(obs=jnp.asarray(42.0))
-        state = w.set_reset_state(
-            state, injected_inner, reset_info=injected_info
-        )
+        state = w.set_reset_state(state, injected_inner, reset_info=injected_info)
 
         assert jax.tree.structure(state) == state_structure
         reset_state, reset_info = w.reset(state=state, key=jax.random.key(1))
@@ -176,6 +200,47 @@ class TestStateInjectionCoreFunctionality:
         assert hasattr(reset_info, "stats")
         assert jnp.allclose(reset_info.obs, 42.0)
         assert jnp.allclose(reset_state.inner_state.inner_state.env_state, 42.0)
+
+    @pytest.mark.parametrize("compiled", [False, True], ids=["eager", "jit"])
+    @pytest.mark.parametrize(
+        "target,mismatch",
+        [
+            ("state", "shape"),
+            ("state", "dtype"),
+            ("info", "shape"),
+            ("info", "dtype"),
+        ],
+    )
+    def test_injection_rejects_leaf_shape_and_dtype_mismatches(
+        self, target, mismatch, compiled
+    ):
+        w = StateInjectionWrapper(StepCounterEnv())
+        state, info = w.init(jax.random.key(0))
+        reset_state = state.reset_state
+        reset_info = info
+
+        if target == "state" and mismatch == "shape":
+            reset_state = reset_state.replace(env_state=jnp.zeros((2,)))
+        elif target == "state":
+            reset_state = reset_state.replace(env_state=jnp.asarray(0, dtype=jnp.int32))
+        elif mismatch == "shape":
+            reset_info = reset_info.update(obs=jnp.zeros((2,)))
+        else:
+            reset_info = reset_info.update(obs=jnp.asarray(0, dtype=jnp.int32))
+
+        def inject(current_state, candidate_state, candidate_info):
+            return w.set_reset_state(
+                current_state,
+                candidate_state,
+                reset_info=candidate_info,
+            )
+
+        inject_fn = jax.jit(inject) if compiled else inject
+        with pytest.raises(
+            ValueError,
+            match=rf"reset_{target}.*{mismatch}",
+        ):
+            inject_fn(state, reset_state, reset_info)
 
 
 # ============================================================================
@@ -197,7 +262,11 @@ class TestStateInjectionWithAutoReset:
         state, _ = w.init(key)
         reset_state = StepState(env_state=jnp.array(42.0), steps=0)
         reset_obs = jnp.array(42.0)
-        state = inner_w.set_reset_state(state, reset_state, reset_obs)
+        state = inner_w.set_reset_state(
+            state,
+            reset_state,
+            reset_info=_reset_info_with_obs(state, reset_obs),
+        )
 
         # Step until termination triggers auto-reset
         state, _ = w.step(state, jnp.array(0.1))
@@ -220,7 +289,11 @@ class TestStateInjectionWithAutoReset:
         # Set a custom reset state - just pass the outermost state
         custom_state = StepState(env_state=jnp.array(100.0), steps=0)
         custom_obs = jnp.array(100.0)
-        state = inner_w.set_reset_state(state, custom_state, custom_obs)
+        state = inner_w.set_reset_state(
+            state,
+            custom_state,
+            reset_info=_reset_info_with_obs(state, custom_obs),
+        )
 
         # Step to trigger termination → auto-reset
         state, info = w.step(state, jnp.array(0.1))
@@ -240,7 +313,11 @@ class TestStateInjectionWithAutoReset:
         state, _ = w.init(key)
         custom_state = StepState(env_state=jnp.array(50.0), steps=0)
         custom_obs = jnp.array(50.0)
-        state = inner_w.set_reset_state(state, custom_state, custom_obs)
+        state = inner_w.set_reset_state(
+            state,
+            custom_state,
+            reset_info=_reset_info_with_obs(state, custom_obs),
+        )
 
         # Trigger multiple auto-resets
         for _ in range(5):
@@ -270,7 +347,11 @@ class TestStateInjectionWithAutoReset:
 
             # Set the reset state for this outer iteration
             # User just passes the outermost state
-            state = inner_w.set_reset_state(state, task_state, task_obs)
+            state = inner_w.set_reset_state(
+                state,
+                task_state,
+                reset_info=_reset_info_with_obs(state, task_obs),
+            )
 
             # Inner loop with auto-resets
             for inner_step in range(4):  # More than terminate_after to trigger resets
@@ -317,7 +398,11 @@ class TestStateInjectionJITCompatibility:
         def run_with_state(k, reset_state, reset_obs):
             s, _ = w.init(k)
             # Set the reset state - just pass the outermost state
-            s = inner_w.set_reset_state(s, reset_state, reset_obs)
+            s = inner_w.set_reset_state(
+                s,
+                reset_state,
+                reset_info=_reset_info_with_obs(s, reset_obs),
+            )
             for _ in range(3):
                 s, info = w.step(s, jnp.array(0.1))
             return s, info
@@ -344,7 +429,11 @@ class TestStateInjectionJITCompatibility:
             task_obs = task_value
 
             # Set reset state for this task - pass outermost state
-            state = inner_w.set_reset_state(state, task_state, task_obs)
+            state = inner_w.set_reset_state(
+                state,
+                task_state,
+                reset_info=_reset_info_with_obs(state, task_obs),
+            )
 
             # Run inner loop
             for _ in range(3):

@@ -137,7 +137,7 @@ def test_mixed_space_types_raises_value_error():
     # FlattenObservationWrapper accesses observation_space in cached_property;
     # building the flattened space triggers the leaf-type check.
     env = MixedObsEnv()
-    with pytest.raises(ValueError, match="All spaces must be of the same type"):
+    with pytest.raises(ValueError, match=r"ContinuousObservationWrapper"):
         w = FlattenObservationWrapper(env)
         _ = w.observation_space
 

@@ -57,6 +57,10 @@ class StepCounterEnv(Environment):
 
     steps_dtype: jnp.dtype | None = None
 
+    @property
+    def supports_init_pooling(self) -> bool:
+        return True
+
     @cached_property
     def observation_space(self) -> Continuous:
         return Continuous(low=-jnp.inf, high=jnp.inf)
@@ -250,6 +254,10 @@ class AlternatingTerminationEnv(Environment):
 
 
 class ScalarToyEnv(Environment):
+    @property
+    def supports_init_pooling(self) -> bool:
+        return True
+
     @cached_property
     def observation_space(self) -> Continuous:
         return Continuous(low=-jnp.inf, high=jnp.inf)
@@ -274,6 +282,46 @@ class ScalarToyEnv(Environment):
             truncated=False,
         )
         return ns, info
+
+
+class NonzeroInitInfoEnv(Environment):
+    """Reset-equivalent env whose initial info has nonzero leaves of varied dtypes."""
+
+    @property
+    def supports_init_pooling(self) -> bool:
+        return True
+
+    @cached_property
+    def observation_space(self) -> Continuous:
+        return Continuous(low=-jnp.inf, high=jnp.inf)
+
+    @cached_property
+    def action_space(self) -> Continuous:
+        return Continuous(low=-1.0, high=1.0)
+
+    def init(self, key: Key) -> tuple[jax.Array, InfoContainer]:
+        state = jnp.asarray(7.0, dtype=jnp.float32)
+        info = InfoContainer(
+            obs=state,
+            reward=jnp.asarray(3.0, dtype=jnp.float16),
+            terminated=jnp.asarray(True),
+            truncated=jnp.asarray(True),
+        ).update(counter=jnp.asarray([2, 4], dtype=jnp.int16))
+        return state, info
+
+    def reset(self, state: State, key: Key) -> tuple[jax.Array, InfoContainer]:
+        return self.init(key)
+
+    def step(
+        self, state: jax.Array, action: jax.Array
+    ) -> tuple[jax.Array, InfoContainer]:
+        next_state = state + action
+        return next_state, InfoContainer(
+            obs=next_state,
+            reward=jnp.asarray(action, dtype=jnp.float16),
+            terminated=jnp.asarray(False),
+            truncated=jnp.asarray(False),
+        ).update(counter=jnp.asarray([2, 4], dtype=jnp.int16))
 
 
 class VectorToyEnv(Environment):
@@ -446,7 +494,10 @@ class PyTreeObsEnv(Environment):
     def step(self, state: State, action: jax.Array):
         ns = state
         return ns, InfoContainer(
-            obs=state, reward=float(action), terminated=False, truncated=False
+            obs=state,
+            reward=jnp.asarray(action, dtype=jnp.float32),
+            terminated=False,
+            truncated=False,
         )
 
 
