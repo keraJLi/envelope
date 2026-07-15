@@ -245,6 +245,28 @@ class TestPyTreeNodeJAXIntegration:
         assert jnp.allclose(reconstructed.y, node.y)
         assert reconstructed.static_val == node.static_val
 
+    def test_tree_unflatten_bypasses_constructor_validation_for_jax_sentinels(self):
+        """Opaque JAX bookkeeping values must not enter ``__post_init__``."""
+
+        class ValidatedNode(FrozenPyTreeNode):
+            value: jax.Array
+            label: str = static_field()
+
+            def __post_init__(self):
+                if not isinstance(self.value, jax.Array):
+                    raise TypeError("value must be a JAX array")
+
+        node = ValidatedNode(value=jnp.asarray(1.0), label="valid")
+        _, treedef = jax.tree_util.tree_flatten(node)
+        sentinel = object()
+
+        with pytest.raises(TypeError, match="JAX array"):
+            ValidatedNode(value=sentinel, label="invalid")
+
+        reconstructed = jax.tree_util.tree_unflatten(treedef, [sentinel])
+        assert reconstructed.value is sentinel
+        assert reconstructed.label == "valid"
+
     def test_jax_tree_map(self):
         """Test that jax.tree.map works correctly with PyTreeNode."""
         node = SimpleNode(
