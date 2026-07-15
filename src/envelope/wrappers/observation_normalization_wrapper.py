@@ -20,6 +20,13 @@ class _InfoWithFinal(Info, Protocol):
 
 
 class ObservationNormalizationWrapper(Wrapper):
+    """Normalize a batch with shared running statistics.
+
+    Place this wrapper outside vectorization. If the inner stack emits ``final``, the
+    wrapper also normalizes and caches ``final.obs`` per batch element while retaining
+    the raw terminal observation as ``final.unnormalized_obs``.
+    """
+
     wrapper_roles: ClassVar[frozenset[str]] = frozenset({"normalization", "persistent"})
 
     class ObservationNormalizationState(WrappedState):

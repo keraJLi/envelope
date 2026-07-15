@@ -10,9 +10,9 @@ states, infos = jax.lax.scan(env.step, state, actions)
 plt.plot(infos.reward.cumsum())
 
 # ... and enjoy a powerful ecosystem of wrappers.
-env = envelope.wrappers.ObservationNormalizationWrapper(env)
 env = envelope.wrappers.AutoResetWrapper(env)
 env = envelope.wrappers.VmapWrapper(env)
+env = envelope.wrappers.ObservationNormalizationWrapper(env)
 ```
 
 ## 🌍 Simple, expressive interaction!

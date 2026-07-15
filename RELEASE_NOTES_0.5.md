@@ -23,10 +23,14 @@ shims for behavior that contradicted the lifecycle contract.
 ## Wrapper composition
 
 Vectorization belongs outside elementwise auto-reset. Episode statistics and truncation
-belong inside auto-reset. Observation normalization also belongs inside auto-reset and
-cannot be combined with pooled initialization. Environments report whether `init` can
-replace `reset` through `init_can_replace_reset`, which is true by default. Pooled
-initialization also remains incompatible with state injection.
+belong inside the wrapper that ends an episode. Observation normalization belongs
+outside vectorization so all environments share its running statistics. It normalizes
+and preserves terminal observations in `info.final`.
+
+Normalization may wrap pooled initialization, but pooled initialization cannot contain
+normalization or state injection. Every inner pooled layer must report
+`init_can_replace_reset=True`; environments do so by default when `reset` is equivalent
+to a fresh `init`.
 
 ## Spaces and core structures
 

@@ -39,8 +39,12 @@ implementation, where `reset(state, key)` simply calls `init(key)`.
 
 Set this property to `False` when `reset` keeps or changes anything from the current
 state. Wrappers pass through the value from their inner environment unless they preserve
-their own state across resets. `PooledInitVmapWrapper` requires the complete inner stack
-to report `init_can_replace_reset=True`.
+their own state across resets.
+
+`PooledInitVmapWrapper` saves results from `init` and uses them when an environment needs
+to reset. Every wrapper inside it must therefore report `init_can_replace_reset=True`.
+Observation normalization reports `False` because its running statistics survive a
+reset. It may wrap a pooled environment, but it cannot be placed inside one.
 
 ## API Reference
 
