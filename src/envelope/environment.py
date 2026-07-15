@@ -1,12 +1,24 @@
 from abc import ABC, abstractmethod
 from dataclasses import field
 from functools import cached_property
+from typing import Any, Callable, TypeVar
 
 from envelope import spaces
 from envelope.struct import Container, FrozenPyTreeNode
 from envelope.typing import Array, Info, Key, PyTree, State
 
 __all__ = ["Environment", "InfoContainer"]
+
+_T = TypeVar("_T")
+
+
+def _abstract_cached_property(
+    function: Callable[[Any], _T],
+) -> cached_property[_T]:
+    """Build a cached property that retains the ABC abstract-property marker."""
+    descriptor = cached_property(function)
+    setattr(descriptor, "__isabstractmethod__", True)
+    return descriptor
 
 
 class InfoContainer(Container):
@@ -63,14 +75,12 @@ class Environment(ABC, FrozenPyTreeNode):
         """Step the environment given an action, returning the next state and info."""
         ...
 
-    @cached_property
-    @abstractmethod
+    @_abstract_cached_property
     def observation_space(self) -> spaces.Space:
         """The space of observations."""
         ...
 
-    @cached_property
-    @abstractmethod
+    @_abstract_cached_property
     def action_space(self) -> spaces.Space:
         """The space of actions."""
         ...
