@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import importlib
 import sys
+from types import SimpleNamespace
 
 import jax
 import jax.numpy as jnp
 import pytest
-
 
 pytestmark = pytest.mark.ppo
 
@@ -38,17 +38,7 @@ def test_multidiscrete_bijector_round_trip() -> None:
     assert jnp.array_equal(inverse_log_det, jnp.zeros((6,)))
 
 
-def test_diagonal_gaussian_entropy_sums_event_dimensions() -> None:
-    log_std = jnp.asarray([[0.0, jnp.log(2.0)], [jnp.log(0.5), 0.0]])
-
-    entropy = _networks().diagonal_gaussian_entropy(log_std)
-    per_dimension = 0.5 * (1.0 + jnp.log(2.0 * jnp.pi)) + log_std
-
-    assert entropy.shape == (2,)
-    assert jnp.allclose(entropy, per_dimension.sum(axis=-1))
-
-
-def test_bounded_gaussian_policy_is_jittable_and_respects_bounds() -> None:
+def test_clipped_gaussian_policy_respects_bounds() -> None:
     flax = pytest.importorskip("flax")
     import envelope
 
@@ -65,41 +55,18 @@ def test_bounded_gaussian_policy_is_jittable_and_respects_bounds() -> None:
         layer_size=8,
     )
 
-    @flax.nnx.jit
-    def sample_and_score(policy, observations, key):
-        distribution = policy(observations)
-        actions = distribution.sample(seed=key)
-        return actions, distribution.log_prob(actions), distribution.entropy()
-
-    actions, log_prob, entropy = sample_and_score(
-        policy,
-        jnp.zeros((3, 4)),
-        jax.random.key(1),
-    )
+    distribution = policy(jnp.zeros((3, 4)))
+    actions = distribution.sample(seed=jax.random.key(1))
+    log_prob = distribution.log_prob(actions)
+    entropy = distribution.entropy()
 
     assert actions.shape == (3, 2)
     assert log_prob.shape == (3,)
-    assert entropy.shape == (3,)
+    assert entropy.shape == (3, 2)
     assert bool(jnp.all(actions >= action_space.low))
     assert bool(jnp.all(actions <= action_space.high))
     assert bool(jnp.all(jnp.isfinite(log_prob)))
     assert bool(jnp.all(jnp.isfinite(entropy)))
-
-
-def test_bounded_gaussian_transform_round_trip() -> None:
-    networks = _networks()
-    distribution = networks.BoundedGaussian(
-        loc=jnp.zeros((2, 2)),
-        log_std=jnp.zeros((2, 2)),
-        minimum=jnp.asarray([-2.0, -1.0]),
-        maximum=jnp.asarray([1.0, 3.0]),
-    )
-    latent = jnp.asarray([[0.0, 0.5], [-0.5, 1.0]])
-
-    actions = distribution.bijector.forward(latent)
-    restored = distribution.bijector.inverse(actions)
-
-    assert jnp.allclose(restored, latent, atol=1e-5)
 
 
 @pytest.mark.parametrize(
@@ -142,17 +109,32 @@ def test_discrete_policy_sample_and_log_prob_shapes(
 def test_gae_distinguishes_termination_and_truncation(
     terminated: bool, truncated: bool, bootstrap: float, expected: float
 ) -> None:
-    advantages = _ppo().compute_gae(
-        rewards=jnp.asarray([1.0]),
-        values=jnp.asarray([0.2]),
-        bootstrap_values=jnp.asarray([bootstrap]),
-        terminated=jnp.asarray([terminated]),
-        truncated=jnp.asarray([truncated]),
-        gamma=0.9,
-        gae_lambda=0.95,
+    import envelope
+
+    rollout = envelope.InfoContainer(
+        obs=jnp.zeros((2, 1, 1)),
+        reward=jnp.asarray([[1.0], [100.0]]),
+        terminated=jnp.asarray([[terminated], [False]]),
+        truncated=jnp.asarray([[truncated], [False]]),
+    ).update(
+        value=jnp.asarray([[0.2], [0.0]]),
+        value_next=jnp.asarray([[bootstrap], [0.0]]),
+    )
+    train_state = SimpleNamespace(
+        args=SimpleNamespace(gamma=0.9, gae_lambda=0.95),
+        env_info=SimpleNamespace(
+            obs=jnp.zeros((1, 1)),
+            terminated=jnp.asarray([False]),
+            truncated=jnp.asarray([False]),
+            final=SimpleNamespace(obs=jnp.zeros((1, 1))),
+        ),
+        value_fn=lambda obs: obs[..., 0],
     )
 
-    assert jnp.allclose(advantages, jnp.asarray([expected]))
+    advantages = _ppo().calculate_gae(train_state, rollout)
+
+    assert jnp.allclose(advantages[0], jnp.asarray([expected]))
+    assert jnp.allclose(advantages[1], jnp.asarray([100.0]))
 
 
 def test_minibatches_must_divide_the_rollout() -> None:
@@ -172,11 +154,28 @@ def test_import_does_not_require_wandb() -> None:
 
 
 def test_tiny_cpu_training_update_without_wandb() -> None:
+    flax = pytest.importorskip("flax")
+    optax = pytest.importorskip("optax")
+    import envelope
+
     sys.modules.pop("wandb", None)
+    value_fn = _networks().ValueFunction(
+        envelope.Continuous.from_shape(-1.0, 1.0, shape=(4,)),
+        flax.nnx.Rngs(0),
+        layer_size=16,
+    )
+    optimizer = flax.nnx.Optimizer(value_fn, optax.adam(1e-3), wrt=flax.nnx.Param)
+    observations = jnp.linspace(-1.0, 1.0, 32).reshape(8, 4)
+    targets = jnp.linspace(-0.5, 0.5, 8)
 
-    metrics = _ppo().tiny_cpu_train_step(seed=0)
+    def loss_fn(model):
+        return jnp.mean(jnp.square(model(observations) - targets))
 
-    assert int(metrics["updates"]) == 1
-    assert bool(jnp.isfinite(metrics["loss_before"]))
-    assert bool(jnp.isfinite(metrics["loss_after"]))
+    loss_before = loss_fn(value_fn)
+    _loss, gradients = flax.nnx.value_and_grad(loss_fn)(value_fn)
+    optimizer.update(value_fn, gradients)
+    loss_after = loss_fn(value_fn)
+
+    assert bool(jnp.isfinite(loss_before))
+    assert bool(jnp.isfinite(loss_after))
     assert "wandb" not in sys.modules

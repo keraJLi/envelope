@@ -113,13 +113,6 @@ def collect_trajectories(ts: TrainState):
         action = pi.sample(seed=ts.rngs())
 
         env_state, env_info = ts.vecenv.step(ts.env_state, action)
-        reset_value = ts.value_fn(env_info.obs)
-        terminal_value = ts.value_fn(env_info.final.obs)
-        bootstrap_value = jnp.where(
-            env_info.final_valid & env_info.truncated,
-            terminal_value,
-            reset_value,
-        )
         ts.global_steps += ts.args.num_envs
         ts.env_state = env_state
         ts.env_info = env_info
@@ -129,7 +122,7 @@ def collect_trajectories(ts: TrainState):
             value=value,
             action=action,
             log_prob=pi.log_prob(action),
-            bootstrap_value=bootstrap_value,
+            value_next=ts.value_fn(env_info.final.obs),
         )
         return ts, out_info
 
@@ -137,67 +130,26 @@ def collect_trajectories(ts: TrainState):
     return out_info
 
 
-def compute_gae(
-    rewards: jax.Array,
-    values: jax.Array,
-    bootstrap_values: jax.Array,
-    terminated: jax.Array,
-    truncated: jax.Array,
-    *,
-    gamma: float,
-    gae_lambda: float,
-) -> jax.Array:
-    """Compute GAE without leaking recurrence across either episode boundary."""
-    done = terminated | truncated
-    deltas = rewards + gamma * jnp.where(terminated, 0, bootstrap_values) - values
-
-    def gae_step(next_gae, transition):
-        delta, transition_done = transition
-        gae = delta + gamma * gae_lambda * (~transition_done) * next_gae
-        return gae, gae
-
-    _, advantages = jax.lax.scan(
-        gae_step,
-        jnp.zeros_like(deltas[-1]),
-        (deltas, done),
-        reverse=True,
-    )
-    return advantages
-
-
 def calculate_gae(ts: TrainState, info):
-    return compute_gae(
-        rewards=info.reward,
-        values=info.value,
-        bootstrap_values=info.bootstrap_value,
-        terminated=info.terminated,
-        truncated=info.truncated,
-        gamma=ts.args.gamma,
-        gae_lambda=ts.args.gae_lambda,
-    )
+    @nnx.scan(reverse=True)
+    def gae_step(carry, transition):
+        gae, next_value = carry
+        done = transition.terminated | transition.truncated
 
+        next_value = jnp.where(transition.truncated, transition.value_next, next_value)
+        next_value = jnp.where(transition.terminated, 0, next_value)
 
-def tiny_cpu_train_step(seed: int = 0) -> dict[str, jax.Array]:
-    """Run one self-contained value update for fast example/CI validation."""
-    obs_space = envelope.Continuous.from_shape(-1.0, 1.0, shape=(4,))
-    value_fn = ValueFunction(obs_space, nnx.Rngs(seed), layer_size=16)
-    optimizer = nnx.Optimizer(value_fn, optax.adam(1e-3), wrt=nnx.Param)
-    observations = jnp.linspace(-1.0, 1.0, 32).reshape(8, 4)
-    targets = jnp.linspace(-0.5, 0.5, 8)
+        delta = transition.reward + ts.args.gamma * next_value - transition.value
+        gae = delta + ts.args.gamma * ts.args.gae_lambda * (1 - done) * gae
+        return (gae, transition.value), gae
 
-    def loss_fn(model: ValueFunction) -> jax.Array:
-        return jnp.mean(jnp.square(model(observations) - targets))
-
-    loss_before = loss_fn(value_fn)
-    loss, gradients = nnx.value_and_grad(loss_fn)(value_fn)
-    optimizer.update(value_fn, gradients)
-    loss_after = loss_fn(value_fn)
-    return {
-        "loss_before": loss_before,
-        "loss_after": loss_after,
-        "optimization_loss": loss,
-        "updates": jnp.asarray(1, dtype=jnp.int32),
-    }
+    # Observations are flat here because make_env always applies the flatten wrapper.
+    done = ts.env_info.terminated | ts.env_info.truncated
+    last_obs = jnp.where(done[:, None], ts.env_info.final.obs, ts.env_info.obs)
+    last_value = ts.value_fn(last_obs)
+    init_carry = (jnp.zeros_like(last_value), last_value)
+    _, advantages = gae_step(init_carry, info)
+    return advantages
 
 
 def update_policy(ts: TrainState, batch):
@@ -278,12 +230,10 @@ def train_step(ts: TrainState):
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
-    wandb = None
 
     if args.use_wandb:
-        import wandb as wandb_module
+        import wandb
 
-        wandb = wandb_module
         wandb.init(
             project=args.wandb_project,
             entity=args.wandb_entity,
@@ -319,7 +269,7 @@ if __name__ == "__main__":
             f"value_loss: {value_loss:.4f}, "
         )
 
-        if wandb is not None and update_count % args.wandb_log_every == 0:
+        if args.use_wandb and update_count % args.wandb_log_every == 0:
             wandb.log(
                 {
                     "time/sps": sps,
@@ -337,17 +287,12 @@ if __name__ == "__main__":
     @nnx.scan(in_axes=nnx.Carry, length=num_updates)
     def train_loop(train_state):
         out_info = train_step(train_state)
-        completed = out_info.final_valid & (out_info.terminated | out_info.truncated)
-        completed_count = jnp.maximum(completed.sum(), 1)
-        mean_return = jnp.where(
-            completed.any(),
-            (out_info.final.stats.reward * completed).sum() / completed_count,
-            jnp.nan,
+        completed = out_info.terminated | out_info.truncated
+        mean_return = jnp.nanmean(
+            jnp.where(completed, out_info.final.stats.reward, jnp.nan)
         )
-        mean_episode_length = jnp.where(
-            completed.any(),
-            (out_info.final.stats.length * completed).sum() / completed_count,
-            jnp.nan,
+        mean_episode_length = jnp.nanmean(
+            jnp.where(completed, out_info.final.stats.length, jnp.nan)
         )
         jax.debug.callback(
             callback,
@@ -369,7 +314,7 @@ if __name__ == "__main__":
     time_compile = time.time() - start
     print(f"Time to compile: {time_compile:.2f} seconds")
 
-    if wandb is not None:
+    if args.use_wandb:
         wandb.log({"time/lower": time_lower, "time/compile": time_compile}, step=0)
 
     start = time.time()
@@ -377,5 +322,5 @@ if __name__ == "__main__":
     mean_returns = mean_returns.block_until_ready()
     print(f"Total time: {(time.time() - start):.2f} seconds")
 
-    if wandb is not None:
+    if args.use_wandb:
         wandb.finish()

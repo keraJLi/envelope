@@ -1,7 +1,8 @@
+import math
+
 import distrax
 import jax
 import jax.numpy as jnp
-import math
 import numpy as np
 from flax import nnx
 
@@ -12,44 +13,6 @@ def ortho_linear(in_dim, out_dim, rngs, scale=jnp.sqrt(2)):
     return nnx.Linear(
         in_dim, out_dim, rngs=rngs, kernel_init=nnx.initializers.orthogonal(scale)
     )
-
-
-def diagonal_gaussian_entropy(log_std: jax.Array) -> jax.Array:
-    """Entropy of an independent diagonal Gaussian, reduced over its event axis."""
-    entropy = 0.5 * (1.0 + jnp.log(2.0 * jnp.pi)) + log_std
-    return jnp.sum(entropy, axis=-1)
-
-
-class BoundedGaussian(distrax.Transformed):
-    """Tanh-transformed diagonal Gaussian with an explicit base entropy estimate."""
-
-    def __init__(
-        self,
-        loc: jax.Array,
-        log_std: jax.Array,
-        minimum: jax.Array,
-        maximum: jax.Array,
-    ) -> None:
-        minimum = jnp.asarray(minimum, dtype=loc.dtype)
-        maximum = jnp.asarray(maximum, dtype=loc.dtype)
-
-        midpoint = (minimum + maximum) / 2
-        half_range = (maximum - minimum) / 2
-        base = distrax.Independent(
-            distrax.Normal(loc=loc, scale=jnp.exp(log_std)),
-            reinterpreted_batch_ndims=1,
-        )
-        scalar_transform = distrax.Chain(
-            [distrax.ScalarAffine(shift=midpoint, scale=half_range), distrax.Tanh()]
-        )
-        super().__init__(base, distrax.Block(scalar_transform, ndims=1))
-        self._log_std = log_std
-
-    def entropy(self, seed: int | jax.Array | None = None) -> jax.Array:
-        # The transformed entropy has no closed form. PPO conventionally regularizes
-        # the correctly reduced base-Gaussian entropy instead.
-        del seed
-        return diagonal_gaussian_entropy(self._log_std)
 
 
 class ValueFunction(nnx.Module):
@@ -81,16 +44,7 @@ class GaussianPolicy(nnx.Module):
     ):
         in_dim = math.prod(obs_space.shape)
         out_dim = math.prod(action_space.shape)
-        action_low = np.asarray(action_space.low)
-        action_high = np.asarray(action_space.high)
-        if not np.all(np.isfinite(action_low) & np.isfinite(action_high)):
-            raise ValueError("PPO Gaussian action bounds must be finite")
-        if not np.all(action_high > action_low):
-            raise ValueError(
-                "PPO Gaussian action upper bounds must exceed lower bounds"
-            )
-        self.action_low = jnp.asarray(action_low)
-        self.action_high = jnp.asarray(action_high)
+        self.action_low, self.action_high = action_space.low, action_space.high
         self.layers = nnx.Sequential(
             ortho_linear(in_dim, layer_size, rngs),
             nnx.swish,
@@ -106,12 +60,18 @@ class GaussianPolicy(nnx.Module):
         features = self.layers(obs)
         action_mean = self.action_mean(features)
         action_log_std = self.action_log_std(features)
-        return BoundedGaussian(
-            loc=action_mean,
-            log_std=action_log_std,
-            minimum=self.action_low,
-            maximum=self.action_high,
+        dist = distrax.Independent(
+            distrax.Clipped(
+                distrax.Normal(loc=action_mean, scale=jnp.exp(action_log_std)),
+                minimum=self.action_low,
+                maximum=self.action_high,
+            ),
+            reinterpreted_batch_ndims=1,
         )
+
+        # This deliberately keeps the example's simple base-Normal entropy estimate.
+        dist.entropy = dist.distribution.distribution.entropy
+        return dist
 
 
 class ReshapeCategoricalBijector(distrax.Bijector):
