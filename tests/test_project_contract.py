@@ -56,11 +56,26 @@ def test_ppo_is_a_repository_only_dependency_group() -> None:
 
 
 def test_distribution_boundaries_exclude_experimental_ppo() -> None:
-    hatch = _project()["tool"]["hatch"]["build"]
+    project = _project()
+    hatch = project["tool"]["hatch"]["build"]
     sdist = hatch["targets"]["sdist"]
 
-    assert "examples/ppo" in sdist["exclude"]
-    assert "examples/ppo" not in sdist["include"]
+    assert "/examples/ppo" in sdist["exclude"]
+    assert "/tests/ppo" in sdist["exclude"]
+    assert "/examples/ppo" not in sdist["include"]
+    assert not project["tool"].get("hatch", {}).get("metadata", {}).get(
+        "allow-direct-references", False
+    )
+
+
+def test_docs_and_readme_links_have_release_safe_bounds() -> None:
+    requirements = (ROOT / "docs/requirements.txt").read_text().splitlines()
+    mkdocs = next(line for line in requirements if line.startswith("mkdocs>="))
+    assert ",<2" in mkdocs
+
+    readme = (ROOT / "README.md").read_text()
+    assert "https://jax-envelope.readthedocs.io/" in readme
+    assert "](docs/" not in readme
 
 
 def test_ci_and_tag_release_workflows_exist() -> None:
@@ -75,4 +90,15 @@ def test_ci_and_tag_release_workflows_exist() -> None:
     assert "importorskip" not in adapters
     assert "tags:" in publish and "v*" in publish
     assert "types: [published, edited]" not in publish
+    assert "schedule:" in adapters and "workflow_dispatch:" in adapters
 
+    for workflow in (ci, publish):
+        assert workflow.count("uv build --no-sources") == 1
+        assert workflow.index("uv build --no-sources") < workflow.index(
+            "ENVELOPE_DIST_DIR=dist"
+        )
+
+    assert "create_test:" in adapters
+    assert "pytest ${{ matrix.create_test }}" in adapters
+    create_integration = (ROOT / "tests/adapters/test_create_integration.py").read_text()
+    assert "importorskip" not in create_integration

@@ -13,18 +13,33 @@ ROOT = Path(__file__).parents[1]
 pytestmark = pytest.mark.packaging
 
 
-def test_built_artifacts_respect_the_release_boundary(tmp_path: Path) -> None:
+def _artifact_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    configured = os.environ.get("ENVELOPE_DIST_DIR")
+    if configured is not None:
+        output = Path(configured)
+        return output if output.is_absolute() else ROOT / output
+
     output = tmp_path / "dist"
-    environment = {**os.environ, "UV_PYTHON": "3.12"}
+    monkeypatch.setenv("UV_PYTHON", "3.12")
     subprocess.run(
         ["uv", "build", "--no-sources", "--out-dir", str(output)],
         cwd=ROOT,
-        env=environment,
         check=True,
     )
+    return output
 
-    sdist = next(output.glob("*.tar.gz"))
-    wheel = next(output.glob("*.whl"))
+
+def test_built_artifacts_respect_the_release_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = _artifact_directory(tmp_path, monkeypatch)
+
+    sdists = list(output.glob("*.tar.gz"))
+    wheels = list(output.glob("*.whl"))
+    assert len(sdists) == 1, f"expected one sdist in {output}, found {sdists}"
+    assert len(wheels) == 1, f"expected one wheel in {output}, found {wheels}"
+    sdist = sdists[0]
+    wheel = wheels[0]
 
     with tarfile.open(sdist, "r:gz") as archive:
         relative_members = {
@@ -35,6 +50,7 @@ def test_built_artifacts_respect_the_release_boundary(tmp_path: Path) -> None:
 
     allowed_directories = {"src", "tests", "docs", ".github"}
     allowed_files = {
+        ".gitignore",
         ".readthedocs.yaml",
         "LICENSE",
         "README.md",
