@@ -23,10 +23,10 @@ shims for behavior that contradicted the lifecycle contract.
 ## Wrapper composition
 
 Vectorization belongs outside elementwise auto-reset. Episode statistics and truncation
-belong inside auto-reset. Environments support initialization pooling by default;
-wrappers whose reset semantics cannot be replaced by a fresh initialized state opt out.
-Pooled initialization is incompatible with state injection or persistent normalization
-inside the pool.
+belong inside auto-reset. Observation normalization also belongs inside auto-reset and
+cannot be combined with pooled initialization. Environments report whether `init` can
+replace `reset` through `init_can_replace_reset`, which is true by default. Pooled
+initialization also remains incompatible with state injection.
 
 ## Spaces and core structures
 

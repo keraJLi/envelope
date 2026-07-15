@@ -10,26 +10,24 @@ the format `SUITE::ENVIRONMENT`, and can pass arguments to the environment const
 env = create("brax::ant", env_kwargs={"backend": "positional"})
 ```
 
-Adapters disable native episode horizons and automatic resetting. They capture the
-backend's finite default horizon before doing so, preventing double truncation or reset
-behavior.
+Adapters turn off the suite's own time limit and auto-reset so Envelope can handle
+episode boundaries itself. They keep the suite's original time limit for `create`.
 
 Adapters implement the `HasFromNameInit` protocol, that ensures they can be created via
 a `from_name(cls, env_name: str, env_kwargs=None, **kwargs)` function. This is used by
 `create`. The `env_kwargs` are passed to the suite's environment constructor (such as
 `navix.make` or `brax.envs.create`), and the `kwargs` are passed to the adapter class on
-creation. Caller-owned mappings and backend parameter objects are left unchanged.
+creation. The dictionaries and parameter objects passed by the caller are left
+unchanged.
 
-`create(..., max_episode_steps="default")` applies the captured backend horizon with an
-Envelope `TruncationWrapper`. A positive integer overrides that horizon, while `None`
-disables outer truncation.
+With `max_episode_steps="default"`, `create` applies the saved time limit with a
+`TruncationWrapper`. A positive integer sets a different limit. `None` adds no outer
+time limit.
 
-Raw suite metadata is normalized into a stable `info.backend` `Container`, with fields
-available through attribute access such as `info.backend.metrics`. Its structure remains
-fixed across `init`, `reset`, and `step`; adapters use zero-like placeholders when a
-backend does not emit reset-time metadata. For those adapters,
-`info.backend.valid=False` identifies a placeholder and real step metadata sets it to
-true.
+Extra data returned by the suite is available under `info.backend`, for example as
+`info.backend.metrics`. The same fields are present after `init`, `reset`, and `step`.
+If a suite has no such data at reset, those fields contain zero placeholders and
+`info.backend.valid` is false.
 
 ## API Reference (`create`)
 

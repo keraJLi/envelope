@@ -31,16 +31,16 @@ pytree structures and leaf shapes.**
 This guarantees that you can map `jnp.where` on the `Info` they produce, or emit the
 `Info` as the output of `jax.lax.scan`.
 
-## Initialization pooling
+## When `init` can replace `reset`
 
-`Environment.supports_init_pooling` is `True` by default. It means a state sampled by
-`init` may be used in place of a later reset state, which matches the default
-implementation of `reset` and most environments with independently sampled episodes.
+`Environment.init_can_replace_reset` is `True` by default. It means the result of `init`
+can safely be used where a later `reset` result is expected. This matches the base
+implementation, where `reset(state, key)` simply calls `init(key)`.
 
-An environment whose reset depends on its current state must override the property with
-`False`. Transparent and reset-equivalent wrappers propagate the inner capability;
-reset-persistent, lifecycle, and vectorization wrappers opt out.
-`PooledInitVmapWrapper` rejects an opted-out stack during construction.
+Set this property to `False` when `reset` keeps or changes anything from the current
+state. Wrappers pass through the value from their inner environment unless they preserve
+their own state across resets. `PooledInitVmapWrapper` requires the complete inner stack
+to report `init_can_replace_reset=True`.
 
 ## API Reference
 

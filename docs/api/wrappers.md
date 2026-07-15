@@ -49,41 +49,42 @@ The standard stack, from outermost to innermost, is:
 ```text
 VmapWrapper
 └─ AutoResetWrapper
-   └─ StateInjectionWrapper              # optional
-      └─ EpisodeStatisticsWrapper
-         └─ TruncationWrapper
-            └─ observation/action transforms
-               └─ base environment
+   └─ ObservationNormalizationWrapper    # optional
+      └─ StateInjectionWrapper            # optional
+         └─ EpisodeStatisticsWrapper
+            └─ TruncationWrapper
+               └─ stateless observation/action transforms
+                  └─ base environment
 ```
 
 The pooled alternative is:
 
 ```text
-ObservationNormalizationWrapper          # optional persistent/shared statistics
-└─ PooledInitVmapWrapper
-   └─ EpisodeStatisticsWrapper
-      └─ TruncationWrapper
-         └─ reset-equivalent observation/action transforms
-            └─ pooling-capable base environment
+PooledInitVmapWrapper
+└─ EpisodeStatisticsWrapper
+   └─ TruncationWrapper
+      └─ reset-equivalent observation/action transforms
+         └─ base environment with init_can_replace_reset=True
 ```
 
-State injection and persistent normalization inside `PooledInitVmapWrapper` are not
-supported. Observation normalization may sit inside `VmapWrapper` for per-environment
-statistics or outside it for shared statistics. In an outer/shared position it also
-normalizes `info.final.obs` and retains the raw terminal observation as
-`info.final.unnormalized_obs`.
+When used with `AutoResetWrapper`, `ObservationNormalizationWrapper` must be inside it,
+and therefore inside `VmapWrapper`, so current and terminal observations use the same
+statistics and representation. Without auto-reset, normalization may sit on either side
+of `VmapWrapper` for per-environment or shared statistics. It cannot be combined with
+`PooledInitVmapWrapper`, because its running statistics must survive resets. State
+injection is also incompatible with pooled initialization.
 
 | Role | Supported placement and constraint |
 | --- | --- |
-| Observation transforms | Inside `AutoResetWrapper` or `PooledInitVmapWrapper`, so current and terminal observations use the same representation. Reset-equivalent transforms may be inside a pooled stack. |
+| Stateless observation transforms | Inside `AutoResetWrapper` or `PooledInitVmapWrapper`, so current and terminal observations use the same representation. Reset-equivalent transforms may be inside a pooled stack. |
 | Action transforms | May sit on either side of vectorization when their shape contract permits it. Reset-equivalent transforms may be inside a pooled stack. |
 | `TruncationWrapper` | Inside `AutoResetWrapper` or `PooledInitVmapWrapper`, so its counter resets at each episode boundary. |
 | `EpisodeStatisticsWrapper` | Inside `AutoResetWrapper` or `PooledInitVmapWrapper`, so `stats` belongs to one episode. |
 | `StateInjectionWrapper` | Inside `AutoResetWrapper`; incompatible with pooled initialization. |
 | `AutoResetWrapper` | Inside `VmapWrapper`, because reset is elementwise; an alternative to, not a child of, `PooledInitVmapWrapper`. |
-| `ObservationNormalizationWrapper` | Inside `VmapWrapper` for per-environment statistics or outside it for shared statistics. Persistent normalization must remain outside `PooledInitVmapWrapper`. |
+| `ObservationNormalizationWrapper` | Inside `AutoResetWrapper` whenever auto-reset is used; incompatible with `PooledInitVmapWrapper`. Without auto-reset it may sit on either side of `VmapWrapper`. |
 | `VmapWrapper` / `VmapEnvsWrapper` | Outside elementwise auto-reset; incompatible inside pooled initialization. |
-| `PooledInitVmapWrapper` | Replaces `VmapWrapper` plus `AutoResetWrapper` and requires the complete inner stack to report `supports_init_pooling=True`. |
+| `PooledInitVmapWrapper` | Replaces `VmapWrapper` plus `AutoResetWrapper` and requires the complete inner stack to report `init_can_replace_reset=True`. |
 
 Known invalid episode-boundary stacks fail during construction with an ordering error.
 
