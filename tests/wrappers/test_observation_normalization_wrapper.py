@@ -13,6 +13,7 @@ from envelope.wrappers.observation_normalization_wrapper import (
     ObservationNormalizationWrapper,
 )
 from envelope.wrappers.pooled_init_vmap_wrapper import PooledInitVmapWrapper
+from envelope.wrappers.vmap_envs_wrapper import VmapEnvsWrapper
 from envelope.wrappers.vmap_wrapper import VmapWrapper
 from tests.wrappers.helpers import (
     ConstantObsEnv,
@@ -81,6 +82,36 @@ class HeterogeneousStatsEnv(Environment):
     def step(self, state, action):
         return state, InfoContainer(
             obs=state, reward=0.0, terminated=False, truncated=False
+        )
+
+
+class ActionTerminationEnv(Environment):
+    """Scalar env whose batch elements can finish on different actions."""
+
+    @cached_property
+    def observation_space(self):
+        return Continuous(low=-jnp.inf, high=jnp.inf)
+
+    @cached_property
+    def action_space(self):
+        return Continuous(low=-1.0, high=1.0)
+
+    def init(self, key):
+        state = jnp.asarray(0.0, dtype=jnp.float32)
+        return state, InfoContainer(
+            obs=state,
+            reward=jnp.asarray(0.0, dtype=jnp.float32),
+            terminated=jnp.asarray(False),
+            truncated=jnp.asarray(False),
+        )
+
+    def step(self, state, action):
+        next_state = state + action
+        return next_state, InfoContainer(
+            obs=next_state,
+            reward=action,
+            terminated=action >= 0.75,
+            truncated=jnp.asarray(False),
         )
 
 
@@ -197,57 +228,127 @@ def test_jit_compatibility_smoke():
     assert shape == (4, 3)
 
 
-def test_normalization_inside_autoreset_transforms_final_observation():
-    base = StepCounterEnv(terminate_after=1)
-    wrapper = VmapWrapper(
-        AutoResetWrapper(ObservationNormalizationWrapper(base)),
-        batch_size=2,
+def _shared_autoreset_normalizer() -> ObservationNormalizationWrapper:
+    termination_steps = jnp.asarray([2, 3])
+    envs = jax.vmap(
+        lambda terminate_after: StepCounterEnv(terminate_after=terminate_after)
+    )(termination_steps)
+    return ObservationNormalizationWrapper(
+        VmapEnvsWrapper(AutoResetWrapper(envs), batch_size=2)
     )
+
+
+def _normalized_scalar(raw, state):
+    return (raw - state.rmv_state.mean) / (state.rmv_state.std + 1e-8)
+
+
+def test_shared_normalization_caches_partial_terminal_observations():
+    wrapper = _shared_autoreset_normalizer()
     action = jnp.asarray([0.25, 0.75], dtype=jnp.float32)
 
-    state, _ = wrapper.init(jax.random.key(0))
-    state, info = jax.jit(wrapper.step)(state, action)
+    state, initial = wrapper.init(jax.random.key(0))
 
-    assert jnp.all(info.final_valid)
-    assert jnp.allclose(info.final.unnormalized_obs, action)
-    assert jnp.allclose(info.final.obs, jnp.ones(2), atol=1e-5)
-    assert not jnp.allclose(info.final.obs, info.final.unnormalized_obs)
-    assert jnp.all(state.inner_state.rmv_state.count == 3)
+    assert state.rmv_state.count == 2
+    assert jnp.all(~initial.final_valid)
+    assert jnp.allclose(initial.final.obs, jnp.zeros(2))
+    assert jnp.allclose(initial.final.unnormalized_obs, jnp.zeros(2))
 
-
-def test_normalized_final_observation_remains_unchanged_after_completion():
-    wrapper = VmapWrapper(
-        AutoResetWrapper(
-            ObservationNormalizationWrapper(StepCounterEnv(terminate_after=2))
-        ),
-        batch_size=2,
-    )
-    action = jnp.asarray([0.25, 0.75], dtype=jnp.float32)
-    state, _ = wrapper.init(jax.random.key(0))
     state, _ = wrapper.step(state, action)
-    state, completed = wrapper.step(state, action)
-    final_obs = completed.final.obs
+    state, first_completion = jax.jit(wrapper.step)(state, action)
 
-    _, continued = wrapper.step(state, jnp.asarray([0.1, 0.1]))
+    assert jnp.array_equal(first_completion.terminated, jnp.asarray([True, False]))
+    assert jnp.array_equal(first_completion.final_valid, jnp.asarray([True, False]))
+    assert jnp.allclose(
+        first_completion.final.obs[0],
+        _normalized_scalar(first_completion.final.unnormalized_obs[0], state),
+    )
+    assert first_completion.final.obs[1] == 0
+    first_cached = first_completion.final.obs
 
-    assert not jnp.any(continued.terminated | continued.truncated)
-    assert jnp.all(continued.final_valid)
-    assert jnp.allclose(continued.final.obs, final_obs)
+    state, second_completion = wrapper.step(state, action)
+
+    assert jnp.array_equal(second_completion.terminated, jnp.asarray([False, True]))
+    assert jnp.all(second_completion.final_valid)
+    assert jnp.array_equal(second_completion.final.obs[0], first_cached[0])
+    assert jnp.allclose(
+        second_completion.final.obs[1],
+        _normalized_scalar(second_completion.final.unnormalized_obs[1], state),
+    )
+    assert state.rmv_state.count == 8
 
 
-@pytest.mark.parametrize(
-    "make_env",
-    [
-        lambda: ObservationNormalizationWrapper(AutoResetWrapper(StepCounterEnv())),
-        lambda: ObservationNormalizationWrapper(
-            PooledInitVmapWrapper(StepCounterEnv(), batch_size=2, pool_size=2)
+def test_shared_normalization_preserves_final_across_manual_reset_and_scan():
+    wrapper = _shared_autoreset_normalizer()
+    actions = jnp.full((3, 2), 0.5, dtype=jnp.float32)
+    state, _ = wrapper.init(jax.random.key(0))
+
+    @jax.jit
+    def run_steps(scan_state, scan_actions):
+        return jax.lax.scan(wrapper.step, scan_state, scan_actions)
+
+    state, infos = run_steps(state, actions)
+    cached_final = infos.final.obs[-1]
+    raw_final = infos.final.unnormalized_obs[-1]
+    count_before_reset = state.rmv_state.count
+
+    state, reset_info = jax.jit(wrapper.reset)(state, jax.random.key(1))
+
+    assert jnp.array_equal(reset_info.final.obs, cached_final)
+    assert jnp.array_equal(reset_info.final.unnormalized_obs, raw_final)
+    assert state.rmv_state.count == count_before_reset + 2
+
+
+def test_terminal_placeholder_uses_normalized_dtype_and_fixed_schema():
+    wrapper = ObservationNormalizationWrapper(
+        VmapWrapper(
+            AutoResetWrapper(StepCounterEnv(terminate_after=1)), batch_size=2
         ),
-    ],
-    ids=["outside-autoreset", "outside-pooled"],
-)
-def test_normalization_outside_episode_boundary_is_rejected(make_env):
-    with pytest.raises(ValueError, match="(?i)normalization.*inside|pooled"):
-        make_env()
+        stats_spec=jax.ShapeDtypeStruct((), jnp.float16),
+    )
+
+    state, initial = jax.jit(wrapper.init)(jax.random.key(0))
+    state, completed = jax.jit(wrapper.step)(
+        state, jnp.asarray([0.25, 0.75], dtype=jnp.float32)
+    )
+
+    assert initial.final.obs.dtype == jnp.float16
+    assert jnp.all(initial.final.obs == 0)
+    assert initial.final.unnormalized_obs.dtype == jnp.float32
+    assert jax.tree.structure(initial) == jax.tree.structure(completed)
+    assert completed.final.obs.dtype == jnp.float16
+    assert completed.final.unnormalized_obs.dtype == jnp.float32
+    assert state.rmv_state.count == 4
+
+
+def test_shared_normalization_can_wrap_pooled_initialization():
+    wrapper = ObservationNormalizationWrapper(
+        PooledInitVmapWrapper(
+            ActionTerminationEnv(), batch_size=2, pool_size=2
+        )
+    )
+    state, initial = wrapper.init(jax.random.key(0))
+
+    assert jnp.all(initial.final.obs == 0)
+    assert state.rmv_state.count == 2
+
+    state, first = jax.jit(wrapper.step)(
+        state, jnp.asarray([1.0, 0.25], dtype=jnp.float32)
+    )
+    first_cached = first.final.obs
+
+    assert jnp.array_equal(first.terminated, jnp.asarray([True, False]))
+    assert jnp.array_equal(first.final_valid, jnp.asarray([True, False]))
+    assert first.final.unnormalized_obs[0] == 1.0
+    assert first.final.obs[1] == 0
+
+    state, second = wrapper.step(
+        state, jnp.asarray([0.1, 1.0], dtype=jnp.float32)
+    )
+
+    assert jnp.array_equal(second.terminated, jnp.asarray([False, True]))
+    assert jnp.array_equal(second.final.obs[0], first_cached[0])
+    assert second.final.unnormalized_obs[1] == 1.25
+    assert state.rmv_state.count == 6
 
 
 def test_pickle_running_mean_var_in_state():

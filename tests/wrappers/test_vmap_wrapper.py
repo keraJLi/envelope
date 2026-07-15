@@ -111,38 +111,26 @@ def test_step_raises_on_action_shape_mismatch():
 
 
 # -----------------------------------------------------------------------------
-# Core: Composability with normalization and order equivalence
+# Core: Composability with shared normalization
 # -----------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("batch_size", [2, 5])
-def test_normalize_then_vmap_equals_vmap_then_normalize(batch_size):
+def test_normalization_must_wrap_vmap(batch_size):
     base = VectorToyEnv(dim=3)
-    # Order A: normalize then vmap
-    a = VmapWrapper(
-        ObservationNormalizationWrapper(base),
-        batch_size=batch_size,
+    with pytest.raises(ValueError, match="ObservationNormalizationWrapper.*wrap"):
+        VmapWrapper(
+            ObservationNormalizationWrapper(base),
+            batch_size=batch_size,
+        )
+
+    wrapper = ObservationNormalizationWrapper(
+        VmapWrapper(base, batch_size=batch_size)
     )
-    # Order B: vmap then normalize
-    b = ObservationNormalizationWrapper(VmapWrapper(base, batch_size=batch_size))
-    key = jax.random.key(42)
-    s_a, i_a = a.init(key)
-    s_b, i_b = b.init(key)
-    # Both produce batched observations with same shape/dtype; numerical values
-    # may differ due to per-env vs aggregated RMV semantics
-    assert i_a.obs.shape == i_b.obs.shape == (batch_size, 3)
-    assert i_a.obs.dtype == i_b.obs.dtype
+    state, info = wrapper.init(jax.random.key(42))
 
-    # Check normalization statistics shapes:
-    # Order A (normalize then vmap): rmv_state is vmapped, so each env has its own stats
-    rmv_a = s_a.rmv_state
-    assert rmv_a.mean.shape == (batch_size, 3)
-    assert rmv_a.var.shape == (batch_size, 3)
-
-    # Order B (vmap then normalize): rmv_state is shared (unbatched)
-    rmv_b = s_b.rmv_state
-    assert rmv_b.mean.shape == (3,)
-    assert rmv_b.var.shape == (3,)
+    assert info.obs.shape == (batch_size, 3)
+    assert state.rmv_state.mean.shape == (3,)
 
 
 def test_nested_vmaps_equivalence_reset_and_step():
