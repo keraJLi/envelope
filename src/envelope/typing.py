@@ -25,6 +25,8 @@ class Info(Protocol):
 
     """
 
+    # Getter properties make the protocol read-only. Concrete implementations can
+    # still expose ordinary constructor fields, including frozen dataclass fields.
     @property
     def obs(self) -> PyTree: ...
 

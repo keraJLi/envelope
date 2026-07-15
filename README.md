@@ -26,9 +26,7 @@ env = envelope.wrappers.ObservationNormalizationWrapper(env)
 ## 💪 Powerful, composable wrappers!
 
 - **Carry state across episodes** to track running statistics, for example to normalize observations.
-- **Explicit wrapper composition** keeps episode boundaries correct. Stateless transforms
-  are flexible, while autoreset, statistics, truncation, and pooling follow the
-  [supported ordering](https://github.com/keraJLi/envelope/blob/main/docs/api/wrappers.md#wrapper-ordering).
+- **Composable wrappers** can be stacked in any order. For example, `ObservationNormalizationWrapper` before vs. after `VmapWrapper` gives per-env vs. global normalization.
 
 ## 🔌 Adapters for existing suites
 
@@ -39,11 +37,11 @@ env = envelope.wrappers.ObservationNormalizationWrapper(env)
 | [craftax](https://github.com/MichaelTMatthews/craftax)                    | 🕺      | 4       |
 | [gymnax](https://github.com/RobertTLange/gymnax)                          | 🕺      | 24      |
 | [jumanji](https://github.com/instadeepai/jumanji)                         | 🕺 / 👯 | 25 / 1  |
-| [kinetix](https://github.com/flairox/kinetix)                             | 🕺      | 74      |
+| [kinetix](https://github.com/flairox/kinetix)                             | 🕺      | 4       |
 | [mujoco_playground](https://github.com/google-deepmind/mujoco_playground) | 🕺      | 54      |
 | [navix](https://github.com/instadeepai/navix)                             | 🕺      | 41      |
 |                                                                           |         |         |
-| Total                                                                     | 🕺 / 👯 | 234 / 1 |
+| Total                                                                     | 🕺 / 👯 | 164 / 1 |
 
 
 ```python
@@ -64,16 +62,7 @@ let's you create environments from any of the above!
 
 ```bash
 pip install jax-envelope
-pip install "jax-envelope[brax]"        # one published adapter extra
-pip install "jax-envelope[adapters]"    # all published adapter extras
 ```
-
-Gymnax and Kinetix currently rely on pinned upstream fixes and therefore remain
-source-backed development adapters. Their exact install commands are documented in the
-[adapter guide](https://github.com/keraJLi/envelope/blob/main/docs/api/adapters.md#source-backed-adapters).
-
-See the [0.5 migration guide](https://github.com/keraJLi/envelope/blob/main/docs/migration-0.5.md)
-when upgrading from Envelope 0.4.
 
 ## 💞 Related projects
 

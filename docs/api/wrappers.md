@@ -14,15 +14,8 @@ property traverses the full nesting to return the base environment's state.
 
 Wrappers communicate additional data to user code by adding fields to the info via
 `info.update(...)`. For example, `EpisodeStatisticsWrapper` adds `stats`,
-`CumulativeStatisticsWrapper` adds `cumulative_stats`,
-`AutoResetWrapper` adds `final` (the complete terminal step info) and `final_valid`, and
-`ObservationNormalizationWrapper` adds `unnormalized_obs`.
-
-On a completing transition, the returned state and `info.obs` are already reset. Reward,
-termination, and truncation still describe the action just taken. Other top-level
-metadata describes the reset state; terminal metadata remains in `info.final`. Before
-the first completion, `final` is a zero-like structural placeholder and
-`final_valid=False`.
+`AutoResetWrapper` adds `final` (a snapshot of the terminal step's info, enabling value
+bootstrapping), and `ObservationNormalizationWrapper` adds `unnormalized_obs`.
 
 ## Vectorization
 
@@ -33,8 +26,8 @@ Three wrappers add batch dimensions:
   created via `jax.vmap(make_env)(params)`. This is useful when different instances have
   different configurations.
 - **`PooledInitVmapWrapper`** vmaps like `VmapWrapper`, but pre-computes a pool of initial
-  states and samples from them on reset. It includes built-in autoreset logic and only
-  accepts environments whose `supports_init_pooling` capability is true.
+  states and samples from them on reset. It also includes built-in autoreset logic, making
+  it an alternative to `AutoResetWrapper` + `VmapWrapper`.
 
 ## Wrapper Ordering
 
@@ -52,45 +45,18 @@ base env → Observation/action transforms → Episode logic → AutoReset → V
 A concrete example with all layers:
 ```
 VmapWrapper                              # outermost: adds batch dim
-└─ CumulativeStatisticsWrapper           # optional lifetime totals
-   └─ AutoResetWrapper                   # resets on done, adds `final`
-      └─ StateInjectionWrapper           # optional reset target
-         └─ EpisodeStatisticsWrapper     # per-episode reward/length
-            └─ TruncationWrapper         # caps episode length
+└─ AutoResetWrapper                      # resets on done, adds `final`
+   └─ StateInjectionWrapper              # (optional) overrides reset target
+      └─ EpisodeStatisticsWrapper        # tracks reward/length
+         └─ TruncationWrapper            # caps episode length
+            └─ ObservationNormalizationWrapper
                └─ ContinuousObservationWrapper
                   └─ ClipActionWrapper
-                     └─ base env          # innermost
+                     └─ base env         # innermost
 ```
 
-Not all wrappers are needed in every pipeline. `ObservationNormalizationWrapper` may be
-inside vectorization for per-environment statistics or outside it for shared statistics.
-Persistent normalization must remain outside `PooledInitVmapWrapper`; state injection is
-not compatible with pooled initialization. Invalid episode-boundary stacks raise during
-construction with the supported alternative.
-
-### Supported order matrix
-
-| Wrapper or role | Supported placement | Rejected placement |
-| --- | --- | --- |
-| Observation/action transforms | Between the base environment and episode logic; batch-aware transforms may also sit on either side of `VmapWrapper` | Mixed discrete/continuous action trees; mixed observation trees without `ContinuousObservationWrapper` first |
-| `TruncationWrapper` | Inside `AutoResetWrapper` or `PooledInitVmapWrapper` | Outside either episode-boundary wrapper |
-| `EpisodeStatisticsWrapper` | Inside `AutoResetWrapper` or `PooledInitVmapWrapper` | Outside either episode-boundary wrapper |
-| `StateInjectionWrapper` | Inside `AutoResetWrapper` | Outside `AutoResetWrapper`, or anywhere in a pooled stack |
-| `AutoResetWrapper` | Outside state injection, episode statistics, and truncation; inside vectorization | Outside `VmapWrapper`, or around cumulative statistics |
-| `CumulativeStatisticsWrapper` | Outside `AutoResetWrapper` or `PooledInitVmapWrapper`; emits `info.cumulative_stats` | Inside auto-reset or pooled initialization |
-| `ObservationNormalizationWrapper` | Inside `VmapWrapper` for per-environment statistics, outside it for shared statistics | Inside `PooledInitVmapWrapper` when statistics must persist |
-| `PooledInitVmapWrapper` | Outside pooling-capable episode statistics, truncation, stateless transforms, and a pooling-capable adapter | Around state injection, auto-reset, or persistent normalization |
-
-The pooling alternative, from outermost to innermost, is:
-
-```
-ObservationNormalizationWrapper / CumulativeStatisticsWrapper  # optional persistence
-└─ PooledInitVmapWrapper
-   └─ EpisodeStatisticsWrapper
-      └─ TruncationWrapper
-         └─ reset-equivalent observation/action transforms
-            └─ pooling-capable base environment
-```
+Not all wrappers are needed in every pipeline. The ordering between wrappers in the same
+layer (e.g. the observation/action transforms) is flexible.
 
 ## API Reference
 
@@ -105,8 +71,6 @@ ObservationNormalizationWrapper / CumulativeStatisticsWrapper  # optional persis
 ::: envelope.wrappers.ContinuousObservationWrapper
 
 ::: envelope.wrappers.EpisodeStatisticsWrapper
-
-::: envelope.wrappers.CumulativeStatisticsWrapper
 
 ::: envelope.wrappers.FlattenActionWrapper
 

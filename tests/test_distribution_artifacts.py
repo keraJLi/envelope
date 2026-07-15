@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-
 ROOT = Path(__file__).parents[1]
 pytestmark = pytest.mark.packaging
 

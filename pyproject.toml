@@ -41,17 +41,17 @@ Issues = "https://github.com/keraJLi/envelope/issues"
 Changelog = "https://github.com/keraJLi/envelope/releases"
 
 [project.optional-dependencies]
-brax = ["brax>=0.13,<0.15"]
-craftax = ["craftax>=1.5,<2"]
-jumanji = ["jumanji>=1.0.1,<2"]
-mujoco-playground = ["playground>=0.1,<0.2"]
-navix = ["navix>=0.7,<0.8"]
+brax = ["brax>=0.13.0"]
+craftax = ["craftax>=1.4.3"]
+jumanji = ["jumanji>=1.0.1"]
+mujoco-playground = ["playground>=0.1.0"]
+navix = ["navix>=0.7.0"]
 adapters = [
-    "brax>=0.13,<0.15",
-    "craftax>=1.5,<2",
-    "jumanji>=1.0.1,<2",
-    "playground>=0.1,<0.2",
-    "navix>=0.7,<0.8",
+    "brax>=0.13.0",
+    "craftax>=1.4.3",
+    "jumanji>=1.0.1",
+    "playground>=0.1.0",
+    "navix>=0.7.0",
 ]
 
 [build-system]
@@ -97,6 +97,7 @@ gymnax-adapter = ["gymnax"]
 kinetix-adapter = ["kinetix-env"]
 dev = [
     "hypothesis>=6.148.1",
+    "pre-commit>=4.0.0",
     "pyright>=1.1.407",
     "pytest>=9.0.0",
     "pytest-cov>=7.0.0",
@@ -136,3 +137,6 @@ typeCheckingMode = "standard"
 reportMissingTypeStubs = false
 venvPath = "."
 venv = ".venv"
+
+[tool.ruff.lint]
+extend-select = ["I"]

@@ -37,7 +37,7 @@ class Discrete(Space):
     A discrete space with a given number of elements. `n` can be a scalar or an array.
     The shape and dtype of the space are inferred from `n`.
 
-    Attributes:
+    Args:
         n (int | jax.Array): The number of elements in the space.
     """
 
@@ -91,7 +91,7 @@ class Continuous(Space):
     scalars or arrays. The shape and dtype of the space are inferred from `low` and
     `high`.
 
-    Attributes:
+    Args:
         low (float | jax.Array): The lower bound of the space.
         high (float | jax.Array): The upper bound of the space.
     """
@@ -206,7 +206,7 @@ class PyTreeSpace(Space):
     and dtype of the `PyTreeSpace` are PyTrees of the same structure, containing the
     shape and dtype of the leaves.
 
-    Attributes:
+    Args:
         tree (PyTree): A PyTree with `Discrete` or `Continuous` leaves.
     """
 
@@ -285,7 +285,7 @@ class BatchedSpace(Space):
     A view that adds a leading batch dimension to a base `Space` without
     materializing or broadcasting its parameters.
 
-    Attributes:
+    Args:
         space (Space): The underlying base space.
         batch_size (int): The leading batch dimension.
     """

@@ -17,13 +17,7 @@ purposes in `envelope`:
   fields at runtime (and even within traced methods).<br>
   For example, the `step` function of an environment emits an `Info` object that is a
   `Container`, and holds observation, reward and terminated/truncated flags. Wrappers
-  can add information to this, such as current episode statistics. Extra names are
-  sorted canonically, but the set of names must stay fixed across JAX branches.
-
-Static fields are strict by default because their values participate in JAX's pytree
-structure and compilation cache. Use immutable values wherever possible. Opaque
-third-party objects require `static_field(unsafe=True)`; mutating such an object after
-tracing has undefined behavior.
+  can add information to this, such as current episode statistics.
 
 
 ## API Reference

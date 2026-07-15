@@ -44,4 +44,3 @@ print(info)  # InfoContainer(obs=Array(...), reward=0.0, terminated=False, ...)
 - **[Wrappers](api/wrappers.md)**: composable wrappers and how to order them.
 - **[Adapters](api/adapters.md)**: creating environments from third-party suites.
 - **[Struct](api/struct.md)**: JAX pytree datastructures used throughout envelope.
-- **[Migrating to 0.5](migration-0.5.md)**: intentional contract changes from 0.4.

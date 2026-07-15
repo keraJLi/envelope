@@ -55,6 +55,8 @@ plugins:
             show_signature: true
             separate_signature: false
             show_if_no_docstring: false
+            docstring_options:
+              warn_unknown_params: false
             heading_level: 3
             filters:
               - "!^_"
@@ -68,4 +70,3 @@ nav:
   - Wrappers: api/wrappers.md
   - Adapters: api/adapters.md
   - Struct: api/struct.md
-  - Migrating to 0.5: migration-0.5.md

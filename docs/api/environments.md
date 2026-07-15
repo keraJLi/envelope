@@ -14,9 +14,6 @@ method, splitting the traditional `reset` into two:
 By default, `reset` simply calls `init`, which is correct for most environments where the
 starting state is sampled from a fixed distribution.
 
-The exact lifecycle signature is `init(key)`, `reset(state, key)`, and
-`step(state, action)`. Positional and keyword calls use this same ordering.
-
 Environment methods return `State` and `Info` tuples. `Info` is a structural protocol;
 `InfoContainer` is its default implementation, built on `Container`. Wrappers extend the
 info with extra fields via `update()` — for example, `EpisodeStatisticsWrapper` adds a
@@ -33,17 +30,6 @@ pytree structures and leaf shapes.**
 
 This guarantees that you can map `jnp.where` on the `Info` they produce, or emit the
 `Info` as the output of `jax.lax.scan`.
-
-Extra field names are part of this structure and must therefore remain fixed across
-branches. Values may change freely without changing the schema.
-
-## Initialization pooling capability
-
-`Environment.supports_init_pooling` is false unless an environment explicitly proves
-that states sampled by `init` are valid substitutes for later reset states. Stateless
-wrappers propagate this capability; wrappers with reset-persistent state do not.
-`PooledInitVmapWrapper` checks the capability at construction and directs unsupported
-environments to `VmapWrapper(AutoResetWrapper(...))`.
 
 ## API Reference
 

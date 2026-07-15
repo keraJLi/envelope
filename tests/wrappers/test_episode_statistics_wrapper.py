@@ -2,7 +2,6 @@ import jax
 import jax.numpy as jnp
 
 import envelope.wrappers as wrappers
-
 from envelope.wrappers.episode_statistics_wrapper import (
     EpisodeStatistics,
     EpisodeStatisticsWrapper,

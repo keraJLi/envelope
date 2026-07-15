@@ -3,8 +3,8 @@ from typing import Any, override
 
 import jax.numpy as jnp
 import navix
-from navix.entities import EntityIds
 from navix import spaces as navix_spaces
+from navix.entities import EntityIds
 from navix.environments.environment import Environment as NavixEnv
 
 from envelope import spaces as envelope_spaces

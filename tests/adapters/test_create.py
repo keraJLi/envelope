@@ -7,10 +7,10 @@ These tests are dependency-free (no brax/gymnax/navix imports) and focus on:
 - argument forwarding and error wrapping
 """
 
-from functools import cached_property
 import importlib
 import inspect
 import types
+from functools import cached_property
 from typing import Literal, get_type_hints
 
 import jax
