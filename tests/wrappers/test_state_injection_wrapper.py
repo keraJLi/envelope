@@ -5,6 +5,7 @@ import jax.numpy as jnp
 import pytest
 
 from envelope.wrappers.autoreset_wrapper import AutoResetWrapper
+from envelope.wrappers.episode_statistics_wrapper import EpisodeStatisticsWrapper
 from envelope.wrappers.state_injection_wrapper import StateInjectionWrapper
 from tests.wrappers.helpers import StepCounterEnv, StepState
 
@@ -29,8 +30,11 @@ class TestStateInjectionCoreFunctionality:
         assert jnp.allclose(state.inner_state.env_state, jnp.array(0.0))
         assert state.inner_state.steps == 0
         assert jnp.allclose(info.obs, jnp.array(0.0))
-        # reset_state is None until set_reset_state is called
-        assert state.reset_state is None
+        assert jax.tree.structure(state.reset_state) == jax.tree.structure(
+            state.inner_state
+        )
+        assert jnp.allclose(state.reset_info.obs, info.obs)
+        assert bool(jnp.asarray(state.active)) is False
 
     def test_set_reset_state_updates_state(self):
         """Verify that set_reset_state() updates the injected state."""
@@ -48,7 +52,8 @@ class TestStateInjectionCoreFunctionality:
 
         # Verify the state was updated
         assert jnp.allclose(state.reset_state.env_state, jnp.array(42.0))
-        assert jnp.allclose(state.reset_obs, custom_obs)
+        assert jnp.allclose(state.reset_info.obs, custom_obs)
+        assert bool(jnp.asarray(state.active)) is True
         # inner_state should also be updated to match
         assert jnp.allclose(state.inner_state.env_state, jnp.array(42.0))
 
@@ -95,7 +100,7 @@ class TestStateInjectionCoreFunctionality:
 
         # Should have new injected state
         assert jnp.allclose(state.reset_state.env_state, jnp.array(99.0))
-        assert jnp.allclose(state.reset_obs, jnp.array(99.0))
+        assert jnp.allclose(state.reset_info.obs, jnp.array(99.0))
 
     def test_step_updates_inner_state_but_preserves_reset_state(self):
         """Verify that step updates inner_state but keeps reset_state unchanged."""
@@ -138,8 +143,7 @@ class TestStateInjectionCoreFunctionality:
         assert jnp.allclose(state2.inner_state.env_state, jnp.array(0.0))
         assert state2.inner_state.steps == 0
         assert jnp.allclose(info2.obs, jnp.array(0.0))
-        # reset_state stays None
-        assert state2.reset_state is None
+        assert bool(jnp.asarray(state2.active)) is False
 
     def test_set_reset_state_raises_on_invalid_state(self):
         """Verify that set_reset_state raises when InjectedState not found."""
@@ -152,31 +156,26 @@ class TestStateInjectionCoreFunctionality:
         with pytest.raises(ValueError, match="Could not find InjectedState"):
             w.set_reset_state(invalid_state, invalid_state, jnp.array(0.0))
 
-    def test_reset_raises_on_partial_reset_state(self):
-        """Verify that reset raises when only one of reset_state/reset_obs is set."""
-        env = StepCounterEnv()
-        w = StateInjectionWrapper(env)
-        key = jax.random.key(0)
+    def test_full_reset_info_preserves_structure_and_inner_extras(self):
+        w = StateInjectionWrapper(EpisodeStatisticsWrapper(StepCounterEnv()))
+        state, info = w.init(jax.random.key(0))
+        state_structure = jax.tree.structure(state)
+        info_structure = jax.tree.structure(info)
 
-        # Create state with only reset_state set (not reset_obs)
-        state_with_only_reset_state = w.InjectedState(
-            inner_state=StepState(env_state=jnp.array(0.0), steps=0),
-            reset_state=StepState(env_state=jnp.array(42.0), steps=0),
-            reset_obs=None,
+        injected_inner = state.inner_state.replace(
+            inner_state=StepState(env_state=jnp.asarray(42.0), steps=0)
+        )
+        injected_info = info.update(obs=jnp.asarray(42.0))
+        state = w.set_reset_state(
+            state, injected_inner, reset_info=injected_info
         )
 
-        with pytest.raises(ValueError, match="must set both"):
-            w.reset(state_with_only_reset_state, key)
-
-        # Create state with only reset_obs set (not reset_state)
-        state_with_only_reset_obs = w.InjectedState(
-            inner_state=StepState(env_state=jnp.array(0.0), steps=0),
-            reset_state=None,
-            reset_obs=jnp.array(42.0),
-        )
-
-        with pytest.raises(ValueError, match="must set both"):
-            w.reset(state_with_only_reset_obs, key)
+        assert jax.tree.structure(state) == state_structure
+        reset_state, reset_info = w.reset(state=state, key=jax.random.key(1))
+        assert jax.tree.structure(reset_info) == info_structure
+        assert hasattr(reset_info, "stats")
+        assert jnp.allclose(reset_info.obs, 42.0)
+        assert jnp.allclose(reset_state.inner_state.inner_state.env_state, 42.0)
 
 
 # ============================================================================

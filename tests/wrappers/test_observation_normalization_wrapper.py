@@ -1,9 +1,12 @@
 import pickle
+from functools import cached_property
 
 import jax
 import jax.numpy as jnp
 import pytest
 
+from envelope.environment import Environment, InfoContainer
+from envelope.spaces import Continuous
 from envelope.wrappers.normalization import RunningMeanVar, update_rmv
 from envelope.wrappers.observation_normalization_wrapper import (
     ObservationNormalizationWrapper,
@@ -15,6 +18,34 @@ from tests.wrappers.helpers import (
     RandomImageEnv,
     VectorObsEnv,
 )
+
+
+class RowStructuredObsEnv(Environment):
+    """Two rows with distinct means, used to test broadcast-aware statistics."""
+
+    @cached_property
+    def observation_space(self):
+        return Continuous.from_shape(-jnp.inf, jnp.inf, (2, 3, 1))
+
+    @cached_property
+    def action_space(self):
+        return Continuous(low=-1.0, high=1.0)
+
+    def init(self, key):
+        obs = jnp.asarray(
+            [[[0.0], [0.0], [0.0]], [[10.0], [10.0], [10.0]]]
+        )
+        return obs, InfoContainer(
+            obs=obs, reward=0.0, terminated=False, truncated=False
+        )
+
+    def reset(self, state, key):
+        return self.init(key)
+
+    def step(self, state, action):
+        return state, InfoContainer(
+            obs=state, reward=0.0, terminated=False, truncated=False
+        )
 
 # -----------------------------------------------------------------------------
 # Core: stats_spec inference and dtype validation
@@ -226,5 +257,29 @@ def test_scalar_stats_spec_broadcast_to_vector_and_cast():
     key = jax.random.key(0)
     state, info = w.init(key)
     assert jnp.asarray(info.obs).dtype == jnp.float16
+    assert w.observation_space.dtype == jnp.float16
     state, info = w.step(state, jnp.zeros((B, D), dtype=jnp.float32))
     assert jnp.asarray(info.obs).dtype == jnp.float16
+
+
+def test_broadcast_stats_spec_reduces_the_broadcast_axes():
+    spec = jax.ShapeDtypeStruct((2, 1, 1), jnp.float32)
+    w = ObservationNormalizationWrapper(RowStructuredObsEnv(), stats_spec=spec)
+
+    state, info = w.init(jax.random.key(0))
+
+    assert jnp.allclose(state.rmv_state.mean[:, 0, 0], jnp.asarray([0.0, 10.0]))
+    assert jnp.allclose(info.obs, jnp.zeros((2, 3, 1)), atol=1e-6)
+
+
+def test_constant_float16_observations_remain_finite():
+    spec = jax.ShapeDtypeStruct((3,), jnp.float16)
+    w = ObservationNormalizationWrapper(
+        ConstantObsEnv(value=7.0, shape=(3,), dtype=jnp.float16),
+        stats_spec=spec,
+    )
+
+    _, info = w.init(jax.random.key(0))
+
+    assert info.obs.dtype == jnp.float16
+    assert jnp.all(jnp.isfinite(info.obs))

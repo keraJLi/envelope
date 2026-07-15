@@ -178,13 +178,12 @@ def test_mixed_space_types_raises_value_error():
 
 
 def test_jit_step():
-    """Step produces correct output. Full JIT of step is not supported: unflatten_x uses jnp.split(..., indices) with space-derived indices, which triggers ConcretizationTypeError under jit."""
     env = PyTreeActionEnv()
     w = FlattenActionWrapper(env)
     key = jax.random.key(0)
     state, _ = w.init(key)
     action = w.action_space.sample(key)
-    next_state, info = w.step(state, action)
+    next_state, info = jax.jit(w.step)(state, action)
     assert next_state.shape == (5,)
     assert info.obs.shape == (5,)
 
@@ -212,4 +211,18 @@ def test_composability_with_vmap_wrapper():
     action = w.action_space.sample(key)
     assert action.shape == (batch_size, 5)
     state, info = w.step(state, action)
+    assert info.obs.shape == (batch_size, 5)
+
+
+def test_flatten_action_outside_vmap_preserves_batch_prefix_under_jit():
+    batch_size = 2
+    w = FlattenActionWrapper(VmapWrapper(PyTreeActionEnv(), batch_size=batch_size))
+    key = jax.random.key(0)
+    state, _ = w.init(key)
+    action = w.action_space.sample(key)
+
+    next_state, info = jax.jit(w.step)(state, action)
+
+    assert action.shape == (batch_size, 5)
+    assert next_state.shape == (batch_size, 5)
     assert info.obs.shape == (batch_size, 5)

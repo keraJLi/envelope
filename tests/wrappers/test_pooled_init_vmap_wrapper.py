@@ -3,6 +3,7 @@ import jax.numpy as jnp
 import pytest
 
 from envelope.spaces import BatchedSpace
+from envelope.wrappers.autoreset_wrapper import AutoResetWrapper
 from envelope.wrappers.episode_statistics_wrapper import EpisodeStatisticsWrapper
 from envelope.wrappers.pooled_init_vmap_wrapper import PooledInitVmapWrapper
 from envelope.wrappers.truncation_wrapper import TruncationWrapper
@@ -18,15 +19,15 @@ def test_init_creates_batched_state():
     assert info.obs.shape == (batch_size,)
 
 
-def test_init_last_final_is_nan_placeholder():
+def test_init_last_final_is_type_preserving_placeholder():
     batch_size = 2
     env = ScalarToyEnv()
     w = PooledInitVmapWrapper(env, batch_size=batch_size, pool_size=2)
     key = jax.random.key(0)
     state, info = w.init(key)
-    # last_final should be info-shaped with NaN
-    assert jnp.all(jnp.isnan(state.last_final.obs))
-    assert jnp.all(jnp.isnan(jnp.asarray(state.last_final.reward).reshape(-1)))
+    assert state.last_final.obs.dtype == info.obs.dtype
+    assert state.last_final.terminated.dtype == info.terminated.dtype
+    assert jnp.all(info.final_valid == jnp.asarray([False, False]))
 
 
 def test_init_info_has_final_field():
@@ -35,7 +36,8 @@ def test_init_info_has_final_field():
     key = jax.random.key(0)
     state, info = w.init(key)
     assert hasattr(info, "final")
-    assert jnp.all(jnp.isnan(info.final.obs))
+    assert jnp.all(info.final_valid == jnp.asarray([False, False]))
+    assert info.final.obs.dtype == info.obs.dtype
 
 
 def test_step_non_done_envs_continue_normally():
@@ -100,6 +102,35 @@ def test_step_info_final_field():
     # For done env: final is terminal info
     assert hasattr(info, "final")
     assert jnp.allclose(info.final.obs, jnp.array([0.5]))
+
+
+def test_terminal_transition_semantics_match_scalar_autoreset():
+    scalar = AutoResetWrapper(StepCounterEnv(terminate_after=1))
+    pooled = PooledInitVmapWrapper(
+        StepCounterEnv(terminate_after=1), batch_size=1, pool_size=1
+    )
+    key = jax.random.key(0)
+    scalar_state, _ = scalar.init(key)
+    pooled_state, _ = pooled.init(key)
+
+    _, scalar_info = scalar.step(scalar_state, jnp.asarray(0.5))
+    _, pooled_info = pooled.step(pooled_state, jnp.asarray([0.5]))
+
+    assert bool(jnp.asarray(scalar_info.terminated)) is True
+    assert bool(jnp.asarray(pooled_info.terminated[0])) is True
+    assert jnp.allclose(scalar_info.reward, pooled_info.reward[0])
+    assert jnp.allclose(scalar_info.obs, pooled_info.obs[0])
+    assert jnp.allclose(scalar_info.final.obs, pooled_info.final.obs[0])
+    assert bool(jnp.asarray(scalar_info.final_valid)) is True
+    assert bool(jnp.asarray(pooled_info.final_valid[0])) is True
+
+
+@pytest.mark.parametrize("batch_size,pool_size", [(0, 1), (1, 0)])
+def test_nonpositive_pooling_capability_is_rejected(batch_size, pool_size):
+    with pytest.raises(ValueError, match="batch_size|pool_size"):
+        PooledInitVmapWrapper(
+            ScalarToyEnv(), batch_size=batch_size, pool_size=pool_size
+        )
 
 
 def test_reset_vmaps_inner_reset():
@@ -198,7 +229,7 @@ def test_no_envs_done():
     state, _ = w.init(key)
     state, info = w.step(state, jnp.array([0.1, 0.2, 0.3]))
     assert jnp.allclose(info.obs, jnp.array([0.1, 0.2, 0.3]))
-    assert jnp.all(jnp.isnan(state.last_final.obs))
+    assert jnp.all(info.final_valid == jnp.asarray([False, False, False]))
 
 
 def test_batch_size_one_pool_size_one():
