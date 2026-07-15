@@ -104,7 +104,7 @@ class KinetixEnvelope(Environment):
         return self._default_max_steps
 
     @property
-    def supports_init_pooling(self) -> bool:
+    def init_can_replace_reset(self) -> bool:
         return True
 
     @classmethod

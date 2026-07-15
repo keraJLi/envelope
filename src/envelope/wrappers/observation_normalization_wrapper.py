@@ -11,11 +11,27 @@ from envelope.spaces import BatchedSpace, Continuous, PyTreeSpace, Space
 from envelope.struct import field, static_field
 from envelope.typing import Key, PyTree
 from envelope.wrappers.normalization import RunningMeanVar, update_rmv
-from envelope.wrappers.wrapper import WrappedState, Wrapper
+from envelope.wrappers.wrapper import WrappedState, Wrapper, WrapperStackRule
 
 
 class ObservationNormalizationWrapper(Wrapper):
     wrapper_roles: ClassVar[frozenset[str]] = frozenset({"normalization", "persistent"})
+    stack_rules: ClassVar[tuple[WrapperStackRule, ...]] = (
+        WrapperStackRule(
+            "pooled_init_vmap",
+            (
+                "ObservationNormalizationWrapper is incompatible with "
+                "PooledInitVmapWrapper"
+            ),
+        ),
+        WrapperStackRule(
+            "autoreset",
+            (
+                "ObservationNormalizationWrapper must be inside AutoResetWrapper, "
+                "not outside it"
+            ),
+        ),
+    )
 
     class ObservationNormalizationState(WrappedState):
         rmv_state: RunningMeanVar = field()
@@ -62,7 +78,7 @@ class ObservationNormalizationWrapper(Wrapper):
 
     @property
     @override
-    def supports_init_pooling(self) -> bool:
+    def init_can_replace_reset(self) -> bool:
         return False
 
     def _init_rmv_state(self) -> RunningMeanVar:
@@ -109,22 +125,6 @@ class ObservationNormalizationWrapper(Wrapper):
             inner_state=state.inner_state, rmv_state=rmv_state
         )
         info = info.update(obs=norm_obs, unnormalized_obs=raw_obs)
-
-        if hasattr(info, "final") and hasattr(info, "final_valid"):
-            final = getattr(info, "final")
-            raw_final_obs = final.obs
-            norm_final_obs = self._normalize_obs(raw_final_obs, rmv_state)
-            final_valid = jnp.asarray(getattr(info, "final_valid"), dtype=jnp.bool_)
-            final_obs = jax.tree.map(
-                lambda normalized, raw: _where_valid(final_valid, normalized, raw),
-                norm_final_obs,
-                raw_final_obs,
-            )
-            final = final.update(
-                obs=final_obs,
-                unnormalized_obs=raw_final_obs,
-            )
-            info = info.update(final=final)
         return state, info
 
     @override
@@ -193,16 +193,6 @@ def _reshape_for_stats(x: jax.Array, spec: jax.ShapeDtypeStruct) -> jax.Array:
         x = jnp.transpose(x, permutation)
     sample_count = prod(x.shape[: len(sample_axes)]) if sample_axes else 1
     return x.reshape((sample_count,) + spec_shape)
-
-
-def _where_valid(
-    valid: jax.Array, normalized: jax.Array, placeholder: jax.Array
-) -> jax.Array:
-    """Select normalized observations while preserving zero-like placeholders."""
-    normalized = jnp.asarray(normalized)
-    placeholder = jnp.asarray(placeholder)
-    mask = jnp.reshape(valid, valid.shape + (1,) * (normalized.ndim - valid.ndim))
-    return jnp.where(mask, normalized, placeholder)
 
 
 def _normalized_observation_space(space: Space, stats_spec: PyTree) -> Space:

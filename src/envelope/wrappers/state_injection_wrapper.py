@@ -67,7 +67,7 @@ class StateInjectionWrapper(Wrapper):
 
     @property
     @override
-    def supports_init_pooling(self) -> bool:
+    def init_can_replace_reset(self) -> bool:
         return False
 
     def set_reset_state(

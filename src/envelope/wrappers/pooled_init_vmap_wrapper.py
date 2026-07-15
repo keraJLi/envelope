@@ -10,7 +10,7 @@ from envelope.environment import Info
 from envelope.struct import field, static_field
 from envelope.typing import Key, PyTree
 from envelope.wrappers.vmap_wrapper import _split_or_keep_key
-from envelope.wrappers.wrapper import WrappedState, Wrapper
+from envelope.wrappers.wrapper import WrappedState, Wrapper, WrapperStackRule
 
 
 class PooledInitVmapWrapper(Wrapper):
@@ -19,6 +19,12 @@ class PooledInitVmapWrapper(Wrapper):
 
     wrapper_roles: ClassVar[frozenset[str]] = frozenset(
         {"lifecycle", "pooled_init_vmap", "vectorization"}
+    )
+    stack_rules: ClassVar[tuple[WrapperStackRule, ...]] = (
+        WrapperStackRule(
+            "vectorization",
+            "PooledInitVmapWrapper cannot wrap another vectorization wrapper",
+        ),
     )
 
     class PooledInitVmapState(WrappedState):
@@ -39,16 +45,16 @@ class PooledInitVmapWrapper(Wrapper):
             raise ValueError("pool_size must be positive")
         object.__setattr__(self, "batch_size", int(self.batch_size))
         object.__setattr__(self, "pool_size", int(self.pool_size))
-        if not self.env.supports_init_pooling:
+        if not self.env.init_can_replace_reset:
             raise ValueError(
                 "PooledInitVmapWrapper requires an environment with "
-                "supports_init_pooling=True"
+                "init_can_replace_reset=True"
             )
         super().__post_init__()
 
     @property
     @override
-    def supports_init_pooling(self) -> bool:
+    def init_can_replace_reset(self) -> bool:
         return False
 
     @override

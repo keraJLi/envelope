@@ -206,20 +206,39 @@ def test_normalization_inside_autoreset_transforms_final_observation():
     action = jnp.asarray([0.25, 0.75], dtype=jnp.float32)
 
     state, _ = wrapper.init(jax.random.key(0))
-    _, info = jax.jit(wrapper.step)(state, action)
+    state, info = jax.jit(wrapper.step)(state, action)
 
     assert jnp.all(info.final_valid)
     assert jnp.allclose(info.final.unnormalized_obs, action)
     assert jnp.allclose(info.final.obs, jnp.ones(2), atol=1e-5)
     assert not jnp.allclose(info.final.obs, info.final.unnormalized_obs)
+    assert jnp.all(state.inner_state.rmv_state.count == 3)
+
+
+def test_normalized_final_observation_remains_unchanged_after_completion():
+    wrapper = VmapWrapper(
+        AutoResetWrapper(
+            ObservationNormalizationWrapper(StepCounterEnv(terminate_after=2))
+        ),
+        batch_size=2,
+    )
+    action = jnp.asarray([0.25, 0.75], dtype=jnp.float32)
+    state, _ = wrapper.init(jax.random.key(0))
+    state, _ = wrapper.step(state, action)
+    state, completed = wrapper.step(state, action)
+    final_obs = completed.final.obs
+
+    _, continued = wrapper.step(state, jnp.asarray([0.1, 0.1]))
+
+    assert not jnp.any(continued.terminated | continued.truncated)
+    assert jnp.all(continued.final_valid)
+    assert jnp.allclose(continued.final.obs, final_obs)
 
 
 @pytest.mark.parametrize(
     "make_env",
     [
-        lambda: ObservationNormalizationWrapper(
-            AutoResetWrapper(StepCounterEnv())
-        ),
+        lambda: ObservationNormalizationWrapper(AutoResetWrapper(StepCounterEnv())),
         lambda: ObservationNormalizationWrapper(
             PooledInitVmapWrapper(StepCounterEnv(), batch_size=2, pool_size=2)
         ),

@@ -90,7 +90,7 @@ class BraxEnvelope(Environment):
         return _BRAX_DEFAULT_EPISODE_LENGTH
 
     @property
-    def supports_init_pooling(self) -> bool:
+    def init_can_replace_reset(self) -> bool:
         return True
 
     def __post_init__(self):

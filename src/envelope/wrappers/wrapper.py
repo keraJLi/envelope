@@ -74,9 +74,9 @@ class Wrapper(Environment):
 
     @property
     @override
-    def supports_init_pooling(self) -> bool:
-        """Propagate reset-equivalence through transparent wrappers."""
-        return self.env.supports_init_pooling
+    def init_can_replace_reset(self) -> bool:
+        """Pass through whether ``init`` can replace ``reset``."""
+        return self.env.init_can_replace_reset
 
     def __getattribute__(self, name: str) -> Any:
         """Forward genuinely missing attributes without hiding wrapper failures.

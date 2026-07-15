@@ -35,11 +35,6 @@ class VmapWrapper(Wrapper):
     batch_size: int = static_field(kw_only=True)
     wrapper_roles: ClassVar[frozenset[str]] = frozenset({"vectorization"})
 
-    @property
-    @override
-    def supports_init_pooling(self) -> bool:
-        return False
-
     @override
     def init(self, key: Key) -> tuple[PyTree, Info]:
         keys = _split_or_keep_key(key, self.batch_size)

@@ -56,7 +56,7 @@ class AutoResetWrapper(Wrapper):
 
     @property
     @override
-    def supports_init_pooling(self) -> bool:
+    def init_can_replace_reset(self) -> bool:
         return False
 
     @override

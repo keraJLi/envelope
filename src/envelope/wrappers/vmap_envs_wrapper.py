@@ -27,11 +27,6 @@ class VmapEnvsWrapper(Wrapper):
     batch_size: int = field(kw_only=True)
     wrapper_roles: ClassVar[frozenset[str]] = frozenset({"vectorization"})
 
-    @property
-    @override
-    def supports_init_pooling(self) -> bool:
-        return False
-
     def _split_keys(self, key: Key) -> Key:
         if not jnp.issubdtype(key.dtype, jax.dtypes.prng_key):
             raise ValueError("key must be a (new-style) `jax.random.key`.")
