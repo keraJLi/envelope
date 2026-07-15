@@ -22,8 +22,9 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pyright
-      - run: uv run pytest -m "not adapters and not ppo"
+      - run: uv run pytest -m "not adapters and not ppo and not packaging"
       - run: uv build --no-sources
+      - run: ENVELOPE_DIST_DIR=dist uv run pytest -m packaging
       - run: uv run --no-project --with dist/*.whl python -c "import envelope, importlib.resources; assert importlib.resources.files('envelope').joinpath('py.typed').is_file()"
       - uses: actions/upload-artifact@v4
         with:

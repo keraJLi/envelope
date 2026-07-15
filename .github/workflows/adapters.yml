@@ -3,6 +3,8 @@ name: Adapter contracts
 on:
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
 
 jobs:
   published-extra:
@@ -13,15 +15,25 @@ jobs:
       matrix:
         include:
           - suite: brax
+            import_name: brax
             test: tests/adapters/test_brax_envelope.py
+            create_test: tests/adapters/test_create_integration.py::test_create_brax_smoke
           - suite: craftax
+            import_name: craftax
             test: tests/adapters/test_craftax_envelope.py
+            create_test: tests/adapters/test_create_integration.py::test_create_craftax_smoke
           - suite: jumanji
+            import_name: jumanji
             test: tests/adapters/test_jumanji_envelope.py
+            create_test: tests/adapters/test_create_integration.py::test_create_jumanji_smoke
           - suite: mujoco-playground
+            import_name: mujoco_playground
             test: tests/adapters/test_mujoco_playground_envelope.py
+            create_test: tests/adapters/test_create_integration.py::test_create_mujoco_playground_smoke
           - suite: navix
+            import_name: navix
             test: tests/adapters/test_navix_envelope.py
+            create_test: tests/adapters/test_create_integration.py::test_create_navix_smoke
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -30,9 +42,15 @@ jobs:
           python-version: "3.12"
       - run: uv build --wheel --no-sources
       - run: uv venv .adapter-venv
-      - run: uv pip install --python .adapter-venv/bin/python "$(find dist -name '*.whl')[${{ matrix.suite }}]" pytest
+      - name: Install the built wheel and selected extra
+        run: |
+          wheel=$(find dist -name '*.whl' -print -quit)
+          test -n "${wheel}"
+          uv pip install --python .adapter-venv/bin/python "${wheel}[${{ matrix.suite }}]" pytest
       - run: .adapter-venv/bin/python -c "import envelope; import envelope.adapters"
+      - run: .adapter-venv/bin/python -c "import ${{ matrix.import_name }}"
       - run: .adapter-venv/bin/pytest ${{ matrix.test }} -m adapters
+      - run: .adapter-venv/bin/pytest ${{ matrix.create_test }} -m adapters
 
   source-backed:
     runs-on: ubuntu-latest
@@ -42,9 +60,13 @@ jobs:
       matrix:
         include:
           - suite: gymnax
+            import_name: gymnax
             test: tests/adapters/test_gymnax_envelope.py
+            create_test: tests/adapters/test_create_integration.py::test_create_gymnax_smoke
           - suite: kinetix
+            import_name: kinetix
             test: tests/adapters/test_kinetix_envelope.py
+            create_test: tests/adapters/test_create_integration.py::test_create_kinetix_smoke
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -52,5 +74,19 @@ jobs:
           enable-cache: true
           python-version: "3.12"
       - run: uv sync --group dev --group adapters --locked
-      - run: uv run python -c "import ${{ matrix.suite == 'kinetix' && 'kinetix' || 'gymnax' }}"
+      - run: uv run python -c "import ${{ matrix.import_name }}"
       - run: uv run pytest ${{ matrix.test }} -m adapters
+      - run: uv run pytest ${{ matrix.create_test }} -m adapters
+
+  full-enumeration:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: "3.12"
+      - run: uv sync --group dev --group adapters --locked
+      - run: uv run pytest tests/adapters -m adapters

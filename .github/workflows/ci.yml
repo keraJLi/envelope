@@ -21,7 +21,7 @@ jobs:
       - run: uv sync --group dev --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: uv run pytest -m "not adapters and not ppo"
+      - run: uv run pytest -m "not adapters and not ppo and not packaging"
 
   typing:
     runs-on: ubuntu-latest
@@ -34,6 +34,18 @@ jobs:
       - run: uv sync --group dev --locked
       - run: uv run pyright
 
+  minimum-jax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: "3.12"
+      - run: uv sync --group dev --locked
+      - run: uv pip install --python .venv/bin/python "jax==0.5.0" "jaxlib==0.5.0"
+      - run: uv run --no-sync pytest -m "not adapters and not ppo and not packaging"
+
   docs:
     runs-on: ubuntu-latest
     steps:
@@ -44,6 +56,17 @@ jobs:
           python-version: "3.12"
       - run: uv run --with-requirements docs/requirements.txt mkdocs build --strict
 
+  experimental-ppo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: "3.12"
+      - run: uv sync --group dev --group ppo --locked
+      - run: uv run pytest tests/ppo -m ppo
+
   distribution:
     runs-on: ubuntu-latest
     steps:
@@ -52,5 +75,7 @@ jobs:
         with:
           enable-cache: true
           python-version: "3.12"
+      - run: uv sync --group dev --locked
       - run: uv build --no-sources
+      - run: ENVELOPE_DIST_DIR=dist uv run pytest -m packaging
       - run: uv run --no-project --with dist/*.whl python -c "import envelope, importlib.resources; assert importlib.resources.files('envelope').joinpath('py.typed').is_file()"
