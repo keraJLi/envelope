@@ -57,24 +57,22 @@ def test_info_contains_stats_field():
     assert isinstance(info.stats, EpisodeStatistics)
 
 
-def test_reset_preserves_stats():
+def test_reset_clears_episode_stats():
     env = StepCounterEnv()
     w = EpisodeStatisticsWrapper(env)
     key = jax.random.key(0)
     state, _ = w.init(key)
     for _ in range(3):
         state, _ = w.step(state, jnp.asarray(0.2))
-    reward_before = state.stats.reward
-    length_before = state.stats.length
     state, info = w.reset(state, key)
-    assert jnp.allclose(state.stats.reward, reward_before)
-    assert jnp.allclose(state.stats.length, length_before)
-    assert jnp.allclose(info.stats.reward, reward_before)
-    assert jnp.allclose(info.stats.length, length_before)
+    assert jnp.allclose(state.stats.reward, 0.0)
+    assert jnp.allclose(state.stats.length, 0)
+    assert jnp.allclose(info.stats.reward, 0.0)
+    assert jnp.allclose(info.stats.length, 0)
     assert w.observation_space.contains(info.obs)
 
 
-def test_stats_persist_and_continue_after_reset():
+def test_stats_restart_after_reset():
     env = StepCounterEnv()
     w = EpisodeStatisticsWrapper(env)
     key = jax.random.key(0)
@@ -84,9 +82,8 @@ def test_stats_persist_and_continue_after_reset():
     state, _ = w.reset(state, key)
     for _ in range(2):
         state, _ = w.step(state, jnp.asarray(0.1))
-    # Total length = 3 + 2 = 5, reward = 0.1*5 = 0.5
-    assert jnp.allclose(state.stats.length, 5)
-    assert jnp.allclose(state.stats.reward, 0.5)
+    assert jnp.allclose(state.stats.length, 2)
+    assert jnp.allclose(state.stats.reward, 0.2)
 
 
 def test_negative_rewards_accumulate_correctly():
@@ -158,17 +155,42 @@ def test_jit_init_step_loop():
     assert jnp.allclose(jnp.asarray(stats.reward), 0.4)
 
 
-def test_composability_with_vmap_wrapper():
+def test_must_be_applied_before_vmap_wrapper():
     batch_size = 3
     env = StepCounterEnv()
-    w = EpisodeStatisticsWrapper(VmapWrapper(env, batch_size=batch_size))
+    w = VmapWrapper(EpisodeStatisticsWrapper(env), batch_size=batch_size)
     key = jax.random.key(0)
-    state, _ = w.init(key)
-    action = jnp.array([0.1, 0.2, 0.3])
-    state, info = w.step(state, action)
-    # Reward is batched; length may be scalar or batched depending on implementation
+    state, info = w.init(key)
     assert jnp.asarray(state.stats.reward).shape == (batch_size,)
-    assert jnp.allclose(jnp.asarray(state.stats.reward), action)
+    assert jnp.asarray(state.stats.length).shape == (batch_size,)
+    assert jnp.asarray(info.stats.reward).shape == (batch_size,)
+
+    actions = jnp.asarray([[0.1, 0.2, 0.3], [0.3, 0.2, 0.1]])
+    state, _ = jax.lax.scan(
+        lambda carry, action: (w.step(carry, action)[0], None), state, actions
+    )
+
+    assert jnp.asarray(state.stats.reward).shape == (batch_size,)
+    assert jnp.asarray(state.stats.length).shape == (batch_size,)
+    assert jnp.allclose(jnp.asarray(state.stats.reward), actions.sum(axis=0))
+    assert jnp.all(state.stats.length == 2)
+
+
+def test_tracks_vector_rewards_outside_vmap():
+    env = VmapWrapper(StepCounterEnv(), batch_size=3)
+    wrapper = EpisodeStatisticsWrapper(env)
+    state, _ = wrapper.init(jax.random.key(0))
+    actions = jnp.asarray([[0.1, 0.2, 0.3], [0.3, 0.2, 0.1]])
+
+    state, infos = jax.lax.scan(
+        lambda carry, action: wrapper.step(carry, action), state, actions
+    )
+
+    assert state.stats.reward.shape == (3,)
+    assert state.stats.length.shape == (3,)
+    assert jnp.allclose(state.stats.reward, actions.sum(axis=0))
+    assert jnp.all(state.stats.length == 2)
+    assert infos.stats.reward.shape == (2, 3)
 
 
 def test_composability_with_truncation_wrapper():
