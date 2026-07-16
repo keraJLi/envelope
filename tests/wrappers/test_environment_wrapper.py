@@ -243,6 +243,17 @@ class TestWrapperAttributeDelegation:
         with pytest.raises(AttributeError):
             _ = environment_wrapper.nonexistent_attribute
 
+    def test_wrapper_descriptor_attribute_error_is_not_silently_delegated(self):
+        class BrokenPropertyWrapper(Wrapper):
+            @property
+            def custom_property(self):
+                raise AttributeError("wrapper property failed")
+
+        environment_wrapper = BrokenPropertyWrapper(WrapperEnvWithMethods())
+
+        with pytest.raises(AttributeError, match="wrapper property failed"):
+            _ = environment_wrapper.custom_property
+
     def test_getattr_setstate_raises(self):
         """Verify __setstate__ raises AttributeError."""
         env = WrapperSimpleEnv()

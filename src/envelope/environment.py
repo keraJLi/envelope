@@ -1,12 +1,36 @@
 from abc import ABC, abstractmethod
 from dataclasses import field
 from functools import cached_property
+from typing import Any, ClassVar, Literal, NamedTuple
 
 from envelope import spaces
 from envelope.struct import Container, FrozenPyTreeNode
 from envelope.typing import Array, Info, Key, PyTree, State
 
-__all__ = ["Environment", "InfoContainer"]
+__all__ = [
+    "Environment",
+    "InfoContainer",
+    "StackConstraint",
+    "not_containing",
+    "not_inside",
+]
+
+
+class StackConstraint(NamedTuple):
+    """A directional prohibition against matching environment or wrapper types."""
+
+    direction: Literal["outer", "inner"]
+    environment_types: tuple[type[Any], ...]
+
+
+def not_inside(*environment_types: type[Any]) -> StackConstraint:
+    """Reject this environment when a matching type appears outside it."""
+    return StackConstraint("outer", environment_types)
+
+
+def not_containing(*environment_types: type[Any]) -> StackConstraint:
+    """Reject this environment when a matching type appears inside it."""
+    return StackConstraint("inner", environment_types)
 
 
 class InfoContainer(Container):
@@ -23,8 +47,8 @@ class InfoContainer(Container):
 
     obs: PyTree
     reward: float | Array
-    terminated: bool
-    truncated: bool = field(default=False)
+    terminated: bool | Array
+    truncated: bool | Array = field(default=False)
 
 
 class Environment(ABC, FrozenPyTreeNode):
@@ -35,6 +59,8 @@ class Environment(ABC, FrozenPyTreeNode):
     environments should expose their wrapped env state as `inner_state` while
     adding any wrapper-specific fields.
     """
+
+    stack_constraints: ClassVar[tuple[StackConstraint, ...]] = ()
 
     @abstractmethod
     def init(self, key: Key) -> tuple[State, Info]:
@@ -78,3 +104,8 @@ class Environment(ABC, FrozenPyTreeNode):
     @property
     def unwrapped(self) -> "Environment":
         return self
+
+    @property
+    def default_max_steps(self) -> int | None:
+        """The backend's captured default horizon, if it has one."""
+        return None

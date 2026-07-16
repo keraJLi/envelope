@@ -14,12 +14,25 @@ from envelope.wrappers.state_injection_wrapper import StateInjectionWrapper
 from envelope.wrappers.truncation_wrapper import TruncationWrapper
 from envelope.wrappers.vmap_envs_wrapper import VmapEnvsWrapper
 from envelope.wrappers.vmap_wrapper import VmapWrapper
-from envelope.wrappers.wrapper import WrappedState, Wrapper
+from envelope.wrappers.wrapper import (
+    PooledInitializationWrapper,
+    StackConstraint,
+    VectorizingWrapper,
+    WrappedState,
+    Wrapper,
+    not_containing,
+    not_inside,
+)
 
 __all__ = [
     # Basic functionality
     "Wrapper",
     "WrappedState",
+    "StackConstraint",
+    "VectorizingWrapper",
+    "PooledInitializationWrapper",
+    "not_inside",
+    "not_containing",
     # Wrappers
     "AutoResetWrapper",
     "ClipActionWrapper",

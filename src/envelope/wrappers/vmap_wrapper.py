@@ -8,7 +8,7 @@ from envelope import spaces
 from envelope.environment import Info
 from envelope.struct import static_field
 from envelope.typing import Key, PyTree
-from envelope.wrappers.wrapper import WrappedState, Wrapper
+from envelope.wrappers.wrapper import VectorizingWrapper, WrappedState, Wrapper
 
 
 def is_single_key(key):
@@ -29,7 +29,7 @@ def _split_or_keep_key(key: Key, batch_size: int) -> Key:
     )
 
 
-class VmapWrapper(Wrapper):
+class VmapWrapper(Wrapper, VectorizingWrapper):
     """Does not wrap the state."""
 
     batch_size: int = static_field(kw_only=True)
@@ -51,15 +51,15 @@ class VmapWrapper(Wrapper):
         state, info = jax.vmap(self.env.step)(state, action)
         return state, info
 
-    @override
     @cached_property
+    @override
     def observation_space(self) -> spaces.Space:
         return spaces.BatchedSpace(
             space=self.env.observation_space, batch_size=self.batch_size
         )
 
-    @override
     @cached_property
+    @override
     def action_space(self) -> spaces.Space:
         return spaces.BatchedSpace(
             space=self.env.action_space, batch_size=self.batch_size
