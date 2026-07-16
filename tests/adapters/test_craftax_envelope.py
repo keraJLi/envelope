@@ -2,6 +2,8 @@
 
 # ruff: noqa: E402
 
+import warnings
+
 import jax
 import jax.numpy as jnp
 import pytest
@@ -10,16 +12,9 @@ pytestmark = pytest.mark.adapters
 
 pytest.importorskip("craftax")
 
-from craftax.craftax.envs.craftax_pixels_env import (
-    CraftaxPixelsEnv,
-    CraftaxPixelsEnvNoAutoReset,
-)
-from craftax.craftax_classic.envs.craftax_pixels_env import (
-    CraftaxClassicPixelsEnv,
-    CraftaxClassicPixelsEnvNoAutoReset,
-)
-
+from envelope.adapters import craftax_envelope
 from envelope.spaces import Continuous, Discrete
+from envelope.struct import Container
 from tests.contract import (
     assert_jitted_rollout_contract,
     assert_obs_matches_space,
@@ -64,17 +59,6 @@ def _one_step(env, state, key):
 
 
 def test_craftax_contract_smoke(craftax_env, prng_key):
-    failing_envs = (
-        CraftaxPixelsEnv,
-        CraftaxClassicPixelsEnv,
-        CraftaxPixelsEnvNoAutoReset,
-        CraftaxClassicPixelsEnvNoAutoReset,
-    )
-    if isinstance(craftax_env.craftax_env, failing_envs):
-        pytest.xfail(
-            "Craftax currently returns the wrong observation space. "
-            "See https://github.com/MichaelTMatthews/Craftax/pull/49"
-        )
     assert_reset_step_contract(
         craftax_env, key=prng_key, obs_check=assert_obs_matches_space
     )
@@ -120,8 +104,69 @@ class _DummyEnv:
         self.default_params = default_params
 
 
-def test_from_name_errors_on_auto_reset():
-    from envelope.adapters.craftax_envelope import CraftaxEnvelope
+def test_from_name_captures_default_before_disabling_time_limit(monkeypatch):
+    dummy_env = _DummyEnv(_DummyParams(max_timesteps=100))
+    monkeypatch.setattr(
+        craftax_envelope, "make_craftax_env_from_name", lambda *_args, **_kwargs: dummy_env
+    )
+    monkeypatch.setattr(
+        craftax_envelope,
+        "_probe_gymnaxlike_info_placeholder",
+        lambda _env, _params: Container(),
+    )
 
-    with pytest.raises(ValueError, match="Cannot override 'auto_reset' directly"):
-        CraftaxEnvelope.from_name("AnyEnv", env_kwargs={"auto_reset": True})
+    env = craftax_envelope.CraftaxEnvelope.from_name("AnyEnv")
+
+    assert jnp.isposinf(env.env_params.max_timesteps)
+    assert env.default_max_steps == 100
+
+
+def test_from_name_preserves_explicit_auto_reset(monkeypatch):
+    captured_kwargs = {}
+    dummy_env = _DummyEnv(_DummyParams(max_timesteps=100))
+
+    def make_env(_name, **kwargs):
+        captured_kwargs.update(kwargs)
+        return dummy_env
+
+    monkeypatch.setattr(craftax_envelope, "make_craftax_env_from_name", make_env)
+    monkeypatch.setattr(
+        craftax_envelope,
+        "_probe_gymnaxlike_info_placeholder",
+        lambda _env, _params: Container(),
+    )
+
+    supplied_params = _DummyParams(max_timesteps=17)
+    with pytest.warns(UserWarning, match="backend settings"):
+        env = craftax_envelope.CraftaxEnvelope.from_name(
+            "AnyEnv",
+            env_params=supplied_params,
+            env_kwargs={"auto_reset": True},
+        )
+
+    assert captured_kwargs["auto_reset"] is True
+    assert env.craftax_env is dummy_env
+    assert env.env_params is supplied_params
+    assert env.default_max_steps == 17
+
+
+def test_from_name_preserves_nonfinite_explicit_horizon_without_warning(monkeypatch):
+    dummy_env = _DummyEnv(_DummyParams(max_timesteps=100))
+    monkeypatch.setattr(
+        craftax_envelope, "make_craftax_env_from_name", lambda *_args, **_kwargs: dummy_env
+    )
+    monkeypatch.setattr(
+        craftax_envelope,
+        "_probe_gymnaxlike_info_placeholder",
+        lambda _env, _params: Container(),
+    )
+    supplied_params = _DummyParams(max_timesteps=jnp.inf)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        env = craftax_envelope.CraftaxEnvelope.from_name(
+            "AnyEnv", env_params=supplied_params
+        )
+
+    assert env.env_params is supplied_params
+    assert env.default_max_steps is None
