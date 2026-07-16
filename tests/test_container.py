@@ -147,6 +147,26 @@ def test_container_extras_use_canonical_key_order():
     assert all(jnp.array_equal(a, b) for a, b in zip(xy_leaves, yx_leaves))
 
 
+def test_direct_extras_mappings_use_canonical_key_order():
+    yx = InfoLike(
+        a=jnp.array(0),
+        b=jnp.array(0),
+        _extras={"y": jnp.array(2), "x": jnp.array(1)},
+    )
+    xy = InfoLike(
+        a=jnp.array(0),
+        b=jnp.array(0),
+        _extras={"x": jnp.array(10), "y": jnp.array(20)},
+    )
+
+    assert jax.tree.structure(yx) == jax.tree.structure(xy)
+
+    select = jax.jit(lambda pred: jax.lax.cond(pred, lambda: yx, lambda: xy))
+    selected = select(False)
+    assert selected.x == 10
+    assert selected.y == 20
+
+
 def test_same_container_extras_schema_composes_in_lax_cond():
     base = InfoLike(a=jnp.array(0), b=jnp.array(0))
     xy = base.update(x=jnp.array(1), y=jnp.array(2))

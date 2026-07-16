@@ -1,6 +1,7 @@
 from typing import override
 
 import jax.numpy as jnp
+from jax import core
 
 from envelope.environment import Info
 from envelope.struct import field
@@ -15,7 +16,7 @@ class TruncationWrapper(Wrapper):
         steps: jnp.ndarray | int = field(default=0)
 
     def __post_init__(self):
-        if self.max_steps <= 0:
+        if not isinstance(self.max_steps, core.Tracer) and self.max_steps <= 0:
             raise ValueError("max_steps must be greater than zero")
         super().__post_init__()
 

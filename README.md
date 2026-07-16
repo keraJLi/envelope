@@ -27,8 +27,8 @@ env = envelope.wrappers.ObservationNormalizationWrapper(env)
 
 - **Carry state across episodes** to track running statistics, for example to normalize observations.
 - **Explicit wrapper composition** keeps episode boundaries correct. See the
-  [wrapper ordering guide](https://github.com/keraJLi/envelope/blob/main/docs/api/wrappers.md#wrapper-ordering)
-  for the supported standard and pooled stacks.
+  [wrapper compatibility guide](https://github.com/keraJLi/envelope/blob/main/docs/api/wrappers.md#stack-constraints)
+  for enforced constraints and ordering examples.
 
 ## 🔌 Adapters for existing suites
 

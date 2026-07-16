@@ -263,7 +263,7 @@ class Container:
         core_keys = tuple(f.name for f in core_fields)
         core_vals = tuple(getattr(self, name) for name in core_keys)
 
-        extras_keys = tuple(self._extras)
+        extras_keys = tuple(sorted(self._extras))
         extras_vals = tuple(self._extras[k] for k in extras_keys)
 
         children = core_vals + extras_vals

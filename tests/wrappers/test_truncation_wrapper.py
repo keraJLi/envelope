@@ -77,6 +77,19 @@ def test_nonpositive_max_steps_are_rejected(max_steps):
         TruncationWrapper(StepCounterEnv(), max_steps=max_steps)
 
 
+def test_max_steps_can_be_traced_when_vmapping_environment_construction():
+    max_steps = jnp.asarray([2, 3], dtype=jnp.int32)
+
+    envs = jax.vmap(
+        lambda horizon: TruncationWrapper(
+            StepCounterEnv(),
+            max_steps=horizon,
+        )
+    )(max_steps)
+
+    assert jnp.array_equal(envs.max_steps, max_steps)
+
+
 def test_truncated_remains_true_after_threshold():
     env = StepCounterEnv()
     w = TruncationWrapper(env, max_steps=2)
