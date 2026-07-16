@@ -3,8 +3,6 @@ name: Adapter contracts
 on:
   pull_request:
   workflow_dispatch:
-  schedule:
-    - cron: "17 3 * * *"
 
 jobs:
   published-extra:
@@ -67,7 +65,7 @@ jobs:
         run: uv run pytest tests/adapters -m adapters
 
   full-enumeration:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
