@@ -2,6 +2,8 @@
 
 # ruff: noqa: E402
 
+from types import SimpleNamespace
+
 import jax
 import jax.numpy as jnp
 import pytest
@@ -63,8 +65,8 @@ def test_mujoco_playground_terminated_matches_done_on_step(
     state, _info = env.init(key_reset)
     action = env.action_space.sample(key_action)
     _next_state, info = env.step(state, action)
-    assert hasattr(info, "done")
-    assert info.terminated == info.done
+    assert hasattr(info.backend, "done")
+    assert info.terminated == info.backend.done
     assert not info.truncated  # mujoco_playground doesn't distinguish truncation
 
 
@@ -207,3 +209,29 @@ def test_config_overrides_are_passed_correctly(prng_key):
 
     # Verify the config was applied
     assert env2.mujoco_playground_env.sim_dt == 0.005
+
+
+def test_explicit_episode_length_is_passed_through(monkeypatch):
+    captured = {}
+    raw_env = SimpleNamespace()
+
+    monkeypatch.setattr(
+        "envelope.adapters.mujoco_playground_envelope.registry.get_default_config",
+        lambda _name: SimpleNamespace(episode_length=1000),
+    )
+
+    def load(_name, *, config_overrides):
+        captured.update(config_overrides)
+        return raw_env
+
+    monkeypatch.setattr(
+        "envelope.adapters.mujoco_playground_envelope.registry.load", load
+    )
+
+    with pytest.warns(UserWarning, match="episode_length"):
+        env = MujocoPlaygroundEnvelope.from_name(
+            "Fake", env_kwargs={"episode_length": 17}
+        )
+
+    assert captured["episode_length"] == 17
+    assert env.default_max_steps == 17

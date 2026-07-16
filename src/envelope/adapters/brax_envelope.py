@@ -1,108 +1,102 @@
-import dataclasses
 import warnings
 from copy import copy
 from functools import cached_property
-from typing import Any, override
+from typing import Any, cast, override
 
 from brax.envs import Env as BraxEnv
-from brax.envs import Wrapper as BraxWrapper
 from brax.envs import create as brax_create
 from jax import numpy as jnp
 
 from envelope import spaces
+from envelope.adapters._common import (
+    _capture_horizon,
+    backend_container,
+    warn_if_wrapper_overlap,
+)
 from envelope.environment import Environment, Info, InfoContainer, State
 from envelope.struct import static_field
 from envelope.typing import Key, PyTree
 
 # Default episode_length in brax.envs.create()
 _BRAX_DEFAULT_EPISODE_LENGTH = 1000
+_CONTROLS = ("episode_length", "auto_reset", "batch_size", "action_repeat")
+
+
+def _brax_state_to_info(brax_state: Any) -> InfoContainer:
+    """Convert a brax state to an envelope InfoContainer."""
+    info = InfoContainer(
+        obs=brax_state.obs,
+        reward=brax_state.reward,
+        terminated=jnp.asarray(brax_state.done, dtype=jnp.bool_),
+    )
+    return info.update(backend=backend_container(brax_state))
 
 
 class BraxEnvelope(Environment):
     """
     Wrapper to convert a Brax environment to a envelope environment.
 
-    Note that Brax' `create` function has a default value of `1000` for the episode
-    length. Thus, the `default_max_steps` property is set to `1000` for all Brax envs.
+    Brax' `create` function defaults to an episode length of `1000`. This horizon, or
+    an explicitly supplied override, is retained as `default_max_steps` while the
+    backend time limit is disabled by default.
 
-    Brax uses a dataclass as the environment state, which we return in full as fields of
-    the `Info` object.
+    Brax uses a dataclass as its state. Its fields are preserved under ``info.backend``.
 
     Args:
         brax_env (BraxEnv): the Brax environment.
     """
 
-    brax_env: BraxEnv = static_field()
+    brax_env: BraxEnv = static_field(unsafe=True)
+    _max_steps: int | None = static_field(default=_BRAX_DEFAULT_EPISODE_LENGTH)
 
     @classmethod
     def from_name(
         cls, env_name: str, env_kwargs: dict[str, Any] | None = None
     ) -> "BraxEnvelope":
         """
-        Create a `BraxEnvelope` from a name and keyword arguments.
-        `env_kwargs` arepassed to `brax.envs.create`.
+        Create a `BraxEnvelope` from a name and keyword arguments. `env_kwargs` are
+        passed to `brax.envs.create`.
         """
-        env_kwargs = env_kwargs or {}
-        if "episode_length" in env_kwargs:
-            raise ValueError(
-                "Cannot override 'episode_length' directly. "
-                "Use TruncationWrapper for episode length control."
-            )
-        if "auto_reset" in env_kwargs:
-            raise ValueError(
-                "Cannot override 'auto_reset' directly. "
-                "Use AutoResetWrapper for auto-reset behavior."
-            )
+        warn_if_wrapper_overlap("Brax", env_kwargs, _CONTROLS)
 
-        env_kwargs["episode_length"] = jnp.inf
-        env_kwargs["auto_reset"] = False
-        env = brax_create(env_name, **env_kwargs)
-        return cls(brax_env=env)
+        env_kwargs = env_kwargs or {}
+        default_max_steps = _capture_horizon(
+            env_kwargs.get("episode_length", _BRAX_DEFAULT_EPISODE_LENGTH)
+        )
+        backend_kwargs = {"episode_length": None, "auto_reset": False, **env_kwargs}
+        env = cast(Any, brax_create)(env_name, **backend_kwargs)
+        return cls(brax_env=env, _max_steps=default_max_steps)
 
     @property
-    def default_max_steps(self) -> int:
-        return _BRAX_DEFAULT_EPISODE_LENGTH
-
-    def __post_init__(self):
-        if isinstance(self.brax_env, BraxWrapper):
-            warnings.warn(
-                "Environment wrapping should be handled by envelope. "
-                "Unwrapping brax environment before converting..."
-            )
-            object.__setattr__(self, "brax_env", self.brax_env.unwrapped)
+    def default_max_steps(self) -> int | None:
+        return self._max_steps
 
     @override
     def init(self, key: Key) -> tuple[State, Info]:
         brax_state = self.brax_env.reset(key)
-        info = InfoContainer(obs=brax_state.obs, reward=0.0, terminated=False)
-        info = info.update(**dataclasses.asdict(brax_state))
+        info = _brax_state_to_info(brax_state)
         return brax_state, info
 
     @override
     def step(self, state: State, action: PyTree) -> tuple[State, Info]:
         brax_state = self.brax_env.step(state, action)
-        info = InfoContainer(
-            obs=brax_state.obs,
-            reward=brax_state.reward,
-            terminated=jnp.asarray(brax_state.done, dtype=bool),
-        )
-        info = info.update(**dataclasses.asdict(brax_state))
+        info = _brax_state_to_info(brax_state)
         return brax_state, info
 
-    @override
     @cached_property
+    @override
     def action_space(self) -> spaces.Space:
         # All brax environments have action limit of -1 to 1
-        return spaces.Continuous.from_shape(
-            low=-1.0, high=1.0, shape=(self.brax_env.action_size,)
-        )
+        shape = (self.brax_env.action_size,)
+        return spaces.Continuous.from_shape(low=-1.0, high=1.0, shape=shape)
 
-    @override
     @cached_property
+    @override
     def observation_space(self) -> spaces.Space:
         # All brax environments have observation limit of -inf to inf
+        obs_size = cast(int, self.brax_env.observation_size)
         return spaces.Continuous.from_shape(
-            low=-jnp.inf, high=jnp.inf, shape=(self.brax_env.observation_size,)
+            low=-jnp.inf, high=jnp.inf, shape=(obs_size,)
         )
 
     def __deepcopy__(self, memo):
