@@ -1,7 +1,8 @@
 from envelope.adapters import create
-from envelope.environment import Environment, Info, InfoContainer
+from envelope.environment import Environment, InfoContainer
 from envelope.spaces import BatchedSpace, Continuous, Discrete, PyTreeSpace, Space
 from envelope.struct import Container, FrozenPyTreeNode, field, static_field
+from envelope.typing import Array, Info, Key, PyTree, State
 from envelope.wrappers import (
     AutoResetWrapper,
     ClipActionWrapper,
@@ -25,6 +26,10 @@ __all__ = [
     "Environment",
     "Info",
     "InfoContainer",
+    "Array",
+    "Key",
+    "PyTree",
+    "State",
     # Spaces
     "Space",
     "BatchedSpace",
