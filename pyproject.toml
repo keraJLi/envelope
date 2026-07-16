@@ -1,6 +1,6 @@
 [project]
 name = "jax-envelope"
-version = "0.4.2"
+version = "0.5.0"
 description = "A JAX-native environment interface with powerful wrappers and adapters for popular RL environment suites"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -41,44 +41,84 @@ Documentation = "https://github.com/keraJLi/envelope#readme"
 Issues = "https://github.com/keraJLi/envelope/issues"
 Changelog = "https://github.com/keraJLi/envelope/releases"
 
+[project.optional-dependencies]
+brax = ["brax>=0.13.0"]
+craftax = ["craftax>=1.6.0"]
+jumanji = ["jumanji>=1.0.1"]
+mujoco-playground = ["playground>=0.1.0"]
+navix = ["navix>=0.7.0"]
+adapters = [
+    "brax>=0.13.0",
+    "craftax>=1.6.0",
+    "jumanji>=1.0.1",
+    "playground>=0.1.0",
+    "navix>=0.7.0",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.hatch.metadata]
-allow-direct-references = true
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/envelope"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/docs",
+    "/.github",
+    "/README.md",
+    "/LICENSE",
+    "/pyproject.toml",
+    "/mkdocs.yml",
+    "/.readthedocs.yaml",
+]
+exclude = [
+    "/.gitignore",
+]
 
 [dependency-groups]
 adapters = [
     "brax>=0.13.0",
-    "craftax>=1.4.3",
+    "craftax>=1.6.0",
     "navix>=0.7.0",
     "jumanji>=1.0.1",
     "playground>=0.1.0",
     "gymnax",
     "kinetix-env",
 ]
+gymnax-adapter = ["gymnax"]
+kinetix-adapter = ["kinetix-env"]
 dev = [
     "hypothesis>=6.148.1",
+    "pre-commit>=4.0.0",
+    "ty>=0.0.59",
     "pytest>=9.0.0",
     "pytest-cov>=7.0.0",
     "ruff>=0.14.2",
 ]
-
 [tool.uv]
 override-dependencies = [
     "tensorflow-probability>=0.26.0.dev20260116",
 ]
 
 [tool.uv.sources]
-gymnax = { git = "https://github.com/RobertTLange/gymnax.git" }
-kinetix-env = { git = "https://github.com/FLAIROx/Kinetix.git" }
+gymnax = { git = "https://github.com/RobertTLange/gymnax.git", rev = "18f2e7f3cffafc7042c76fdc538c83957418a9a9" }
+kinetix-env = { git = "https://github.com/FLAIROx/Kinetix.git", rev = "df4de60cabd42dbd1c35fb5214fdc6728710e33d" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
   "adapters: tests requiring optional adapters dependencies",
+  "packaging: tests that build and inspect distribution artifacts",
 ]
+
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.ty.src]
+include = ["src/envelope"]
+
+[tool.ruff.lint]
+extend-select = ["I"]
