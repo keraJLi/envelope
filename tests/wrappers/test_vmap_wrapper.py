@@ -124,9 +124,7 @@ def test_normalization_works_on_both_sides_of_vmap(batch_size):
     )
     independent_state, independent_info = independent.init(jax.random.key(42))
 
-    shared = ObservationNormalizationWrapper(
-        VmapWrapper(base, batch_size=batch_size)
-    )
+    shared = ObservationNormalizationWrapper(VmapWrapper(base, batch_size=batch_size))
     shared_state, shared_info = shared.init(jax.random.key(42))
 
     assert independent_info.obs.shape == shared_info.obs.shape == (batch_size, 3)

@@ -125,9 +125,7 @@ class KinetixEnvelope(Environment):
         """
         env_kwargs = env_kwargs or {}
         if env_name in ("s", "m", "l"):
-            return cls.create_from_size(
-                env_name, env_params=env_params, **env_kwargs
-            )
+            return cls.create_from_size(env_name, env_params=env_params, **env_kwargs)
         if env_name == "random":
             return cls.create_random(env_params=env_params, **env_kwargs)
 
@@ -170,9 +168,7 @@ class KinetixEnvelope(Environment):
             static_env_params=static_env_params,
             auto_reset=auto_reset,
         )
-        empty_backend_info = _probe_gymnaxlike_info_placeholder(
-            kinetix_env, env_params
-        )
+        empty_backend_info = _probe_gymnaxlike_info_placeholder(kinetix_env, env_params)
         return cls(
             kinetix_env=kinetix_env,
             env_params=env_params,
@@ -228,9 +224,7 @@ class KinetixEnvelope(Environment):
             static_env_params=static_env_params,
             auto_reset=auto_reset,
         )
-        empty_backend_info = _probe_gymnaxlike_info_placeholder(
-            kinetix_env, env_params
-        )
+        empty_backend_info = _probe_gymnaxlike_info_placeholder(kinetix_env, env_params)
         return cls(
             kinetix_env=kinetix_env,
             env_params=env_params,
@@ -270,9 +264,7 @@ class KinetixEnvelope(Environment):
             static_env_params=static_env_params,
             auto_reset=auto_reset,
         )
-        empty_backend_info = _probe_gymnaxlike_info_placeholder(
-            kinetix_env, env_params
-        )
+        empty_backend_info = _probe_gymnaxlike_info_placeholder(kinetix_env, env_params)
         return cls(
             kinetix_env=kinetix_env,
             env_params=env_params,

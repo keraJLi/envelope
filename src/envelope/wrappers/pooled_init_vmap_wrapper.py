@@ -18,9 +18,7 @@ from envelope.wrappers.wrapper import (
 )
 
 
-class PooledInitVmapWrapper(
-    Wrapper, VectorizingWrapper, PooledInitializationWrapper
-):
+class PooledInitVmapWrapper(Wrapper, VectorizingWrapper, PooledInitializationWrapper):
     """Vectorize environments using lazily generated init states.
 
     Explicit ``reset`` calls still invoke the inner environment's vectorized ``reset``;

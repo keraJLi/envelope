@@ -83,9 +83,7 @@ def test_constraint_helpers_are_exposed_only_from_wrappers() -> None:
     "make_stack",
     [
         lambda: OuterTarget(RejectOuterTargets(ScalarToyEnv())),
-        lambda: OuterTarget(
-            IntermediateWrapper(RejectOuterTargets(ScalarToyEnv()))
-        ),
+        lambda: OuterTarget(IntermediateWrapper(RejectOuterTargets(ScalarToyEnv()))),
         lambda: OtherOuterTarget(RejectOuterTargets(ScalarToyEnv())),
     ],
     ids=["direct", "indirect", "multiple-match-types"],
@@ -101,9 +99,7 @@ def test_not_inside_searches_the_complete_outer_chain(make_stack) -> None:
     "make_stack",
     [
         lambda: RejectInnerTargets(InnerTarget(ScalarToyEnv())),
-        lambda: RejectInnerTargets(
-            IntermediateWrapper(InnerTarget(ScalarToyEnv()))
-        ),
+        lambda: RejectInnerTargets(IntermediateWrapper(InnerTarget(ScalarToyEnv()))),
         lambda: RejectInnerTargets(OtherInnerTarget(ScalarToyEnv())),
     ],
     ids=["direct", "indirect", "multiple-match-types"],

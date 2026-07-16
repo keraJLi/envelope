@@ -73,9 +73,7 @@ class GymnaxEnvelope(Environment):
         else:
             default_max_steps = _capture_horizon(env_params.max_steps_in_episode)
             if default_max_steps is not None:
-                _warn_preserved_horizon(
-                    "Gymnax", "env_params.max_steps_in_episode"
-                )
+                _warn_preserved_horizon("Gymnax", "env_params.max_steps_in_episode")
 
         empty_backend_info = _probe_gymnaxlike_info_placeholder(
             gymnax_env, env_params, step_fn=gymnax_env.step_env

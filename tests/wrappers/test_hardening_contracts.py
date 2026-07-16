@@ -84,9 +84,7 @@ def test_documented_episode_stack_runs_through_boundary_under_jit_scan():
 
 
 def test_autoreset_rejects_vectorization_on_the_inside():
-    with pytest.raises(
-        ValueError, match="AutoResetWrapper cannot contain VmapWrapper"
-    ):
+    with pytest.raises(ValueError, match="AutoResetWrapper cannot contain VmapWrapper"):
         AutoResetWrapper(VmapWrapper(StepCounterEnv(), batch_size=2))
 
 

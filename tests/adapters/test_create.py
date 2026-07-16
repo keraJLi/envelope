@@ -254,9 +254,7 @@ def test_create_forwards_env_name_env_kwargs_and_kwargs(monkeypatch):
     )
 
     env_kwargs = {"a": 1}
-    out = create(
-        "dummy::MyEnv", env_kwargs=env_kwargs, max_episode_steps=None, foo=2
-    )
+    out = create("dummy::MyEnv", env_kwargs=env_kwargs, max_episode_steps=None, foo=2)
 
     assert out is sentinel
     assert import_calls == ["dummy_mod"]

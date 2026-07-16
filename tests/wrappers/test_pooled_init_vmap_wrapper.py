@@ -172,9 +172,7 @@ def test_pooled_incompatibilities_are_rejected(env, error_pattern):
     ids=["vmap", "vmap-envs"],
 )
 def test_vectorization_is_rejected_inside_pool(env):
-    with pytest.raises(
-        ValueError, match="PooledInitVmapWrapper cannot contain Vmap"
-    ):
+    with pytest.raises(ValueError, match="PooledInitVmapWrapper cannot contain Vmap"):
         PooledInitVmapWrapper(env, batch_size=2, pool_size=2)
 
 

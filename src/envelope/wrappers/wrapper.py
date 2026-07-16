@@ -119,8 +119,7 @@ def _validate_stack(root: Environment) -> None:
                         f"{type(candidate).__name__}"
                     )
                 raise ValueError(
-                    f"{type(owner).__name__} cannot contain "
-                    f"{type(candidate).__name__}"
+                    f"{type(owner).__name__} cannot contain {type(candidate).__name__}"
                 )
 
 

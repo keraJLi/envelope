@@ -107,7 +107,9 @@ class _DummyEnv:
 def test_from_name_captures_default_before_disabling_time_limit(monkeypatch):
     dummy_env = _DummyEnv(_DummyParams(max_timesteps=100))
     monkeypatch.setattr(
-        craftax_envelope, "make_craftax_env_from_name", lambda *_args, **_kwargs: dummy_env
+        craftax_envelope,
+        "make_craftax_env_from_name",
+        lambda *_args, **_kwargs: dummy_env,
     )
     monkeypatch.setattr(
         craftax_envelope,
@@ -153,7 +155,9 @@ def test_from_name_preserves_explicit_auto_reset(monkeypatch):
 def test_from_name_preserves_nonfinite_explicit_horizon_without_warning(monkeypatch):
     dummy_env = _DummyEnv(_DummyParams(max_timesteps=100))
     monkeypatch.setattr(
-        craftax_envelope, "make_craftax_env_from_name", lambda *_args, **_kwargs: dummy_env
+        craftax_envelope,
+        "make_craftax_env_from_name",
+        lambda *_args, **_kwargs: dummy_env,
     )
     monkeypatch.setattr(
         craftax_envelope,

@@ -201,9 +201,7 @@ def test_from_name_dispatches_size_categories(
         KinetixEnvelope, "create_from_size", classmethod(create_from_size)
     )
 
-    result = KinetixEnvelope.from_name(
-        size, env_kwargs={"auto_reset": True}
-    )
+    result = KinetixEnvelope.from_name(size, env_kwargs={"auto_reset": True})
 
     assert result is sentinel
     assert calls == [(size, {"env_params": None, "auto_reset": True})]
