@@ -115,12 +115,7 @@ def test_action_space_flattened_discrete():
     w = FlattenActionWrapper(env)
     space = w.action_space
     assert isinstance(space, Discrete)
-    assert space.shape == (
-        2,
-    )  # 2 + 3 = 5 elements? No - Discrete(n=2) has shape (), Discrete(n=3) has ().
-    # Actually flatten_space on PyTreeSpace of Discrete: shape is PyTree of shapes. Discrete has shape ().
-    # So shapes are [(), ()] and dims [1, 1] for n=2 and n=3? No - prod(()) = 1. So total dim 2.
-    # And Discrete concatenation: n = concat([2, 3]) = array [2, 3], shape (2,). So action_space is Discrete(n=[2,3]).
+    # Each scalar Discrete leaf contributes one event dimension.
     assert space.shape == (2,)
 
 
@@ -178,13 +173,12 @@ def test_mixed_space_types_raises_value_error():
 
 
 def test_jit_step():
-    """Step produces correct output. Full JIT of step is not supported: unflatten_x uses jnp.split(..., indices) with space-derived indices, which triggers ConcretizationTypeError under jit."""
     env = PyTreeActionEnv()
     w = FlattenActionWrapper(env)
     key = jax.random.key(0)
     state, _ = w.init(key)
     action = w.action_space.sample(key)
-    next_state, info = w.step(state, action)
+    next_state, info = jax.jit(w.step)(state, action)
     assert next_state.shape == (5,)
     assert info.obs.shape == (5,)
 
@@ -212,4 +206,18 @@ def test_composability_with_vmap_wrapper():
     action = w.action_space.sample(key)
     assert action.shape == (batch_size, 5)
     state, info = w.step(state, action)
+    assert info.obs.shape == (batch_size, 5)
+
+
+def test_flatten_action_outside_vmap_preserves_batch_prefix_under_jit():
+    batch_size = 2
+    w = FlattenActionWrapper(VmapWrapper(PyTreeActionEnv(), batch_size=batch_size))
+    key = jax.random.key(0)
+    state, _ = w.init(key)
+    action = w.action_space.sample(key)
+
+    next_state, info = jax.jit(w.step)(state, action)
+
+    assert action.shape == (batch_size, 5)
+    assert next_state.shape == (batch_size, 5)
     assert info.obs.shape == (batch_size, 5)

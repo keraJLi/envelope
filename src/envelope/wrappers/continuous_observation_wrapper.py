@@ -5,13 +5,13 @@ import jax
 import jax.numpy as jnp
 
 from envelope.environment import Info, State
-from envelope.spaces import BatchedSpace, Continuous, Discrete, Space, peel_batched
+from envelope.spaces import Continuous, Discrete, Space, peel_batched, rebatch
 from envelope.typing import Key, PyTree
 from envelope.wrappers.wrapper import Wrapper
 
 
 def to_float(obs: PyTree) -> PyTree:
-    return jax.tree.map(lambda x: x.astype(jnp.float32), obs)
+    return jax.tree.map(lambda x: jnp.asarray(x, dtype=jnp.float32), obs)
 
 
 def to_continuous(space: Discrete | Continuous) -> Continuous:
@@ -46,8 +46,8 @@ class ContinuousObservationWrapper(Wrapper):
         info = info.update(obs=to_float(info.obs))
         return state, info
 
-    @override
     @cached_property
+    @override
     def observation_space(self) -> Space:
         batch_dims, base = peel_batched(self.env.observation_space)
 
@@ -56,6 +56,4 @@ class ContinuousObservationWrapper(Wrapper):
 
         space = jax.tree.map(to_continuous, base, is_leaf=is_leaf)
 
-        for batch_dim in batch_dims:
-            space = BatchedSpace(space, batch_dim)
-        return space
+        return rebatch(space, batch_dims)

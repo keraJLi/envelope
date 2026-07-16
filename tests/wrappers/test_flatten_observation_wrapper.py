@@ -176,3 +176,20 @@ def test_composability_with_vmap_wrapper():
     assert info.obs.shape == (batch_size, 5)
     assert isinstance(w.observation_space, BatchedSpace)
     assert w.observation_space.space.shape == (5,)
+
+
+def test_flatten_observation_outside_vmap_preserves_batch_prefix():
+    batch_size = 4
+    w = FlattenObservationWrapper(
+        VmapWrapper(
+            PyTreeObsEnv(shapes={"a": (2,), "b": (3,)}),
+            batch_size=batch_size,
+        )
+    )
+
+    state, info = w.init(jax.random.key(0))
+    _, step_info = jax.jit(w.step)(state, jnp.zeros((batch_size,)))
+
+    assert w.observation_space.shape == (batch_size, 5)
+    assert info.obs.shape == (batch_size, 5)
+    assert step_info.obs.shape == (batch_size, 5)
