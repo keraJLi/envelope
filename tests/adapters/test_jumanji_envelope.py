@@ -108,6 +108,28 @@ def test_bounded_array_spec_conversion_broadcasts_bounds(prng_key):
     assert space.contains(sample)
 
 
+def test_discrete_integer_dtype_is_preserved():
+    spec = specs.DiscreteArray(num_values=7, dtype=np.int8, name="int8")
+
+    space = convert_jumanji_spec_to_envelope_space(spec)
+
+    assert space.dtype == jnp.dtype(jnp.int8)
+
+
+def test_boolean_observations_use_int8():
+    class DummyTimestep:
+        observation = jnp.asarray([True, False])
+        reward = 0.0
+        extras = {}
+
+        def last(self):
+            return False
+
+    info = jumanji_envelope.convert_jumanji_to_envelope_info(DummyTimestep())
+
+    assert info.obs.dtype == jnp.int8
+
+
 def test_array_spec_conversion_float_is_unbounded_box():
     """Float Array converts to Continuous(-inf, +inf)."""
     spec = specs.Array(shape=(2, 3), dtype=np.float32, name="a")
@@ -130,6 +152,35 @@ def test_deepcopy_warning(jumanji_env):
     with pytest.warns(RuntimeWarning, match="Trying to deepcopy"):
         copied = deepcopy(env)
     assert copied is not None
+
+
+def test_default_time_limit_is_captured_then_disabled(monkeypatch):
+    class DummyEnv:
+        time_limit = 100
+
+    monkeypatch.setattr(
+        jumanji_envelope, "jumanji_make", lambda *_args, **_kwargs: DummyEnv()
+    )
+
+    env = JumanjiEnvelope.from_name("Dummy-v0")
+
+    assert env.default_max_steps == 100
+    assert env.jumanji_env.time_limit == jumanji_envelope._MAX_INT
+
+
+def test_explicit_time_limit_warns(monkeypatch):
+    class DummyEnv:
+        time_limit = 17
+
+    monkeypatch.setattr(
+        jumanji_envelope, "jumanji_make", lambda *_args, **_kwargs: DummyEnv()
+    )
+
+    with pytest.warns(UserWarning, match="time_limit"):
+        env = JumanjiEnvelope.from_name("Dummy-v0", env_kwargs={"time_limit": 17})
+
+    assert env.default_max_steps == 17
+    assert env.jumanji_env.time_limit == 17
 
 
 def test_namedtuple_observation_preserved_for_info():

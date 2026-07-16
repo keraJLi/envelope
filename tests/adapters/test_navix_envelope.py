@@ -11,6 +11,7 @@ pytestmark = pytest.mark.adapters
 pytest.importorskip("navix")
 
 import navix
+from navix.entities import EntityIds
 
 from envelope.adapters.navix_envelope import NavixEnvelope
 from envelope.spaces import Continuous, Discrete
@@ -41,7 +42,6 @@ def _navix_env_warmup(navix_env, prng_key):
     env.step(state, action)
 
 
-@pytest.mark.xfail(reason="navix obs space declares n=9 but env emits values >= 9")
 def test_navix_contract_smoke(prng_key, navix_env):
     assert_reset_step_contract(
         navix_env, key=prng_key, obs_check=assert_obs_matches_space
@@ -63,22 +63,28 @@ def test_action_space_conversion(navix_env):
     assert env.action_space.dtype == env.navix_env.action_space.dtype
 
 
-@pytest.mark.xfail(reason="navix obs space declares n=9 but env emits values >= 9")
-def test_observation_space_conversion(navix_env):
-    """Test conversion of navix observation spaces to envelope spaces."""
+def test_observation_space_contains_real_reset_observation(navix_env, prng_key):
+    """The converted cardinalities must include values emitted by Navix."""
     env = navix_env
-
-    # Check that observation space is converted correctly
     assert isinstance(env.observation_space, Discrete)
-    # Navix n might be scalar, envelope n is array - check if all elements equal navix n
-    navix_n = env.navix_env.observation_space.n
-    envelope_n = env.observation_space.n
-    if jnp.ndim(navix_n) == 0:  # scalar
-        assert jnp.all(envelope_n == navix_n)
-    else:
-        assert jnp.array_equal(envelope_n, navix_n)
+
+    _state, info = env.init(prng_key)
+
+    assert env.observation_space.contains(info.obs)
     assert env.observation_space.shape == env.navix_env.observation_space.shape
     assert env.observation_space.dtype == env.navix_env.observation_space.dtype
+
+
+def test_observation_entity_cardinality_comes_from_authoritative_ids(
+    navix_env, prng_key
+):
+    _state, info = navix_env.init(prng_key)
+    entity_cardinality = (
+        max(int(value) for name, value in vars(EntityIds).items() if name.isupper()) + 1
+    )
+
+    assert jnp.all(navix_env.observation_space.n[..., 0] == entity_cardinality)
+    assert jnp.all(info.obs[..., 0] < navix_env.observation_space.n[..., 0])
 
 
 def test_container_conversion_reset(navix_env, prng_key):
@@ -100,7 +106,7 @@ def test_container_conversion_reset(navix_env, prng_key):
     assert not info.terminated
     assert not info.truncated
 
-    # Check that extra timestep fields are preserved via update()
+    # Check that extra timestep fields are preserved at the top level.
     # (if navix timestep has extra fields beyond the standard ones)
     import dataclasses
 
@@ -136,7 +142,11 @@ def test_container_conversion_step(navix_env, prng_key):
 
 def test_episode_truncation(prng_key):
     """Test that episode truncation is correctly detected."""
-    env = _create_navix_env(max_steps=5)  # Very short episode
+    from envelope.wrappers.truncation_wrapper import TruncationWrapper
+
+    adapter = _create_navix_env(max_steps=5)
+    assert adapter.default_max_steps == 5
+    env = TruncationWrapper(env=adapter, max_steps=adapter.default_max_steps)
     key = prng_key
 
     state, info = env.init(key)
@@ -151,6 +161,24 @@ def test_episode_truncation(prng_key):
     # Verify truncation occurred
     assert info.truncated
     assert not info.terminated
+
+
+def test_explicit_max_steps_warns(monkeypatch):
+    from envelope.adapters import navix_envelope
+
+    class DummyEnv:
+        max_steps = 17
+
+    monkeypatch.setattr(
+        navix_envelope.navix, "make", lambda *_args, **_kwargs: DummyEnv()
+    )
+
+    with pytest.warns(UserWarning, match="max_steps"):
+        env = navix_envelope.NavixEnvelope.from_name(
+            "Dummy-v0", env_kwargs={"max_steps": 17}
+        )
+
+    assert env.default_max_steps == 17
 
 
 def test_unsupported_space_type():

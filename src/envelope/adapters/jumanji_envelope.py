@@ -1,21 +1,26 @@
 import warnings
 from copy import copy
 from functools import cached_property
-from typing import Any, override
+from typing import Any, cast, override
 
 import jax
 import jax.numpy as jnp
-import jumanji
 from jumanji.env import Environment as JumanjiEnv
+from jumanji.registration import make as jumanji_make
 from jumanji.specs import Array, BoundedArray, DiscreteArray, MultiDiscreteArray, Spec
 from jumanji.types import TimeStep as JumanjiTimeStep
 
 from envelope import spaces as envelope_spaces
+from envelope.adapters._common import (
+    _capture_horizon,
+    backend_container,
+    warn_if_wrapper_overlap,
+)
 from envelope.environment import Environment, Info, InfoContainer, State
 from envelope.struct import static_field
 from envelope.typing import Key, PyTree
 
-_MAX_INT = jnp.iinfo(jnp.int32).max
+_MAX_INT = int(jnp.iinfo(jnp.int32).max)
 
 
 class JumanjiEnvelope(Environment):
@@ -30,7 +35,7 @@ class JumanjiEnvelope(Environment):
         jumanji_env (JumanjiEnv): the Jumanji environment.
     """
 
-    jumanji_env: JumanjiEnv = static_field()
+    jumanji_env: JumanjiEnv = static_field(unsafe=True)
     _default_time_limit: int | None = static_field(default=None)
 
     @classmethod
@@ -41,19 +46,16 @@ class JumanjiEnvelope(Environment):
         Create a `JumanjiEnvelope` from a name and keyword arguments.
         `env_kwargs` are passed to `jumanji.make`.
         """
+        warn_if_wrapper_overlap("Jumanji", env_kwargs, ("time_limit",))
+
         env_kwargs = env_kwargs or {}
-        if "time_limit" in env_kwargs:
-            raise ValueError(
-                "Cannot override 'time_limit' directly. "
-                "Use TruncationWrapper for episode length control."
-            )
-
-        # Create env first with defaults to capture default time_limit
-        env = jumanji.make(env_name, **env_kwargs)
-        default_time_limit = getattr(env, "time_limit", None)
-        if default_time_limit is not None:
-            env.time_limit = _MAX_INT
-
+        env = jumanji_make(env_name, **env_kwargs)
+        time_limit = getattr(env, "time_limit", None)
+        if "time_limit" not in env_kwargs and time_limit is not None:
+            cast(Any, env).time_limit = _MAX_INT
+        default_time_limit = (
+            None if time_limit is None else _capture_horizon(time_limit)
+        )
         return cls(jumanji_env=env, _default_time_limit=default_time_limit)
 
     @property
@@ -72,13 +74,13 @@ class JumanjiEnvelope(Environment):
         info = convert_jumanji_to_envelope_info(timestep)
         return env_state, info
 
-    @override
     @cached_property
+    @override
     def action_space(self) -> envelope_spaces.Space:
         return convert_jumanji_spec_to_envelope_space(self.jumanji_env.action_spec)
 
-    @override
     @cached_property
+    @override
     def observation_space(self) -> envelope_spaces.Space:
         return convert_jumanji_spec_to_envelope_space(self.jumanji_env.observation_spec)
 
@@ -95,10 +97,28 @@ class JumanjiEnvelope(Environment):
 
 def convert_jumanji_to_envelope_info(timestep: JumanjiTimeStep) -> InfoContainer:
     term = jnp.asarray(timestep.last(), dtype=bool)
+    # Envelope deliberately has no boolean Space. Jumanji action masks are boolean
+    # BoundedArrays, so represent those leaves as int8 to match Discrete(n=2).
+    # All integer-valued Jumanji specs retain their declared dtype unchanged.
+    observation = jax.tree.map(_normalize_observation_leaf, timestep.observation)
     info = InfoContainer(
-        obs=timestep.observation, reward=timestep.reward, terminated=term
-    ).update(**timestep.extras)
+        obs=observation,
+        reward=jnp.asarray(timestep.reward),
+        terminated=term,
+    )
+    info = info.update(backend=backend_container(timestep.extras))
     return info
+
+
+def _normalize_observation_leaf(value: PyTree) -> PyTree:
+    """Represent boolean suite observations as integer-valued discrete samples."""
+    try:
+        array = jnp.asarray(value)
+    except (TypeError, ValueError):
+        return value
+    if jnp.issubdtype(array.dtype, jnp.bool_):
+        return array.astype(jnp.int8)
+    return value
 
 
 def convert_jumanji_spec_to_envelope_space(
@@ -121,6 +141,9 @@ def _spec_to_tree(spec: Spec | PyTree):
         return envelope_spaces.Discrete(n=n)
 
     if isinstance(spec, BoundedArray):
+        dtype = jnp.dtype(spec.dtype)
+        if jnp.issubdtype(dtype, jnp.bool_):
+            return envelope_spaces.Discrete(n=jnp.full(spec.shape, 2, dtype=jnp.int8))
         low = jnp.broadcast_to(jnp.asarray(spec.minimum, dtype=spec.dtype), spec.shape)
         high = jnp.broadcast_to(jnp.asarray(spec.maximum, dtype=spec.dtype), spec.shape)
         return envelope_spaces.Continuous(low=low, high=high)
