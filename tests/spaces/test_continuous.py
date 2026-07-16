@@ -173,43 +173,20 @@ def test_continuous_tree_operations():
 # ============================================================================
 
 
-def test_continuous_space_validation():
-    """Test that Continuous space validates bounds at appropriate points."""
-    key = jax.random.key(0)
+def test_continuous_space_defers_invariant_checks():
+    """Inconsistent bounds are accepted until downstream JAX operations use them."""
+    Continuous(low=jnp.zeros(1), high=jnp.ones(2))
+    Continuous(low=jnp.zeros(1, dtype=jnp.float16), high=jnp.ones(1))
+    Continuous(low=jnp.asarray(0), high=jnp.asarray(1))
 
-    # Test 1: Shape mismatch - fails when accessing shape property
-    with pytest.raises(ValueError, match="low and high must have the same shape"):
-        space = Continuous(low=jnp.array([0.0]), high=jnp.array([1.0, 2.0]))
-        _ = space.shape  # Access shape property to trigger validation
 
-    # Test 1b: Shape mismatch - also fails when calling sample() (which accesses shape)
-    with pytest.raises(ValueError, match="low and high must have the same shape"):
-        space = Continuous(low=jnp.array([0.0]), high=jnp.array([1.0, 2.0]))
-        space.sample(key)  # sample() accesses self.shape, triggering validation
+def test_continuous_space_validation_does_not_concretize_traced_parameters():
+    @jax.jit
+    def sample_continuous(low, high, key):
+        return Continuous(low=low, high=high).sample(key)
 
-    # Test 2: Dtype mismatch - fails when accessing dtype property
-    # Note: JAX may auto-convert dtypes in some cases, so this might not always fail
-    # We test with explicit dtypes that JAX won't auto-convert
-    try:
-        space = Continuous(
-            low=jnp.array([0.0], dtype=jnp.float32),
-            high=jnp.array([1.0], dtype=jnp.float16),
-        )
-        _ = space.dtype  # Access dtype property to trigger validation
-        # If we get here, JAX auto-converted the dtype, which is acceptable
-    except ValueError as e:
-        assert "low and high must have the same dtype" in str(e)
-
-    # Test 2b: Dtype mismatch - also fails when calling sample() (which accesses dtype)
-    try:
-        space = Continuous(
-            low=jnp.array([0.0], dtype=jnp.float32),
-            high=jnp.array([1.0], dtype=jnp.float16),
-        )
-        space.sample(key)  # sample() accesses self.dtype, triggering validation
-        # If we get here, JAX auto-converted the dtype, which is acceptable
-    except ValueError as e:
-        assert "low and high must have the same dtype" in str(e)
+    sample = sample_continuous(jnp.zeros(2), jnp.ones(2), jax.random.key(0))
+    assert sample.shape == (2,)
 
 
 # ============================================================================
@@ -217,16 +194,42 @@ def test_continuous_space_validation():
 # ============================================================================
 
 
-def test_continuous_contains_wrong_dtype():
-    """Test Continuous.contains with wrong dtype values."""
-    space = Continuous.from_shape(low=0.0, high=1.0, shape=(2,))
+@pytest.mark.parametrize("dtype", [jnp.float16, jnp.float32, jnp.int8, jnp.int32])
+def test_continuous_contains_accepts_real_numeric_dtypes(dtype):
+    space = Continuous.from_shape(low=0.0, high=2.0, shape=(2,))
 
-    # Should work with float32
-    assert space.contains(jnp.array([0.5, 0.5], dtype=jnp.float32))
+    assert space.contains(jnp.array([1, 2], dtype=dtype))
 
-    # Should also work with int (gets converted/compared)
-    # Note: int array [0, 1] should be in range [0.0, 1.0]
-    assert space.contains(jnp.array([0, 1], dtype=jnp.int32))
+
+@pytest.mark.parametrize(
+    "candidate", [jnp.array([True, False]), jnp.array([1 + 0j, 2 + 0j])]
+)
+def test_continuous_contains_rejects_non_real_numeric_dtypes(candidate):
+    space = Continuous.from_shape(low=0.0, high=2.0, shape=(2,))
+
+    assert not space.contains(candidate)
+
+
+@pytest.mark.parametrize("candidate", [jnp.array(0.5), jnp.ones((1, 2))])
+def test_continuous_contains_requires_exact_shape(candidate):
+    assert not Continuous.from_shape(0.0, 1.0, (2,)).contains(candidate)
+
+
+@pytest.mark.parametrize(
+    "space",
+    [
+        Continuous.from_shape(-jnp.inf, jnp.inf, (3,)),
+        Continuous(
+            low=jnp.array([-jnp.inf, 0.0, -jnp.inf, 1.0]),
+            high=jnp.array([jnp.inf, jnp.inf, 2.0, 1.0]),
+        ),
+    ],
+)
+def test_unbounded_continuous_sampling_is_finite_and_contained(space):
+    samples = jax.vmap(space.sample)(jax.random.split(jax.random.key(0), 32))
+
+    assert jnp.all(jnp.isfinite(samples))
+    assert jnp.all(jax.vmap(space.contains)(samples))
 
 
 def test_continuous_space_replace():

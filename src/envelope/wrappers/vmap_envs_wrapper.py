@@ -8,10 +8,10 @@ from envelope import spaces
 from envelope.environment import Environment, Info
 from envelope.struct import field
 from envelope.typing import Key, PyTree
-from envelope.wrappers.wrapper import WrappedState, Wrapper
+from envelope.wrappers.wrapper import VectorizingWrapper, WrappedState, Wrapper
 
 
-class VmapEnvsWrapper(Wrapper):
+class VmapEnvsWrapper(Wrapper, VectorizingWrapper):
     """
     Vectorizes over a batched collection of environment instances (vmapping over 'self').
 
@@ -58,22 +58,22 @@ class VmapEnvsWrapper(Wrapper):
         )
         return next_state, info
 
+    @cached_property
     @override
-    @property
     def observation_space(self) -> spaces.Space:
         env0 = _index_env(self.env, 0, self.batch_size)
         return spaces.BatchedSpace(
             space=env0.observation_space, batch_size=self.batch_size
         )
 
-    @override
     @cached_property
+    @override
     def action_space(self) -> spaces.Space:
         env0 = _index_env(self.env, 0, self.batch_size)
         return spaces.BatchedSpace(space=env0.action_space, batch_size=self.batch_size)
 
-    @override
     @property
+    @override
     def unwrapped(self) -> Environment:
         return self.env.unwrapped
 

@@ -19,6 +19,16 @@ purposes in `envelope`:
   `Container`, and holds observation, reward and terminated/truncated flags. Wrappers
   can add information to this, such as current episode statistics.
 
+`Container` sorts additional field names lexicographically, so insertion order does not
+change the Container node definition. JAX control-flow branches must still emit the same
+field names and value pytrees.
+
+Safe `static_field()` values must be hashable, which rejects arrays and ordinary mutable
+containers. Caller-managed opaque metadata may opt out with `static_field(unsafe=True)`.
+
+If a `FrozenPyTreeNode` subclass defines `__post_init__`, it must call
+`super().__post_init__()` to run static-field validation.
+
 
 ## API Reference
 
@@ -29,3 +39,5 @@ purposes in `envelope`:
 ::: envelope.struct.static_field
 
 ::: envelope.struct.Container
+
+::: envelope.struct.zeros_like

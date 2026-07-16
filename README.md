@@ -26,7 +26,9 @@ env = envelope.wrappers.ObservationNormalizationWrapper(env)
 ## 💪 Powerful, composable wrappers!
 
 - **Carry state across episodes** to track running statistics, for example to normalize observations.
-- **Composable wrappers** can be stacked in any order. For example, `ObservationNormalizationWrapper` before vs. after `VmapWrapper` gives per-env vs. global normalization.
+- **Explicit wrapper composition** keeps episode boundaries correct. See the
+  [wrapper compatibility guide](https://github.com/keraJLi/envelope/blob/main/docs/api/wrappers.md#stack-constraints)
+  for enforced constraints and ordering examples.
 
 ## 🔌 Adapters for existing suites
 
@@ -56,13 +58,18 @@ let's you create environments from any of the above!
 - **Adapters suite (requires full adapters dependency group)**:
   - `uv sync --group adapters`
   - `uv run pytest -m adapters`
-  - If any adapter dependency is missing/broken, the run will fail fast with an error telling you what to install.
+  - Tests for suites unavailable in a partial installation are skipped.
 
 ## 🏗️ Installation
 
 ```bash
 pip install jax-envelope
+pip install "jax-envelope[navix]"       # one published adapter
+pip install "jax-envelope[adapters]"    # all published adapters
 ```
+
+Gymnax and Kinetix are temporarily source-backed development adapters rather than
+published extras.
 
 ## 💞 Related projects
 

@@ -1,6 +1,6 @@
 """Compatibility wrappers for various RL environment libraries."""
 
-from typing import Any, Protocol, Self
+from typing import Any, Literal, Protocol
 
 from envelope.environment import Environment
 
@@ -26,7 +26,7 @@ class HasFromNameInit(Protocol):
         env_name: str,
         env_kwargs: dict[str, Any] | None = None,
         **kwargs: dict[str, Any],
-    ) -> Self:
+    ) -> Environment:
         """Creates an environment from a name and keyword arguments. Unless otherwise
         noted, the created environment will have its default parameters, with
         truncation and auto-reset disabled.
@@ -39,13 +39,20 @@ class HasFromNameInit(Protocol):
 
 
 def create(
-    env_name: str, env_kwargs: dict[str, Any] | None = None, **kwargs: dict[str, Any]
+    env_name: str,
+    env_kwargs: dict[str, Any] | None = None,
+    *,
+    max_episode_steps: Literal["default"] | int | None = "default",
+    **kwargs: dict[str, Any],
 ) -> Environment:
     """Create an environment from a prefixed environment ID.
 
     Args:
         env_name: Environment ID in the format "suite::env_name" (e.g., "brax::ant")
         env_kwargs: Keyword arguments passed to the suite's environment constructor
+        max_episode_steps: Episode horizon. When omitted or set to ``"default"``, use
+            the adapter's captured backend default; a positive integer overrides it;
+            ``None`` disables truncation.
         **kwargs: Additional keyword arguments passed to the environment wrapper
 
     Returns:
@@ -85,18 +92,19 @@ def create(
     except ImportError as e:
         raise ImportError(
             f"Failed to import {suite} wrapper. "
-            f"Make sure you have installed the '{suite}' dependencies. "
+            f"Make sure the '{suite}' library is installed. "
             f"Original error: {e}"
         ) from e
 
     env = env_class.from_name(env_name, env_kwargs=env_kwargs, **kwargs)
 
-    # Wrap with TruncationWrapper using adapter's default
-    default_max_steps = getattr(env, "default_max_steps", None)
-    if default_max_steps is not None:
+    if max_episode_steps == "default":
+        max_episode_steps = env.default_max_steps
+
+    if max_episode_steps is not None:
         from envelope.wrappers.truncation_wrapper import TruncationWrapper
 
-        env = TruncationWrapper(env=env, max_steps=int(default_max_steps))
+        env = TruncationWrapper(env=env, max_steps=max_episode_steps)
 
     return env
 

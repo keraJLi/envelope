@@ -9,45 +9,60 @@ jobs:
     name: Test Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
+      - name: Install uv and Python ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-
-      - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: |
-          test -f uv.lock
-          uv sync --group dev --locked
+        run: uv sync --group dev --locked
 
       - name: Run tests
-        run: uv run pytest -m "not adapters"
+        run: uv run pytest -m "not adapters and not packaging"
 
   build:
-    name: Build distribution
+    name: Build and verify distribution
     needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: "3.12"
 
-      - name: Build package
-        run: uv build
+      - name: Verify tag matches project version
+        run: |
+          VERSION=$(uv run --no-project python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          test "${GITHUB_REF_NAME}" = "v${VERSION}"
+
+      - name: Install build verification dependencies
+        run: uv sync --group dev --locked
+
+      - name: Build distribution
+        run: uv build --no-sources
+
+      - name: Inspect distribution contents
+        run: ENVELOPE_DIST_DIR=dist uv run pytest -m packaging
+
+      - name: Smoke-test the built wheel
+        run: uv run --no-project --with dist/*.whl python -c "import envelope, importlib.resources; assert importlib.resources.files('envelope').joinpath('py.typed').is_file()"
 
       - name: Store distribution packages
         uses: actions/upload-artifact@v4
         with:
           name: python-package-distributions
           path: dist/
+          if-no-files-found: error
 
   publish:
     name: Publish to PyPI

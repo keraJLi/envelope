@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from functools import cached_property
 from typing import override
 
 import jax
@@ -10,7 +9,12 @@ from envelope.typing import Key, PyTree
 
 
 class Space(ABC, FrozenPyTreeNode):
-    """Base class for all spaces. Spaces are immutable and hashable."""
+    """Base class for immutable JAX-compatible spaces.
+
+    Space constructors assume their arguments are internally consistent. In
+    particular, callers are responsible for valid bounds and cardinalities, matching
+    shapes and dtypes, positive batch sizes, and matching PyTree structures.
+    """
 
     @property
     @abstractmethod
@@ -27,7 +31,7 @@ class Space(ABC, FrozenPyTreeNode):
         """Sample a random element from the space."""
 
     @abstractmethod
-    def contains(self, x: PyTree) -> bool:
+    def contains(self, x: PyTree) -> jax.Array:
         """Check if `self` contains a sample `x`."""
 
 
@@ -43,7 +47,7 @@ class Discrete(Space):
     n: int | jax.Array
 
     @classmethod
-    def from_shape(cls, n: int, shape: tuple[int, ...]) -> "Discrete":
+    def from_shape(cls, n: int | jax.Array, shape: tuple[int, ...]) -> "Discrete":
         """
         Create a Discrete space from a shape and a number of elements. This is
         a shorthand for `Discrete` with `n` being expanded to the shape.
@@ -61,18 +65,28 @@ class Discrete(Space):
     def sample(self, key: Key) -> jax.Array:
         return jax.random.randint(key, self.shape, 0, self.n, dtype=self.dtype)
 
-    def contains(self, x: int | jax.Array) -> bool:
-        return jnp.all(x >= 0) & jnp.all(x < self.n)
+    def contains(self, x: int | jax.Array) -> jax.Array:
+        try:
+            candidate = jnp.asarray(x)
+        except (TypeError, ValueError):
+            return jnp.asarray(False)
+
+        if candidate.shape != self.shape:
+            return jnp.asarray(False)
+        if not jnp.issubdtype(candidate.dtype, jnp.integer):
+            return jnp.asarray(False)
+        return jnp.all(candidate >= 0) & jnp.all(candidate < self.n)
 
     def __repr__(self) -> str:
         return f"Discrete(shape={self.shape}, dtype={self.dtype}, n={self.n})"
 
 
 class Continuous(Space):
-    """
-    A continuous space with a given lower and upper bound. `low` and `high` can be
-    scalars or arrays. The shape and dtype of the space are inferred from `low` and
-    `high`.
+    """A continuous space with elementwise lower and upper bounds.
+
+    ``low`` and ``high`` can be scalars or arrays. Their shared shape and dtype define
+    the space. Sampling treats each element independently, so a single space may mix
+    finite, one-sided, and unbounded dimensions.
 
     Args:
         low (float | jax.Array): The lower bound of the space.
@@ -111,12 +125,69 @@ class Continuous(Space):
 
     @override
     def sample(self, key: Key) -> jax.Array:
-        uniform_sample = jax.random.uniform(key, self.shape, self.dtype)
-        return self.low + uniform_sample * (self.high - self.low)
+        """Sample independently from every dimension of the space.
+
+        The distribution for each element depends on its bounds:
+
+        - Two finite bounds use a uniform distribution over the interval.
+        - A finite lower bound uses that bound plus a unit exponential sample.
+        - A finite upper bound uses that bound minus a unit exponential sample.
+        - Two infinite bounds use a standard normal distribution.
+
+        One-sided and unbounded samples are clipped to the finite range representable
+        by the space's dtype.
+
+        Args:
+            key: JAX pseudorandom key.
+
+        Returns:
+            An array with the space's shape and dtype.
+        """
+        uniform_key, normal_key, exponential_key = jax.random.split(key, 3)
+        low = jnp.asarray(self.low)
+        high = jnp.asarray(self.high)
+        finite_low = jnp.isfinite(low)
+        finite_high = jnp.isfinite(high)
+
+        uniform = jax.random.uniform(uniform_key, self.shape, self.dtype)
+        normal = jax.random.normal(normal_key, self.shape, self.dtype)
+        exponential = jax.random.exponential(exponential_key, self.shape, self.dtype)
+
+        # A convex combination avoids overflow for wide but finite intervals.
+        bounded = (1 - uniform) * low + uniform * high
+        dtype_info = jnp.finfo(self.dtype)
+        lower_bounded = jnp.minimum(low + exponential, dtype_info.max)
+        upper_bounded = jnp.maximum(high - exponential, dtype_info.min)
+        unbounded = jnp.clip(normal, dtype_info.min, dtype_info.max)
+
+        return jnp.where(
+            finite_low & finite_high,
+            bounded,
+            jnp.where(
+                finite_low,
+                lower_bounded,
+                jnp.where(finite_high, upper_bounded, unbounded),
+            ),
+        )
 
     @override
-    def contains(self, x: jax.Array) -> bool:
-        return jnp.all((x >= jnp.asarray(self.low)) & (x <= jnp.asarray(self.high)))
+    def contains(self, x: jax.Array) -> jax.Array:
+        try:
+            candidate = jnp.asarray(x)
+        except (TypeError, ValueError):
+            return jnp.asarray(False)
+
+        if candidate.shape != self.shape:
+            return jnp.asarray(False)
+
+        is_integer = jnp.issubdtype(candidate.dtype, jnp.integer)
+        is_floating = jnp.issubdtype(candidate.dtype, jnp.floating)
+        if not (is_integer or is_floating):
+            return jnp.asarray(False)
+
+        return jnp.all(
+            (candidate >= jnp.asarray(self.low)) & (candidate <= jnp.asarray(self.high))
+        )
 
     def __repr__(self) -> str:
         dtype_str = getattr(self.dtype, "__name__", str(self.dtype))
@@ -148,6 +219,7 @@ class PyTreeSpace(Space):
                     f"PyTreeSpace leaves must be Discrete or Continuous,"
                     f"got {type(leaf).__name__}"
                 )
+        super().__post_init__()
 
     @override
     def sample(self, key: Key) -> PyTree:
@@ -159,8 +231,7 @@ class PyTreeSpace(Space):
         return jax.tree.unflatten(treedef, samples)
 
     @override
-    def contains(self, x: PyTree) -> bool:
-        # Use tree.map to check containment for each space-value pair
+    def contains(self, x: PyTree) -> jax.Array:
         contains = jax.tree.map(
             lambda space, xi: space.contains(xi),
             self.tree,
@@ -201,6 +272,13 @@ def peel_batched(space: Space) -> tuple[tuple[int, ...], Space]:
     return tuple(dims), s
 
 
+def rebatch(space: Space, batch_dims: tuple[int, ...]) -> Space:
+    """Reapply batch dimensions returned by ``peel_batched``."""
+    for batch_dim in reversed(batch_dims):
+        space = BatchedSpace(space=space, batch_size=batch_dim)
+    return space
+
+
 class BatchedSpace(Space):
     """
     A view that adds a leading batch dimension to a base `Space` without
@@ -236,7 +314,7 @@ class BatchedSpace(Space):
         return jax.vmap(self.space.sample)(keys)
 
     @override
-    def contains(self, x: PyTree) -> bool:
+    def contains(self, x: PyTree) -> jax.Array:
         """
         `BatchedSpace.contains` checks if each entry of `x` along the leading dimension
         is contained in the base (unbatched) `Space`.
@@ -244,11 +322,11 @@ class BatchedSpace(Space):
         result = jax.vmap(self.space.contains)(x)
         return jnp.all(jnp.asarray(result))
 
+    @property
     @override
-    @cached_property
-    def shape(self) -> tuple[int, ...] | PyTree:
+    def shape(self) -> PyTree:
         """
-        The shape of the `BatchedSpace` is the leading batch dimension prepend the
+        The shape of the `BatchedSpace` is the leading batch dimension prepended to the
         shape of the wrapped `Space`. If the wrapped `Space` is a `PyTreeSpace`, the
         shape is a PyTree of the same structure, with the leading batch dimension
         prepended to the shape of each leaf `Space`.
@@ -262,10 +340,9 @@ class BatchedSpace(Space):
             )
         return batch_dims + base.shape
 
-    @override
     @property
-    def dtype(self) -> jnp.dtype | PyTree:
-        """The dtype of the base space (batch dimensions don't affect dtype)."""
+    @override
+    def dtype(self) -> PyTree:
         _, base = peel_batched(self)
         return base.dtype
 

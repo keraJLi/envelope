@@ -57,8 +57,8 @@ def test_brax_info_preserves_brax_fields_on_reset(brax_fast_env, prng_key):
 
     # Check extra Brax state fields are preserved
     # Brax state typically has: obs, reward, done, metrics, info
-    assert hasattr(info, "done")
-    assert hasattr(info, "metrics")
+    assert hasattr(info.backend, "done")
+    assert hasattr(info.backend, "metrics")
 
     # Verify state fields match what was returned
     assert state is not None
@@ -72,18 +72,11 @@ def test_brax_terminated_matches_done_on_step(brax_fast_env, prng_key):
     state, _info = env.init(key_reset)
     action = env.action_space.sample(key_action)
     _next_state, info = env.step(state, action)
-    assert hasattr(info, "done")
-    assert info.terminated == info.done
+    assert hasattr(info.backend, "done")
+    assert info.terminated == info.backend.done
 
 
-def test_from_name_with_auto_reset_error():
-    """Test that from_name raises ValueError when using auto_reset."""
-    with pytest.raises(ValueError, match="Cannot override 'auto_reset' directly"):
-        BraxEnvelope.from_name("fast", env_kwargs={"auto_reset": True})
-
-
-def test_wrapper_unwrapping():
-    """Test that wrapped Brax environments are properly unwrapped."""
+def test_pre_wrapped_brax_environment_is_preserved():
     from brax.envs import create as brax_create
 
     # Create a base Brax environment
@@ -99,15 +92,9 @@ def test_wrapper_unwrapping():
 
     wrapped_env = SimpleWrapper(base_env)
 
-    # Initialize BraxEnvelope with wrapped environment
-    with pytest.warns(
-        UserWarning, match="Environment wrapping should be handled by envelope"
-    ):
-        env = BraxEnvelope(brax_env=wrapped_env)
+    env = BraxEnvelope(brax_env=wrapped_env)
 
-    # Verify environment is properly unwrapped
-    assert not isinstance(env.brax_env, BraxWrapper)
-    assert env.brax_env is wrapped_env.unwrapped
+    assert env.brax_env is wrapped_env
 
 
 def test_deepcopy_warning(brax_fast_env, prng_key):

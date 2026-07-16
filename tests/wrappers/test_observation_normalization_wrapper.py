@@ -1,20 +1,119 @@
 import pickle
+from functools import cached_property
 
 import jax
 import jax.numpy as jnp
 import pytest
 
+from envelope.environment import Environment, InfoContainer
+from envelope.spaces import Continuous, PyTreeSpace
+from envelope.wrappers.autoreset_wrapper import AutoResetWrapper
 from envelope.wrappers.normalization import RunningMeanVar, update_rmv
 from envelope.wrappers.observation_normalization_wrapper import (
     ObservationNormalizationWrapper,
 )
+from envelope.wrappers.pooled_init_vmap_wrapper import PooledInitVmapWrapper
+from envelope.wrappers.vmap_envs_wrapper import VmapEnvsWrapper
 from envelope.wrappers.vmap_wrapper import VmapWrapper
 from tests.wrappers.helpers import (
     ConstantObsEnv,
     IntObsEnv,
+    PyTreeObsEnv,
     RandomImageEnv,
+    StepCounterEnv,
     VectorObsEnv,
 )
+
+
+class RowStructuredObsEnv(Environment):
+    """Two rows with distinct means, used to test broadcast-aware statistics."""
+
+    @cached_property
+    def observation_space(self):
+        return Continuous.from_shape(-jnp.inf, jnp.inf, (2, 3, 1))
+
+    @cached_property
+    def action_space(self):
+        return Continuous(low=-1.0, high=1.0)
+
+    def init(self, key):
+        obs = jnp.asarray([[[0.0], [0.0], [0.0]], [[10.0], [10.0], [10.0]]])
+        return obs, InfoContainer(
+            obs=obs, reward=0.0, terminated=False, truncated=False
+        )
+
+    def reset(self, state, key):
+        return self.init(key)
+
+    def step(self, state, action):
+        return state, InfoContainer(
+            obs=state, reward=0.0, terminated=False, truncated=False
+        )
+
+
+class HeterogeneousStatsEnv(Environment):
+    """Leaves whose broadcast statistics consume different sample counts."""
+
+    @cached_property
+    def observation_space(self):
+        return PyTreeSpace(
+            (
+                Continuous.from_shape(-jnp.inf, jnp.inf, (2,)),
+                Continuous.from_shape(-jnp.inf, jnp.inf, (2, 3)),
+            )
+        )
+
+    @cached_property
+    def action_space(self):
+        return Continuous(low=-1.0, high=1.0)
+
+    def init(self, key):
+        obs = (
+            jnp.asarray([1.0, 3.0]),
+            jnp.asarray([[0.0, 2.0, 4.0], [10.0, 12.0, 14.0]]),
+        )
+        return obs, InfoContainer(
+            obs=obs, reward=0.0, terminated=False, truncated=False
+        )
+
+    def reset(self, state, key):
+        return self.init(key)
+
+    def step(self, state, action):
+        return state, InfoContainer(
+            obs=state, reward=0.0, terminated=False, truncated=False
+        )
+
+
+class ActionTerminationEnv(Environment):
+    """Scalar env whose batch elements can finish on different actions."""
+
+    @cached_property
+    def observation_space(self):
+        return Continuous(low=-jnp.inf, high=jnp.inf)
+
+    @cached_property
+    def action_space(self):
+        return Continuous(low=-1.0, high=1.0)
+
+    def init(self, key):
+        state = jnp.asarray(0.0, dtype=jnp.float32)
+        return state, InfoContainer(
+            obs=state,
+            reward=jnp.asarray(0.0, dtype=jnp.float32),
+            terminated=jnp.asarray(False),
+            truncated=jnp.asarray(False),
+        )
+
+    def step(self, state, action):
+        next_state = state + action
+        return next_state, InfoContainer(
+            obs=next_state,
+            reward=action,
+            terminated=action >= 0.75,
+            truncated=jnp.asarray(False),
+        )
+
 
 # -----------------------------------------------------------------------------
 # Core: stats_spec inference and dtype validation
@@ -26,8 +125,7 @@ def test_stats_spec_infers_from_unbatched_space():
     # Wrap with vmap first to add batch dimension, then normalize
     vm = VmapWrapper(base, batch_size=7)
     w = ObservationNormalizationWrapper(vm)
-    # stats_spec should match unbatched obs leaves
-    sd = w.stats_spec  # jax.ShapeDtypeStruct for leaf
+    sd = w.stats_spec
     assert hasattr(sd, "shape") and hasattr(sd, "dtype")
     assert sd.shape == base.observation_space.shape
     assert sd.dtype == base.observation_space.dtype
@@ -37,6 +135,22 @@ def test_non_floating_observation_raises():
     env = IntObsEnv()
     with pytest.raises(ValueError):
         _ = ObservationNormalizationWrapper(env)
+
+
+@pytest.mark.parametrize("spec_source", ["inferred", "provided"])
+def test_pytree_stats_spec_is_available_and_jittable(spec_source):
+    env = PyTreeObsEnv(shapes={"a": (2,), "b": (3,)})
+    expected_spec = {
+        "a": jax.ShapeDtypeStruct((2,), jnp.float32),
+        "b": jax.ShapeDtypeStruct((3,), jnp.float32),
+    }
+    stats_spec = None if spec_source == "inferred" else expected_spec
+
+    wrapper = ObservationNormalizationWrapper(env, stats_spec=stats_spec)
+
+    assert jax.tree.structure(wrapper.stats_spec) == jax.tree.structure(expected_spec)
+    _state, info = jax.jit(wrapper.init)(jax.random.key(0))
+    assert jax.tree.structure(info.obs) == jax.tree.structure(expected_spec)
 
 
 # -----------------------------------------------------------------------------
@@ -108,6 +222,125 @@ def test_jit_compatibility_smoke():
     cnt, shape = run_once(key, action)
     # Only check shapes; count semantics differ under various compositions
     assert shape == (4, 3)
+
+
+def _shared_autoreset_normalizer() -> ObservationNormalizationWrapper:
+    termination_steps = jnp.asarray([2, 3])
+    envs = jax.vmap(
+        lambda terminate_after: StepCounterEnv(terminate_after=terminate_after)
+    )(termination_steps)
+    return ObservationNormalizationWrapper(
+        VmapEnvsWrapper(AutoResetWrapper(envs), batch_size=2)
+    )
+
+
+def _normalized_scalar(raw, state):
+    return (raw - state.rmv_state.mean) / (state.rmv_state.std + 1e-8)
+
+
+def test_shared_normalization_handles_partial_terminal_observations():
+    wrapper = _shared_autoreset_normalizer()
+    action = jnp.asarray([0.25, 0.75], dtype=jnp.float32)
+
+    state, initial = wrapper.init(jax.random.key(0))
+
+    assert state.rmv_state.count == 2
+    assert jnp.all(~initial.final_valid)
+    assert jnp.allclose(initial.final.obs, jnp.zeros(2))
+    assert jnp.allclose(initial.final.unnormalized_obs, jnp.zeros(2))
+
+    state, _ = wrapper.step(state, action)
+    state, first_completion = jax.jit(wrapper.step)(state, action)
+
+    assert jnp.array_equal(first_completion.terminated, jnp.asarray([True, False]))
+    assert jnp.array_equal(first_completion.final_valid, jnp.asarray([True, False]))
+    assert jnp.allclose(
+        first_completion.final.obs[0],
+        _normalized_scalar(first_completion.final.unnormalized_obs[0], state),
+    )
+    assert first_completion.final.obs[1] == 0
+
+    state, second_completion = wrapper.step(state, action)
+
+    assert jnp.array_equal(second_completion.terminated, jnp.asarray([False, True]))
+    assert jnp.all(second_completion.final_valid)
+    assert jnp.allclose(
+        second_completion.final.obs,
+        _normalized_scalar(second_completion.final.unnormalized_obs, state),
+    )
+    assert state.rmv_state.count == 8
+
+
+def test_shared_normalization_preserves_final_across_manual_reset_and_scan():
+    wrapper = _shared_autoreset_normalizer()
+    actions = jnp.full((3, 2), 0.5, dtype=jnp.float32)
+    state, _ = wrapper.init(jax.random.key(0))
+
+    @jax.jit
+    def run_steps(scan_state, scan_actions):
+        return jax.lax.scan(wrapper.step, scan_state, scan_actions)
+
+    state, infos = run_steps(state, actions)
+    raw_final = infos.final.unnormalized_obs[-1]
+    count_before_reset = state.rmv_state.count
+
+    state, reset_info = jax.jit(wrapper.reset)(state, jax.random.key(1))
+
+    assert jnp.array_equal(reset_info.final.unnormalized_obs, raw_final)
+    assert jnp.allclose(
+        reset_info.final.obs,
+        _normalized_scalar(reset_info.final.unnormalized_obs, state),
+    )
+    assert state.rmv_state.count == count_before_reset + 2
+
+
+def test_terminal_placeholder_uses_normalized_dtype_and_fixed_schema():
+    wrapper = ObservationNormalizationWrapper(
+        VmapWrapper(AutoResetWrapper(StepCounterEnv(terminate_after=1)), batch_size=2),
+        stats_spec=jax.ShapeDtypeStruct((), jnp.float16),
+    )
+
+    state, initial = jax.jit(wrapper.init)(jax.random.key(0))
+    state, completed = jax.jit(wrapper.step)(
+        state, jnp.asarray([0.25, 0.75], dtype=jnp.float32)
+    )
+
+    assert initial.final.obs.dtype == jnp.float16
+    assert jnp.all(initial.final.obs == 0)
+    assert initial.final.unnormalized_obs.dtype == jnp.float32
+    assert jax.tree.structure(initial) == jax.tree.structure(completed)
+    assert completed.final.obs.dtype == jnp.float16
+    assert completed.final.unnormalized_obs.dtype == jnp.float32
+    assert state.rmv_state.count == 4
+
+
+def test_shared_normalization_can_wrap_pooled_initialization():
+    wrapper = ObservationNormalizationWrapper(
+        PooledInitVmapWrapper(ActionTerminationEnv(), batch_size=2, pool_size=2)
+    )
+    state, initial = wrapper.init(jax.random.key(0))
+
+    assert jnp.all(initial.final.obs == 0)
+    assert state.rmv_state.count == 2
+
+    state, first = jax.jit(wrapper.step)(
+        state, jnp.asarray([1.0, 0.25], dtype=jnp.float32)
+    )
+
+    assert jnp.array_equal(first.terminated, jnp.asarray([True, False]))
+    assert jnp.array_equal(first.final_valid, jnp.asarray([True, False]))
+    assert first.final.unnormalized_obs[0] == 1.0
+    assert first.final.obs[1] == 0
+
+    state, second = wrapper.step(state, jnp.asarray([0.1, 1.0], dtype=jnp.float32))
+
+    assert jnp.array_equal(second.terminated, jnp.asarray([False, True]))
+    assert second.final.unnormalized_obs[1] == 1.25
+    assert jnp.allclose(
+        second.final.obs,
+        _normalized_scalar(second.final.unnormalized_obs, state),
+    )
+    assert state.rmv_state.count == 6
 
 
 def test_pickle_running_mean_var_in_state():
@@ -213,6 +446,8 @@ def test_image_channelwise_stats_spec_dtype_cast():
     key = jax.random.key(0)
     state, info = w.init(key)
     assert info.obs.dtype == jnp.bfloat16
+    assert w.observation_space.shape == (B, H, W, C)
+    assert w.observation_space.dtype == jnp.bfloat16
     state, info = w.step(state, jnp.zeros((B,)))
     assert info.obs.dtype == jnp.bfloat16
 
@@ -226,5 +461,49 @@ def test_scalar_stats_spec_broadcast_to_vector_and_cast():
     key = jax.random.key(0)
     state, info = w.init(key)
     assert jnp.asarray(info.obs).dtype == jnp.float16
+    assert w.observation_space.dtype == jnp.float16
     state, info = w.step(state, jnp.zeros((B, D), dtype=jnp.float32))
     assert jnp.asarray(info.obs).dtype == jnp.float16
+
+
+def test_broadcast_stats_spec_reduces_the_broadcast_axes():
+    spec = jax.ShapeDtypeStruct((2, 1, 1), jnp.float32)
+    w = ObservationNormalizationWrapper(RowStructuredObsEnv(), stats_spec=spec)
+
+    state, info = w.init(jax.random.key(0))
+
+    assert jnp.allclose(state.rmv_state.mean[:, 0, 0], jnp.asarray([0.0, 10.0]))
+    assert jnp.allclose(info.obs, jnp.zeros((2, 3, 1)), atol=1e-6)
+
+
+def test_broadcast_statistics_track_per_leaf_effective_counts_under_jit():
+    stats_spec = (
+        jax.ShapeDtypeStruct((2,), jnp.float32),
+        jax.ShapeDtypeStruct((1, 3), jnp.float32),
+    )
+    wrapper = ObservationNormalizationWrapper(
+        HeterogeneousStatsEnv(), stats_spec=stats_spec
+    )
+
+    state, _ = wrapper.init(jax.random.key(0))
+
+    assert jax.tree.structure(state.rmv_state.count) == jax.tree.structure(stats_spec)
+    assert state.rmv_state.count[0] == 1
+    assert state.rmv_state.count[1] == 2
+
+    state, _ = jax.jit(wrapper.step)(state, jnp.asarray(0.0))
+    assert state.rmv_state.count[0] == 2
+    assert state.rmv_state.count[1] == 4
+
+
+def test_constant_float16_observations_remain_finite():
+    spec = jax.ShapeDtypeStruct((3,), jnp.float16)
+    w = ObservationNormalizationWrapper(
+        ConstantObsEnv(value=7.0, shape=(3,), dtype=jnp.float16),
+        stats_spec=spec,
+    )
+
+    _, info = w.init(jax.random.key(0))
+
+    assert info.obs.dtype == jnp.float16
+    assert jnp.all(jnp.isfinite(info.obs))

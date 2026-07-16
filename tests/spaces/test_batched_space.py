@@ -4,7 +4,14 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from envelope.spaces import BatchedSpace, Continuous, Discrete, PyTreeSpace
+from envelope.spaces import (
+    BatchedSpace,
+    Continuous,
+    Discrete,
+    PyTreeSpace,
+    peel_batched,
+    rebatch,
+)
 
 # ============================================================================
 # Tests: BatchedSpace - Basic Functionality
@@ -230,6 +237,20 @@ def test_batched_space_multiple_calls():
     assert sample.shape == (2, 3)
 
 
+def test_peel_batched_and_rebatch_round_trip():
+    base = Continuous.from_shape(low=-1.0, high=1.0, shape=(3,))
+    nested = BatchedSpace(
+        space=BatchedSpace(space=base, batch_size=5),
+        batch_size=2,
+    )
+
+    batch_dims, peeled = peel_batched(nested)
+
+    assert batch_dims == (2, 5)
+    assert peeled == base
+    assert rebatch(peeled, batch_dims) == nested
+
+
 def test_double_batched_pytree_space():
     """Test nested BatchedSpace wrapping a PyTreeSpace."""
     base_space = PyTreeSpace(
@@ -257,6 +278,10 @@ def test_double_batched_pytree_space():
 # ============================================================================
 # Tests: BatchedSpace - Edge Cases
 # ============================================================================
+
+
+def test_batched_space_defers_batch_size_validation():
+    BatchedSpace(space=Discrete(n=2), batch_size=0)
 
 
 def test_batched_space_batch_size_one():

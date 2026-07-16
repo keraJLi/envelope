@@ -14,12 +14,6 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     pytest.skip("hypothesis not installed", allow_module_level=True)
 
-try:
-    from hypothesis import given, settings
-    from hypothesis import strategies as st
-except ImportError:  # pragma: no cover - optional dependency
-    pytest.skip("hypothesis not installed", allow_module_level=True)
-
 # ============================================================================
 # Tests: Discrete Space - Basic Functionality
 # ============================================================================
@@ -102,7 +96,7 @@ def test_discrete_space_sampling(
 )
 def test_discrete_space_contains_array(value, expected):
     """Parameterised coverage for array inputs to Discrete.contains."""
-    space = Discrete(n=10)
+    space = Discrete.from_shape(n=10, shape=(3,))
     assert space.contains(value) == expected
 
 
@@ -134,6 +128,21 @@ def test_discrete_space_jit():
 
     assert 0 <= sample < 10
     assert valid
+
+
+def test_discrete_contains_shape_and_dtype_guards_under_jit_and_vmap():
+    space = Discrete.from_shape(4, (2,))
+    contains = jax.jit(space.contains)
+
+    assert bool(contains(jnp.asarray([0, 3], dtype=jnp.int32)))
+    assert not bool(contains(jnp.asarray([0.0, 3.0], dtype=jnp.float32)))
+    assert not bool(contains(jnp.asarray([0], dtype=jnp.int32)))
+
+    candidates = jnp.asarray([[0, 1], [3, 3], [1, 4]], dtype=jnp.int32)
+    assert jnp.array_equal(
+        jax.vmap(space.contains)(candidates),
+        jnp.asarray([True, True, False]),
+    )
 
 
 def test_discrete_space_different_dtypes():
@@ -169,18 +178,13 @@ def test_discrete_tree_operations():
 # ============================================================================
 
 
-def test_discrete_contains_wrong_dtype():
-    """Test Discrete.contains with wrong dtype values."""
+@pytest.mark.parametrize("dtype", [jnp.int8, jnp.int16, jnp.int32, jnp.uint8])
+def test_discrete_contains_uses_integer_dtype_category(dtype):
     space = Discrete(n=10)
 
-    # Should work with int32
-    assert space.contains(jnp.array(5, dtype=jnp.int32))
-
-    # Should also work with different int dtype (gets compared as numbers)
-    assert space.contains(jnp.array(5, dtype=jnp.int16))
-
-    # Float values should work if they're within range
-    assert space.contains(jnp.array(5.0, dtype=jnp.float32))
+    assert space.contains(jnp.array(5, dtype=dtype))
+    assert not space.contains(jnp.array(5.0, dtype=jnp.float32))
+    assert not space.contains(jnp.array(True))
 
 
 def test_discrete_space_replace():
@@ -190,6 +194,19 @@ def test_discrete_space_replace():
     assert new_discrete.n == 20
     assert new_discrete.dtype == jnp.int32
     assert discrete.n == 10  # Original unchanged
+
+
+@pytest.mark.parametrize("candidate", [jnp.array(1), jnp.ones((1, 2), dtype=int)])
+def test_discrete_contains_requires_exact_shape(candidate):
+    assert not Discrete.from_shape(3, (2,)).contains(candidate)
+
+
+def test_discrete_space_validation_does_not_concretize_traced_parameters():
+    @jax.jit
+    def sample_discrete(n, key):
+        return Discrete(n=n).sample(key)
+
+    assert sample_discrete(jnp.array(3), jax.random.key(0)).shape == ()
 
 
 @given(

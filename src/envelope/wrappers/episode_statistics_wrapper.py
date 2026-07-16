@@ -1,6 +1,7 @@
 from typing import override
 
 import jax
+import jax.numpy as jnp
 
 from envelope.environment import Info, State
 from envelope.struct import FrozenPyTreeNode, field
@@ -20,13 +21,14 @@ class EpisodeStatisticsWrapper(Wrapper):
     @override
     def init(self, key: Key) -> tuple[State, Info]:
         inner_state, info = self.env.init(key)
-        state = self.EpisodeStatisticsState(inner_state=inner_state)
+        stats = _zero_stats(info)
+        state = self.EpisodeStatisticsState(inner_state=inner_state, stats=stats)
         return state, info.update(stats=state.stats)
 
     @override
     def reset(self, state: State, key: Key) -> tuple[State, Info]:
         inner_state, info = self.env.reset(state.inner_state, key)
-        state = state.replace(inner_state=inner_state)
+        state = state.replace(inner_state=inner_state, stats=_zero_stats(info))
         return state, info.update(stats=state.stats)
 
     @override
@@ -38,3 +40,10 @@ class EpisodeStatisticsWrapper(Wrapper):
         )
         state = state.replace(inner_state=inner_state, stats=stats)
         return state, info.update(stats=stats)
+
+
+def _zero_stats(info: Info) -> EpisodeStatistics:
+    return EpisodeStatistics(
+        reward=jnp.zeros_like(info.reward),
+        length=jnp.zeros_like(info.reward, dtype=jnp.int32),
+    )

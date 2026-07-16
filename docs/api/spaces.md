@@ -12,16 +12,26 @@ The `PyTreeSpace`s methods and properties are mapped onto the PyTree of subspace
 treating them as the leaves. For example
 
 ```python
-space = PyTreeSpace({
-  "foo": Discrete([3, 5]),
-  "bar": Continuous(low=-1.0, high=1.0)
-})
-space.shape  # {'foo': (2,), 'bar': ()}
+space = PyTreeSpace({"foo": Discrete([3, 5]), "bar": Continuous(low=-1.0, high=1.0)})
+space.shape  # {'foo': (2,), 'bar': ()}
 space.dtype  # {'foo': dtype('int32'), 'bar': dtype('float32')}
 ```
 
 Spaces can be batched using `BatchedSpace`, which returns a view that prepends a batch
-dimension and vectorizes `sample` and `contains`.
+dimension and vectorizes `sample` and `contains`. `peel_batched` removes all leading
+`BatchedSpace` layers and returns their dimensions; `rebatch` reapplies those
+dimensions.
+
+Spaces assume their constructor arguments are internally consistent. Envelope does not
+check obvious invariants such as matching bound shapes and dtypes, positive
+cardinalities and batch sizes, or matching nested structures. These errors will surface
+naturally when the space is sampled, transformed, or compiled by JAX.
+
+`contains` is a lightweight membership operation, not a schema validator, though it
+might fail if space structures don't match. Give `PyTreeSpace` and `BatchedSpace` values
+the matching tree and batch structure. For correctly structured inputs it returns a
+scalar JAX boolean. Discrete values may use any non-boolean integer dtype, and
+continuous values may use any non-boolean real numeric dtype.
 
 The constraints on the `PyTreeSpace`'s members imply a strict ordering on the
 construction of spaces:
@@ -40,3 +50,7 @@ Discrete / Continuous → PyTreeSpace → BatchedSpace
 ::: envelope.spaces.PyTreeSpace
 
 ::: envelope.spaces.BatchedSpace
+
+::: envelope.spaces.peel_batched
+
+::: envelope.spaces.rebatch

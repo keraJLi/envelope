@@ -1,0 +1,78 @@
+name: Adapter contracts
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  published-extra:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: brax
+            import_name: brax
+          - suite: craftax
+            import_name: craftax
+          - suite: jumanji
+            import_name: jumanji
+          - suite: mujoco-playground
+            import_name: mujoco_playground
+          - suite: navix
+            import_name: navix
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: "3.12"
+      - run: uv build --wheel --no-sources
+      - run: uv venv .adapter-venv
+      - name: Install the built wheel and selected extra
+        run: |
+          wheel=$(find dist -name '*.whl' -print -quit)
+          test -n "${wheel}"
+          uv pip install --python .adapter-venv/bin/python "${wheel}[${{ matrix.suite }}]" pytest
+      - run: .adapter-venv/bin/python -c "import envelope; import envelope.adapters"
+      - run: .adapter-venv/bin/python -c "import ${{ matrix.import_name }}"
+      - name: Run adapter tests with the isolated extra
+        run: .adapter-venv/bin/pytest tests/adapters -m adapters
+
+  source-backed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: gymnax
+            import_name: gymnax
+            dependency_group: gymnax-adapter
+          - suite: kinetix
+            import_name: kinetix
+            dependency_group: kinetix-adapter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: "3.12"
+      - run: uv sync --group dev --group ${{ matrix.dependency_group }} --locked
+      - run: uv run python -c "import ${{ matrix.import_name }}"
+      - name: Run adapter tests with the isolated source dependency
+        run: uv run pytest tests/adapters -m adapters
+
+  full-enumeration:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: "3.12"
+      - run: uv sync --group dev --group adapters --locked
+      - run: uv run pytest tests/adapters -m adapters

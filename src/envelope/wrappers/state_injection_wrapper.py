@@ -1,9 +1,17 @@
-from typing import override
+from typing import ClassVar, override
 
-from envelope.environment import Info, InfoContainer
+import jax
+import jax.numpy as jnp
+
+from envelope.environment import Info
 from envelope.struct import field
 from envelope.typing import Key, PyTree
-from envelope.wrappers.wrapper import WrappedState, Wrapper
+from envelope.wrappers.wrapper import (
+    PooledInitializationWrapper,
+    WrappedState,
+    Wrapper,
+    not_inside,
+)
 
 
 class StateInjectionWrapper(Wrapper):
@@ -19,8 +27,10 @@ class StateInjectionWrapper(Wrapper):
 
         for outer_iter in range(num_outer_iters):
             # Sample a new task and set it as the reset state
-            task_state, task_obs = sample_task(key)
-            state = env.set_reset_state(state, task_state, task_obs)
+            task_state, task_info = sample_task(key)
+            state = env.set_reset_state(
+                state, task_state, reset_info=task_info
+            )
 
             # Run episode - auto-resets return to task_state
             for inner_step in range(num_inner_steps):
@@ -28,12 +38,19 @@ class StateInjectionWrapper(Wrapper):
         ```
     """
 
+    stack_constraints: ClassVar = (not_inside(PooledInitializationWrapper),)
+
     class InjectedState(WrappedState):
-        reset_state: PyTree | None = field(default=None)
-        reset_obs: PyTree | None = field(default=None)
+        reset_state: PyTree = field()
+        reset_info: Info = field()
+        active: jax.Array = field()
 
     def set_reset_state(
-        self, state: WrappedState, reset_state: PyTree, reset_obs: PyTree
+        self,
+        state: WrappedState,
+        reset_state: PyTree,
+        *,
+        reset_info: Info,
     ) -> WrappedState:
         """Update the state that resets will return to.
 
@@ -43,7 +60,8 @@ class StateInjectionWrapper(Wrapper):
         Args:
             state: Current state (can be from any outer wrapper)
             reset_state: The state to reset to (inner environment state)
-            reset_obs: The observation to return on reset
+            reset_info: The complete info value to return on reset. Its PyTree
+                structure must match the environment's normal reset info.
 
         Returns:
             New state with updated reset fields at the appropriate level
@@ -52,10 +70,11 @@ class StateInjectionWrapper(Wrapper):
         def update_injected(s: WrappedState) -> WrappedState:
             # If this is our InjectedState, update it
             if isinstance(s, self.InjectedState):
-                return self.InjectedState(
+                return s.replace(
                     inner_state=reset_state,
                     reset_state=reset_state,
-                    reset_obs=reset_obs,
+                    reset_info=reset_info,
+                    active=jnp.asarray(True),
                 )
             # Otherwise, recurse into inner_state and rebuild
             if hasattr(s, "inner_state"):
@@ -65,25 +84,30 @@ class StateInjectionWrapper(Wrapper):
         return update_injected(state)
 
     @override
-    def init(self, key: Key) -> tuple[WrappedState, Info]:
+    def init(self, key: Key) -> tuple[InjectedState, Info]:
         inner_state, info = self.env.init(key)
-        state = self.InjectedState(inner_state=inner_state)
+        state = self.InjectedState(
+            inner_state=inner_state,
+            reset_state=inner_state,
+            reset_info=info,
+            active=jnp.asarray(False),
+        )
         return state, info
 
     @override
-    def reset(self, state: WrappedState, key: Key) -> tuple[WrappedState, Info]:
-        # If reset state is set, use it instead of resetting inner env
-        if state.reset_state is not None and state.reset_obs is not None:
-            inner_state = state.reset_state
-            info = InfoContainer(obs=state.reset_obs, reward=0.0, terminated=False)
-        elif state.reset_state is None and state.reset_obs is None:
-            inner_state, info = self.env.reset(state.inner_state, key)
-        else:
-            raise ValueError("State must set both reset_state and reset_obs or neither")
+    def reset(self, state: InjectedState, key: Key) -> tuple[InjectedState, Info]:
+        def injected(_):
+            return state.reset_state, state.reset_info
 
+        def delegated(_):
+            return self.env.reset(state.inner_state, key)
+
+        inner_state, info = jax.lax.cond(
+            state.active, injected, delegated, operand=None
+        )
         return state.replace(inner_state=inner_state), info
 
     @override
-    def step(self, state: WrappedState, action: PyTree) -> tuple[WrappedState, Info]:
+    def step(self, state: InjectedState, action: PyTree) -> tuple[InjectedState, Info]:
         inner_state, info = self.env.step(state.inner_state, action)
         return state.replace(inner_state=inner_state), info

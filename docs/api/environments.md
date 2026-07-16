@@ -31,6 +31,16 @@ pytree structures and leaf shapes.**
 This guarantees that you can map `jnp.where` on the `Info` they produce, or emit the
 `Info` as the output of `jax.lax.scan`.
 
+## Stack constraints and backend horizons
+
+`Environment.stack_constraints` is empty by default. Environments that need a wrapper
+placement restriction can declare constraints with `not_inside(...)` or
+`not_containing(...)`; wrapper construction validates the complete stack. See the
+wrapper documentation for examples.
+
+`Environment.default_max_steps` is `None` by default. Adapters use it to expose a
+captured backend horizon to `create`, and ordinary wrappers delegate it unchanged.
+
 ## API Reference
 
 ::: envelope.environment.Environment

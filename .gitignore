@@ -163,6 +163,18 @@ cython_debug/
 # Weights and Biases
 wandb/
 
+# Reinforcement-learning outputs
+runs/
+checkpoints/
+*.ckpt
+*.jsonl
+
+# Local interpreter/tool selections
+.python-version
+.claude/
+*.old
+*.aip2.isambard
+
 # ruff
 .ruff_cache/
 

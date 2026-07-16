@@ -10,9 +10,10 @@ the format `SUITE::ENVIRONMENT`, and can pass arguments to the environment const
 env = create("brax::ant", env_kwargs={"backend": "positional"})
 ```
 
-**Note**: Many suites natively support episode truncation and automatic resetting. When
-instantiating adapters, users are highly discouraged from using these features. Instead,
-they should use the envelope-native wrapper ecosystem. 
+Adapters choose backend settings that leave episode boundaries to Envelope by default.
+Explicit backend options are still passed through. Be careful when enabling native
+time limits, auto-reset, batching, or action repetition. Adapters warn when they can
+recognize such an explicit setting, but do not reject it.
 
 Adapters implement the `HasFromNameInit` protocol, that ensures they can be created via
 a `from_name(cls, env_name: str, env_kwargs=None, **kwargs)` function. This is used by
@@ -20,9 +21,13 @@ a `from_name(cls, env_name: str, env_kwargs=None, **kwargs)` function. This is u
 `navix.make` or `brax.envs.create`), and the `kwargs` are passed to the adapter class on
 creation.
 
-Each adapter may have a `default_episode_length` property that is populated depending on
-the suite and specific environment. If it is not `None`, the `create` function will wrap
-the adapter in a `TruncationWrapper` before returning it.
+With `max_episode_steps="default"`, `create` applies the environment's default time
+limit with a `TruncationWrapper`. `None` adds no outer time limit.
+
+Most adapters expose extra suite data under `info.backend`, for example as
+`info.backend.metrics`. If a suite has no such data at reset, those fields contain zero
+placeholders and `info.backend.valid` is false. Navix retains its established top-level
+extra fields.
 
 ## API Reference (`create`)
 

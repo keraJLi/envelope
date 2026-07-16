@@ -55,6 +55,8 @@ plugins:
             show_signature: true
             separate_signature: false
             show_if_no_docstring: false
+            docstring_options:
+              warn_unknown_params: false
             heading_level: 3
             filters:
               - "!^_"
