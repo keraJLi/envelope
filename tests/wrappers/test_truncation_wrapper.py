@@ -54,25 +54,27 @@ def test_preserves_other_info_fields():
     assert bool(jnp.asarray(info.truncated)) is True
 
 
-def test_reset_overrides_underlying_truncated_true():
+def test_reset_preserves_underlying_truncated_true():
     env = StepCounterEnv(reset_truncated=True)
     w = TruncationWrapper(env, max_steps=5)
     key = jax.random.key(0)
     state, info = w.init(key)
-    assert info.truncated is False
+    assert info.truncated is True
 
 
-@pytest.mark.parametrize("max_steps", [0, 1])
-def test_max_steps_edge_values(max_steps):
+def test_max_steps_one_truncates_first_step():
     env = StepCounterEnv()
-    w = TruncationWrapper(env, max_steps=max_steps)
+    w = TruncationWrapper(env, max_steps=1)
     key = jax.random.key(0)
     state, info = w.init(key)
-    # First step should truncate immediately when max_steps == 0
     state, info = w.step(state, jnp.asarray(0.0))
-    # After first step, steps == 1; wrapper truncates when steps >= max_steps
-    expected = 1 >= max_steps
-    assert bool(jnp.asarray(info.truncated)) == expected
+    assert bool(jnp.asarray(info.truncated)) is True
+
+
+@pytest.mark.parametrize("max_steps", [0, -1])
+def test_nonpositive_max_steps_are_rejected(max_steps):
+    with pytest.raises(ValueError, match="max_steps.*positive|greater than zero"):
+        TruncationWrapper(StepCounterEnv(), max_steps=max_steps)
 
 
 def test_truncated_remains_true_after_threshold():
@@ -91,14 +93,14 @@ def test_truncated_remains_true_after_threshold():
     assert bool(jnp.asarray(info.truncated)) is True
 
 
-def test_wrapper_overrides_underlying_truncated_on_step():
+def test_wrapper_ors_with_underlying_truncated_on_step():
     env = StepCounterEnv(step_truncated=True)
     w = TruncationWrapper(env, max_steps=10)
     key = jax.random.key(0)
     state, info = w.init(key)
-    # Underlying env sets truncated True, but steps < max_steps => wrapper should set False
+    # The local time limit must not erase an earlier underlying truncation.
     state, info = w.step(state, jnp.asarray(0.5))
-    assert bool(jnp.asarray(info.truncated)) is False
+    assert bool(jnp.asarray(info.truncated)) is True
 
 
 def test_steps_as_jax_scalar_array_behaves_correctly():
