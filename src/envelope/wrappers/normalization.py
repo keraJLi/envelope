@@ -1,5 +1,4 @@
 from functools import cached_property
-from typing import NamedTuple
 
 import jax
 from jax import numpy as jnp
@@ -8,31 +7,30 @@ from envelope.struct import FrozenPyTreeNode
 from envelope.typing import Array, PyTree
 
 
-class MeanVarPair(NamedTuple):
-    mean: Array
-    var: Array
-
-
 class RunningMeanVar(FrozenPyTreeNode):
     mean: PyTree
     var: PyTree
-    count: int | Array
+    count: PyTree
 
     @cached_property
     def std(self) -> PyTree:
-        return jax.tree.map(jnp.sqrt, self.var)
+        return jax.tree.map(lambda var: jnp.sqrt(jnp.maximum(var, 0)), self.var)
 
 
 def update_rmv(rmv_state: RunningMeanVar, x: PyTree) -> RunningMeanVar:
     """
-    Update running mean/variance with a new batch of observations x. We assume x is a
-    PyTree of arrays, each with a leading batch dimension (aligned sizes).
+    Update running mean/variance with new observation batches. Each leaf has its own
+    leading sample dimension and count, so broadcast-reduced leaves may consume
+    different effective batch sizes.
     """
-    global_count = rmv_state.count
-    batch_count = jax.tree.leaves(x)[0].shape[0]
-    tot_count = global_count + batch_count
 
-    def _update_arr(mean: Array, var: Array, x_arr: Array) -> MeanVarPair:
+    def _update(
+        mean: Array, var: Array, global_count: Array, x_arr: Array
+    ) -> RunningMeanVar:
+        x_arr = jnp.asarray(x_arr, dtype=jnp.asarray(mean).dtype)
+        global_count = jnp.asarray(global_count)
+        batch_count = jnp.asarray(x_arr.shape[0], dtype=global_count.dtype)
+        total_count = global_count + batch_count
         batch_mean = x_arr.mean(axis=0)
         batch_var = x_arr.var(axis=0)
 
@@ -40,17 +38,17 @@ def update_rmv(rmv_state: RunningMeanVar, x: PyTree) -> RunningMeanVar:
         m_a = var * global_count
         m_b = batch_var * batch_count
         delta = batch_mean - mean
-        m2 = m_a + m_b + (delta**2) * (global_count * batch_count) / tot_count
+        m2 = m_a + m_b + (delta**2) * (global_count * batch_count) / total_count
 
-        new_mean = mean + delta * (batch_count / tot_count)
-        new_var = m2 / tot_count
-        return MeanVarPair(mean=new_mean, var=new_var)
+        new_mean = mean + delta * (batch_count / total_count)
+        new_var = jnp.maximum(m2 / total_count, 0)
+        return RunningMeanVar(mean=new_mean, var=new_var, count=total_count)
 
-    def is_pair(z):
-        return isinstance(z, MeanVarPair)
+    def is_result(z):
+        return isinstance(z, RunningMeanVar)
 
-    # jax.tree.map returns a PyTree whose leaves are MeanVarPairs
-    mean_var_pairs = jax.tree.map(_update_arr, rmv_state.mean, rmv_state.var, x)
-    new_mean = jax.tree.map(lambda mv: mv.mean, mean_var_pairs, is_leaf=is_pair)
-    new_var = jax.tree.map(lambda mv: mv.var, mean_var_pairs, is_leaf=is_pair)
-    return RunningMeanVar(mean=new_mean, var=new_var, count=tot_count)
+    results = jax.tree.map(_update, rmv_state.mean, rmv_state.var, rmv_state.count, x)
+    new_mean = jax.tree.map(lambda result: result.mean, results, is_leaf=is_result)
+    new_var = jax.tree.map(lambda result: result.var, results, is_leaf=is_result)
+    new_count = jax.tree.map(lambda result: result.count, results, is_leaf=is_result)
+    return RunningMeanVar(mean=new_mean, var=new_var, count=new_count)
