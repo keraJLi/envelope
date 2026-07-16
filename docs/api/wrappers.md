@@ -22,47 +22,94 @@ bootstrapping), and `ObservationNormalizationWrapper` adds `unnormalized_obs`.
 Three wrappers add batch dimensions:
 
 - **`VmapWrapper`** vmaps a single environment with `batch_size` parallel instances.
-- **`VmapEnvsWrapper`** vmaps over a batched pytree of environment instances, for example
-  created via `jax.vmap(make_env)(params)`. This is useful when different instances have
-  different configurations.
-- **`PooledInitVmapWrapper`** vmaps like `VmapWrapper`, but pre-computes a pool of initial
-  states and samples from them on reset. It also includes built-in autoreset logic, making
-  it an alternative to `AutoResetWrapper` + `VmapWrapper`.
+- **`VmapEnvsWrapper`** vmaps over a batched pytree of environment instances, for
+  example created via `jax.vmap(make_env)(params)`. This is useful when different
+  instances have different configurations.
+- **`PooledInitVmapWrapper`** vectorizes like `VmapWrapper`, but lazily generates a
+  small pool of initial states, from which it samples the next state of done
+  environments. An explicit reset still calls the wrapped environment's vectorized
+  reset. It is an alternative to `AutoResetWrapper` + `VmapWrapper` that is
+  computationally efficient.
 
-## Wrapper Ordering
+## Stack constraints
 
-The key constraint is that `AutoResetWrapper` calls `reset()` on its inner wrapper chain
-when an episode ends. Wrappers that need their `reset()` triggered on episode boundaries
-(e.g. `TruncationWrapper` resetting its step counter) must therefore be **inside**
-`AutoResetWrapper`. Vectorization wrappers must be **outside**, since autoreset operates
-per-element.
+Compatibility uses directional, type-based constraints. A wrapper or environment may
+declare:
 
-From innermost to outermost:
-```
-base env → Observation/action transforms → Episode logic → AutoReset → Vectorization
-```
-
-A concrete example with all layers:
-```
-VmapWrapper                              # outermost: adds batch dim
-└─ AutoResetWrapper                      # resets on done, adds `final`
-   └─ StateInjectionWrapper              # (optional) overrides reset target
-      └─ EpisodeStatisticsWrapper        # tracks reward/length
-         └─ TruncationWrapper            # caps episode length
-            └─ ObservationNormalizationWrapper
-               └─ ContinuousObservationWrapper
-                  └─ ClipActionWrapper
-                     └─ base env         # innermost
+```python
+class MyWrapper(Wrapper):
+    stack_constraints = (
+        not_inside(SomeOuterType),
+        not_containing(SomeInnerType),
+    )
 ```
 
-Not all wrappers are needed in every pipeline. The ordering between wrappers in the same
-layer (e.g. the observation/action transforms) is flexible.
+`not_inside(X)` searches the complete outer chain. `not_containing(X)` searches the
+complete inner chain. Matching uses `isinstance`, so subclasses and marker mixins work
+without a separate role registry. The entire stack is validated whenever a wrapper is
+constructed, including constraints declared by a custom base environment.
+
+The built-in hard constraints are:
+
+| Owner | Cannot be inside | Cannot contain |
+| --- | --- | --- |
+| `AutoResetWrapper` | `PooledInitializationWrapper` | `VectorizingWrapper` |
+| `ObservationNormalizationWrapper` | `PooledInitializationWrapper` | — |
+| `StateInjectionWrapper` | `PooledInitializationWrapper` | — |
+| `PooledInitVmapWrapper` | — | `VectorizingWrapper` |
+
+`VmapWrapper` and `VmapEnvsWrapper` implement `VectorizingWrapper`.
+`PooledInitVmapWrapper` implements both `VectorizingWrapper` and
+`PooledInitializationWrapper`. All other built-in wrappers have no hard stack
+constraints. Configurations that are runnable but surprising are left to the user.
+
+Conceptually, each rule points in the direction it searches:
+
+```text
+outer wrappers  ←  not_inside(...)  [owner]  not_containing(...)  →  inner wrappers
+```
+
+For example, autoreset must be vectorized from the outside:
+
+```text
+VmapWrapper
+└─ AutoResetWrapper       valid
+   └─ base
+
+AutoResetWrapper
+└─ VmapWrapper            rejected: AutoResetWrapper cannot contain VmapWrapper
+   └─ base
+```
+
+Observation normalization works on either side of ordinary vectorization. Outside a
+`VmapWrapper` it maintains shared statistics; inside it, each vectorized instance has
+independent statistics. It may wrap pooled initialization but cannot be placed inside
+it. It normalizes terminal observations detected structurally through `info.final` and
+`info.final_valid`, while retaining raw values as `info.final.unnormalized_obs`.
+
+Only top-level observations update the running statistics. A terminal observation is
+normalized with the same current statistics, but is not counted as another sample.
 
 ## API Reference
+
+### Core Wrapper Infrastructure
 
 ::: envelope.wrappers.Wrapper
 
 ::: envelope.wrappers.WrappedState
+
+::: envelope.wrappers.StackConstraint
+
+::: envelope.wrappers.not_inside
+
+::: envelope.wrappers.not_containing
+
+::: envelope.wrappers.VectorizingWrapper
+
+::: envelope.wrappers.PooledInitializationWrapper
+
+
+### Wrapper Instances
 
 ::: envelope.wrappers.AutoResetWrapper
 
