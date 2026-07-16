@@ -1,19 +1,46 @@
 # 💌 Envelope: a JAX-native environment interface
 
-```python
-# Create environments from JAX-native suites you have installed, ...
+<table>
+  <tr>
+      <td width="42%" valign="top">
+      <a href="https://xkcd.com/927/">
+        <img src="https://imgs.xkcd.com/comics/standards.png" alt="xkcd: Standards" width="100%">
+      </a>
+    </td>
+    <td width="58%" valign="top">
+      <pre><code class="language-python"># Create environments from JAX-native suites you have installed, ...
 env = envelope.create("gymnax::CartPole-v1")
 
-# ... interact with the environments using a simple interface, ...
+\# ... interact with the environments using a simple interface, ...
 state, info = env.init(key)
 states, infos = jax.lax.scan(env.step, state, actions)
 plt.plot(infos.reward.cumsum())
 
-# ... and enjoy a powerful ecosystem of wrappers.
+\# ... and enjoy a powerful ecosystem of wrappers.
 env = envelope.wrappers.AutoResetWrapper(env)
 env = envelope.wrappers.VmapWrapper(env)
-env = envelope.wrappers.ObservationNormalizationWrapper(env)
-```
+env = envelope.wrappers.ObservationNormalizationWrapper(env)</code></pre>
+    </td>
+  </tr>
+</table>
+
+## What I have to say in defense of yet another Jax RL library
+Envelope is an environment **interface**.
+- You will be able to set up the same experiments and get the same results with Gymnax or Jumanji.
+- If you use coding agents, you easily set up any wrappers, logging, or compatibility you need.
+- If what you care about is results, Envelope has little value to you.
+
+
+But I made it because I care, and I want to get things right. Squeezing gym into Jax is hard. Envelope is my best attempt.
+- Envelope gets things right that other libraries get wrong: spaces, wrappers, and adapters.
+- It was designed purely by me, not coding agents. Not because I don't like them, but because they wouldn't get it right (as of July 2026).
+- Agents have a better time using Envelope over other interfaces, in my subjective experience.
+- It supports many popular suites, so you can interact with many environments in the same way.
+- It's only requirement is Jax.
+
+It's really good.
+
+The rest of the readme was also written by me, despite the vibe-coding-coded vibes.
 
 ## 🌍 Simple, expressive interaction!
 
@@ -21,7 +48,7 @@ env = envelope.wrappers.ObservationNormalizationWrapper(env)
 - **Idiomatic jax-y interface** of `init(key: Key) -> State, Info` and `step(state: State, action: PyTree) -> State, Info`. You can directly `jax.scan` over a `step(...)`!
 - **Spaces are super simple**. No `Tuple`, `Dict` nonsense! There are two spaces: `Continuous` and `Discrete`, which you can compose into a `PyTreeSpace`.
 - **Explicit episode truncation** supports correctly handling bootstrapping for value-function targets.
-- **No auto-reset** by default. Resetting every step can be expensive!
+- **No auto-reset** by default. Resetting every step can be expensive! Obviously Envelope has a wrapper for this.
 
 ## 💪 Powerful, composable wrappers!
 
@@ -50,7 +77,7 @@ env = envelope.wrappers.ObservationNormalizationWrapper(env)
 envelope.create("📦::🌍")
 ```
 
-let's you create environments from any of the above!
+lets you create environments from any of the above!
 
 ## 📝 Testing
 
