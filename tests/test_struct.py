@@ -37,11 +37,11 @@ class _NodeWithDefaults(FrozenPyTreeNode):
     scale: float = static_field(default=1.0)
 
 
-class _NodeWithDefaultList(FrozenPyTreeNode):
-    """Helper node for default_factory independence checks."""
+class _NodeWithDefaultTuple(FrozenPyTreeNode):
+    """Helper node for immutable static-field defaults."""
 
     x: jax.Array
-    items: list = static_field(default_factory=list)
+    items: tuple[int, ...] = static_field(default_factory=tuple)
 
 
 class _BaseNode(FrozenPyTreeNode):
@@ -76,7 +76,7 @@ class _ComplexNode(FrozenPyTreeNode):
     int_static: int = static_field()
     another_array: jax.Array
     str_static: str = static_field()
-    list_static: list = static_field()
+    tuple_static: tuple[int, ...] = static_field()
 
 
 # ============================================================================
@@ -245,6 +245,28 @@ class TestPyTreeNodeJAXIntegration:
         assert jnp.allclose(reconstructed.y, node.y)
         assert reconstructed.static_val == node.static_val
 
+    def test_tree_unflatten_bypasses_constructor_validation_for_jax_sentinels(self):
+        """Opaque JAX bookkeeping values must not enter ``__post_init__``."""
+
+        class ValidatedNode(FrozenPyTreeNode):
+            value: jax.Array
+            label: str = static_field()
+
+            def __post_init__(self):
+                if not isinstance(self.value, jax.Array):
+                    raise TypeError("value must be a JAX array")
+
+        node = ValidatedNode(value=jnp.asarray(1.0), label="valid")
+        _, treedef = jax.tree_util.tree_flatten(node)
+        sentinel = object()
+
+        with pytest.raises(TypeError, match="JAX array"):
+            ValidatedNode(value=sentinel, label="invalid")
+
+        reconstructed = jax.tree_util.tree_unflatten(treedef, [sentinel])
+        assert reconstructed.value is sentinel
+        assert reconstructed.label == "valid"
+
     def test_jax_tree_map(self):
         """Test that jax.tree.map works correctly with PyTreeNode."""
         node = SimpleNode(
@@ -327,7 +349,7 @@ class TestPyTreeNodeJAXIntegration:
                     int_static=42,
                     another_array=jnp.array([[1.0, 2.0], [3.0, 4.0]]),
                     str_static="metadata",
-                    list_static=[1, 2, 3],
+                    tuple_static=(1, 2, 3),
                 ),
                 id="complex-node",
             ),
@@ -449,22 +471,66 @@ class TestPyTreeNodeDefaults:
 
         class NodeWithStaticDefault(FrozenPyTreeNode):
             x: jax.Array
-            config: dict = static_field(default_factory=dict)
+            config: tuple[str, ...] = static_field(default_factory=tuple)
             threshold: float = static_field(default=0.5)
 
         # Create with defaults
         node1 = NodeWithStaticDefault(x=jnp.array([1.0]))
         assert jnp.allclose(node1.x, jnp.array([1.0]))
-        assert node1.config == {}
+        assert node1.config == ()
         assert node1.threshold == 0.5
 
         # Create with explicit values
         node2 = NodeWithStaticDefault(
-            x=jnp.array([2.0]), config={"key": "value"}, threshold=0.9
+            x=jnp.array([2.0]), config=("value",), threshold=0.9
         )
         assert jnp.allclose(node2.x, jnp.array([2.0]))
-        assert node2.config == {"key": "value"}
+        assert node2.config == ("value",)
         assert node2.threshold == 0.9
+
+    @pytest.mark.parametrize(
+        "value_factory",
+        [list, dict, set, lambda: jnp.array([1, 2])],
+        ids=["list", "dict", "set", "jax-array"],
+    )
+    def test_static_field_rejects_mutable_or_unhashable_metadata(self, value_factory):
+        class Node(FrozenPyTreeNode):
+            x: jax.Array
+            metadata: object = static_field()
+
+        with pytest.raises(TypeError, match="static"):
+            Node(x=jnp.array(1.0), metadata=value_factory())
+
+    def test_static_field_unsafe_opt_in_allows_opaque_metadata(self):
+        class Node(FrozenPyTreeNode):
+            x: jax.Array
+            metadata: object = static_field(unsafe=True)
+
+        metadata = {"mutable": []}
+        node = Node(x=jnp.array(1.0), metadata=metadata)
+        assert node.metadata is metadata
+
+    def test_subclass_post_init_must_call_super_for_static_validation(self):
+        class UnvalidatedNode(FrozenPyTreeNode):
+            x: jax.Array
+            metadata: object = static_field(default=None)
+
+            def __post_init__(self):
+                object.__setattr__(self, "metadata", {"mutable": []})
+
+        node = UnvalidatedNode(x=jnp.array(1.0))
+        assert node.metadata == {"mutable": []}
+
+        class ValidatedNode(FrozenPyTreeNode):
+            x: jax.Array
+            metadata: object = static_field(default=None)
+
+            def __post_init__(self):
+                object.__setattr__(self, "metadata", {"mutable": []})
+                super().__post_init__()
+
+        with pytest.raises(TypeError, match="static"):
+            ValidatedNode(x=jnp.array(1.0))
 
     def test_mixed_required_and_default_fields(self):
         """Test nodes with mix of required and default fields."""
@@ -497,18 +563,10 @@ class TestPyTreeNodeDefaults:
         assert node2.d == "custom"
         assert jnp.allclose(node2.e, jnp.array([2.0, 3.0]))
 
-    def test_default_factory_independence(self):
-        """Test that default_factory creates independent instances."""
-
-        node1 = _NodeWithDefaultList(x=jnp.array([1.0]))
-        node2 = _NodeWithDefaultList(x=jnp.array([2.0]))
-
-        # Modify node1's list (if it weren't frozen)
-        # Since the node is frozen, we can't modify in place, but we can check
-        # that the default_factory created different instances
-        assert node1.items is not node2.items
-        assert node1.items == []
-        assert node2.items == []
+    def test_immutable_static_default_factory(self):
+        node1 = _NodeWithDefaultTuple(x=jnp.array([1.0]))
+        node2 = _NodeWithDefaultTuple(x=jnp.array([2.0]))
+        assert node1.items == node2.items == ()
 
 
 # ============================================================================

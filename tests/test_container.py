@@ -136,17 +136,28 @@ def test_container_treedef_and_leaf_order_behavior():
     assert jnp.allclose(rec2.y, c2.y)
 
 
-def test_extras_insertion_order_does_not_affect_treedef():
-    """Extras inserted in different order should produce the same pytree structure."""
-    c1 = SimpleContainer(x=jnp.array(1), y=jnp.array(0)).update(b=jnp.array(2), a=jnp.array(3))
-    c2 = SimpleContainer(x=jnp.array(1), y=jnp.array(0)).update(a=jnp.array(3), b=jnp.array(2))
+def test_container_extras_use_canonical_key_order():
+    base = InfoLike(a=jnp.array(0), b=jnp.array(0))
+    xy = base.update(x=jnp.array(1), y=jnp.array(2))
+    yx = base.update(y=jnp.array(2), x=jnp.array(1))
 
-    children1, treedef1 = jax.tree_util.tree_flatten(c1)
-    children2, treedef2 = jax.tree_util.tree_flatten(c2)
+    xy_leaves, xy_def = jax.tree.flatten(xy)
+    yx_leaves, yx_def = jax.tree.flatten(yx)
+    assert xy_def == yx_def
+    assert all(jnp.array_equal(a, b) for a, b in zip(xy_leaves, yx_leaves))
 
-    assert treedef1 == treedef2
-    for l1, l2 in zip(children1, children2):
-        assert jnp.array_equal(l1, l2)
+
+def test_same_container_extras_schema_composes_in_lax_cond():
+    base = InfoLike(a=jnp.array(0), b=jnp.array(0))
+    xy = base.update(x=jnp.array(1), y=jnp.array(2))
+    yx = base.update(y=jnp.array(20), x=jnp.array(10))
+
+    select = jax.jit(lambda pred: jax.lax.cond(pred, lambda: xy, lambda: yx))
+    selected = select(False)
+    assert selected.x == 10
+    assert selected.y == 20
+
+    assert jax.tree.structure(base.update(x=1)) != jax.tree.structure(base.update(y=1))
 
 
 # ============================================================================
