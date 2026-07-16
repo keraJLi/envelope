@@ -1,3 +1,4 @@
+import warnings
 from functools import cached_property
 from typing import Any, override
 
@@ -15,6 +16,18 @@ from envelope.struct import static_field
 from envelope.typing import Key, PyTree
 
 _MAX_INT = int(jnp.iinfo(jnp.int32).max)
+
+
+def _warp_cuda_available() -> bool:
+    """Return whether NVIDIA Warp can execute on a CUDA device."""
+    try:
+        import warp
+    except ImportError:
+        return False
+    try:
+        return bool(warp.is_cuda_available())
+    except (OSError, RuntimeError):
+        return False
 
 
 class MujocoPlaygroundEnvelope(Environment):
@@ -44,6 +57,9 @@ class MujocoPlaygroundEnvelope(Environment):
         Create a `MujocoPlaygroundEnvelope` from a name and keyword arguments.
         `env_kwargs` are passed to `config_overrides` of
         `mujoco_playground.registry.load`.
+
+        If MuJoCo Playground defaults to Warp but CUDA is unavailable, Envelope
+        warns and falls back to JAX. An explicit ``impl`` setting is always preserved.
         """
         warn_if_wrapper_overlap("MuJoCo Playground", env_kwargs, ("episode_length",))
 
@@ -55,6 +71,20 @@ class MujocoPlaygroundEnvelope(Environment):
 
         # MuJoCo Playground requires an integer episode length.
         config_overrides = {"episode_length": _MAX_INT, **env_kwargs}
+        if (
+            env_kwargs.get("impl") is None
+            and getattr(default_config, "impl", None) == "warp"
+            and not _warp_cuda_available()
+        ):
+            warnings.warn(
+                "MuJoCo Playground defaults to Warp, but Warp cannot use a CUDA "
+                "device on this host; falling back to the JAX implementation. Pass "
+                "env_kwargs={'impl': 'warp'} to require Warp explicitly.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            config_overrides["impl"] = "jax"
+
         env = registry.load(env_name, config_overrides=config_overrides)
         return cls(mujoco_playground_env=env, _default_max_steps=default_max_steps)
 

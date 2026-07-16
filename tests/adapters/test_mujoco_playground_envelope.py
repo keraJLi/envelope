@@ -2,6 +2,7 @@
 
 # ruff: noqa: E402
 
+import sys
 from types import SimpleNamespace
 
 import jax
@@ -235,3 +236,99 @@ def test_explicit_episode_length_is_passed_through(monkeypatch):
 
     assert captured["episode_length"] == 17
     assert env.default_max_steps == 17
+
+
+def test_default_warp_falls_back_to_jax_without_cuda(monkeypatch):
+    captured = {}
+    raw_env = SimpleNamespace()
+
+    monkeypatch.setattr(
+        "envelope.adapters.mujoco_playground_envelope.registry.get_default_config",
+        lambda _name: SimpleNamespace(episode_length=1000, impl="warp"),
+    )
+    monkeypatch.setattr(
+        "envelope.adapters.mujoco_playground_envelope._warp_cuda_available",
+        lambda: False,
+    )
+
+    def load(_name, *, config_overrides):
+        captured.update(config_overrides)
+        return raw_env
+
+    monkeypatch.setattr(
+        "envelope.adapters.mujoco_playground_envelope.registry.load", load
+    )
+
+    with pytest.warns(RuntimeWarning, match="falling back to the JAX"):
+        MujocoPlaygroundEnvelope.from_name("Fake")
+
+    assert captured["impl"] == "jax"
+
+
+def test_cuda_probe_failure_is_treated_as_unavailable(monkeypatch):
+    def fail_probe():
+        raise PermissionError("cache is not writable")
+
+    monkeypatch.setitem(
+        sys.modules, "warp", SimpleNamespace(is_cuda_available=fail_probe)
+    )
+
+    from envelope.adapters.mujoco_playground_envelope import _warp_cuda_available
+
+    assert not _warp_cuda_available()
+
+
+def test_default_warp_is_preserved_with_cuda(monkeypatch):
+    captured = {}
+    raw_env = SimpleNamespace()
+
+    monkeypatch.setattr(
+        "envelope.adapters.mujoco_playground_envelope.registry.get_default_config",
+        lambda _name: SimpleNamespace(episode_length=1000, impl="warp"),
+    )
+    monkeypatch.setattr(
+        "envelope.adapters.mujoco_playground_envelope._warp_cuda_available",
+        lambda: True,
+    )
+
+    def load(_name, *, config_overrides):
+        captured.update(config_overrides)
+        return raw_env
+
+    monkeypatch.setattr(
+        "envelope.adapters.mujoco_playground_envelope.registry.load", load
+    )
+
+    MujocoPlaygroundEnvelope.from_name("Fake")
+
+    assert "impl" not in captured
+
+
+def test_explicit_warp_is_preserved_without_cuda(monkeypatch):
+    captured = {}
+    raw_env = SimpleNamespace()
+
+    monkeypatch.setattr(
+        "envelope.adapters.mujoco_playground_envelope.registry.get_default_config",
+        lambda _name: SimpleNamespace(episode_length=1000, impl="warp"),
+    )
+
+    def unexpected_cuda_probe():
+        raise AssertionError("explicit implementations must not probe CUDA")
+
+    monkeypatch.setattr(
+        "envelope.adapters.mujoco_playground_envelope._warp_cuda_available",
+        unexpected_cuda_probe,
+    )
+
+    def load(_name, *, config_overrides):
+        captured.update(config_overrides)
+        return raw_env
+
+    monkeypatch.setattr(
+        "envelope.adapters.mujoco_playground_envelope.registry.load", load
+    )
+
+    MujocoPlaygroundEnvelope.from_name("Fake", env_kwargs={"impl": "warp"})
+
+    assert captured["impl"] == "warp"

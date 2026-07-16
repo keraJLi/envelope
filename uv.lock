@@ -1102,6 +1102,7 @@ adapters = [
     { name = "jumanji" },
     { name = "navix" },
     { name = "playground" },
+    { name = "requests" },
 ]
 brax = [
     { name = "brax" },
@@ -1111,6 +1112,7 @@ craftax = [
 ]
 jumanji = [
     { name = "jumanji" },
+    { name = "requests" },
 ]
 mujoco-playground = [
     { name = "playground" },
@@ -1128,6 +1130,7 @@ adapters = [
     { name = "kinetix-env" },
     { name = "navix" },
     { name = "playground" },
+    { name = "requests" },
 ]
 dev = [
     { name = "hypothesis" },
@@ -1157,6 +1160,8 @@ requires-dist = [
     { name = "navix", marker = "extra == 'navix'", specifier = ">=0.7.0" },
     { name = "playground", marker = "extra == 'adapters'", specifier = ">=0.1.0" },
     { name = "playground", marker = "extra == 'mujoco-playground'", specifier = ">=0.1.0" },
+    { name = "requests", marker = "extra == 'adapters'" },
+    { name = "requests", marker = "extra == 'jumanji'" },
 ]
 provides-extras = ["brax", "craftax", "jumanji", "mujoco-playground", "navix", "adapters"]
 
@@ -1169,6 +1174,7 @@ adapters = [
     { name = "kinetix-env", git = "https://github.com/FLAIROx/Kinetix.git?rev=df4de60cabd42dbd1c35fb5214fdc6728710e33d" },
     { name = "navix", specifier = ">=0.7.0" },
     { name = "playground", specifier = ">=0.1.0" },
+    { name = "requests" },
 ]
 dev = [
     { name = "hypothesis", specifier = ">=6.148.1" },

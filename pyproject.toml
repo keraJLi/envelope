@@ -44,13 +44,19 @@ Changelog = "https://github.com/keraJLi/envelope/releases"
 [project.optional-dependencies]
 brax = ["brax>=0.13.0"]
 craftax = ["craftax>=1.6.0"]
-jumanji = ["jumanji>=1.0.1"]
+jumanji = [
+    "jumanji>=1.0.1",
+    # Jumanji 1.1.1 imports requests for Sokoban but omits it from its metadata.
+    "requests",
+]
 mujoco-playground = ["playground>=0.1.0"]
 navix = ["navix>=0.7.0"]
 adapters = [
     "brax>=0.13.0",
     "craftax>=1.6.0",
     "jumanji>=1.0.1",
+    # Jumanji 1.1.1 imports requests for Sokoban but omits it from its metadata.
+    "requests",
     "playground>=0.1.0",
     "navix>=0.7.0",
 ]
@@ -84,6 +90,8 @@ adapters = [
     "craftax>=1.6.0",
     "navix>=0.7.0",
     "jumanji>=1.0.1",
+    # Jumanji 1.1.1 imports requests for Sokoban but omits it from its metadata.
+    "requests",
     "playground>=0.1.0",
     "gymnax",
     "kinetix-env",
