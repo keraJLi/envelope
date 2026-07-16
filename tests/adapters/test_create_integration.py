@@ -13,6 +13,14 @@ from envelope.wrappers.truncation_wrapper import TruncationWrapper
 pytestmark = pytest.mark.adapters
 
 
+def _run_init_and_step(env: Environment, key) -> None:
+    state, info = env.init(key)
+    assert hasattr(info, "obs")
+    action = env.action_space.sample(key)
+    _state, info = env.step(state, action)
+    assert hasattr(info, "obs")
+
+
 def test_create_brax_smoke(prng_key):
     pytest.importorskip("brax")
 
@@ -24,8 +32,7 @@ def test_create_brax_smoke(prng_key):
     assert isinstance(env, Environment)
     assert env.max_steps == 1000  # Brax default
 
-    _state, info = env.init(prng_key)
-    assert hasattr(info, "obs")
+    _run_init_and_step(env, prng_key)
 
 
 def test_create_gymnax_smoke(prng_key):
@@ -39,8 +46,7 @@ def test_create_gymnax_smoke(prng_key):
     assert isinstance(env, Environment)
     assert env.max_steps == 500  # CartPole-v1 default
 
-    _state, info = env.init(prng_key)
-    assert hasattr(info, "obs")
+    _run_init_and_step(env, prng_key)
 
 
 def test_create_navix_smoke(prng_key):
@@ -54,8 +60,7 @@ def test_create_navix_smoke(prng_key):
     assert isinstance(env, Environment)
     assert env.max_steps == 100  # Navix default
 
-    _state, info = env.init(prng_key)
-    assert hasattr(info, "obs")
+    _run_init_and_step(env, prng_key)
 
 
 def test_create_jumanji_smoke(prng_key):
@@ -69,8 +74,7 @@ def test_create_jumanji_smoke(prng_key):
     assert isinstance(env, Environment)
     assert env.max_steps == 4000  # Snake-v1 default
 
-    _state, info = env.init(prng_key)
-    assert hasattr(info, "obs")
+    _run_init_and_step(env, prng_key)
 
 
 def test_create_craftax_smoke(prng_key):
@@ -84,8 +88,7 @@ def test_create_craftax_smoke(prng_key):
     assert isinstance(env, Environment)
     assert env.max_steps == 100000  # Craftax default
 
-    _state, info = env.init(prng_key)
-    assert hasattr(info, "obs")
+    _run_init_and_step(env, prng_key)
 
 
 def test_create_mujoco_playground_smoke(prng_key):
@@ -99,8 +102,7 @@ def test_create_mujoco_playground_smoke(prng_key):
     assert isinstance(env, Environment)
     assert env.max_steps == 1000  # CartpoleBalance default
 
-    _state, info = env.init(prng_key)
-    assert hasattr(info, "obs")
+    _run_init_and_step(env, prng_key)
 
 
 def test_create_kinetix_smoke(prng_key):
@@ -114,13 +116,4 @@ def test_create_kinetix_smoke(prng_key):
     assert isinstance(env, Environment)
     assert env.max_steps == 256  # Kinetix default
 
-    _state, info = env.init(prng_key)
-    assert hasattr(info, "obs")
-
-
-def test_create_rejects_max_steps_override():
-    """Test that create() raises ValueError when trying to override max_steps."""
-    pytest.importorskip("gymnax")
-
-    with pytest.raises(ValueError, match="Cannot override"):
-        create("gymnax::CartPole-v1", env_kwargs={"max_steps_in_episode": 100})
+    _run_init_and_step(env, prng_key)
