@@ -2,12 +2,13 @@
 
 These tests are dependency-free (no brax/gymnax/navix imports) and focus on:
 - parsing/validation of the env id
-- suite dispatch via the module map
-- lazy importing via importlib.import_module
+- suite dispatch via the registry
+- lazy importing via entry-point targets
 - argument forwarding and error wrapping
 """
 
 import importlib
+import importlib.metadata
 import inspect
 import types
 from functools import cached_property
@@ -17,7 +18,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-import envelope.adapters as adapters
+import envelope.registry as registry
 from envelope.adapters import create
 from envelope.environment import Environment, InfoContainer
 from envelope.spaces import Discrete
@@ -75,11 +76,13 @@ def _install_dummy_suite(
     class_name: str = "DummyWrapper",
     return_value: object | None = None,
 ):
-    """Patch the module map and import mechanism to a dummy wrapper."""
+    """Patch the built-in registry and import mechanism to a dummy wrapper."""
     import_calls: list[str] = []
     from_name_calls: list[dict[str, object]] = []
+    if return_value is None:
+        return_value = _FakeAdapter()
 
-    class DummyWrapper:
+    class DummyWrapper(_FakeAdapter):
         @classmethod
         def from_name(cls, env_name: str, env_kwargs=None, **kwargs):
             from_name_calls.append(
@@ -88,7 +91,7 @@ def _install_dummy_suite(
             return return_value
 
     dummy_module = types.SimpleNamespace(**{class_name: DummyWrapper})
-    real_import_module = importlib.import_module
+    real_import_module = importlib.metadata.import_module
 
     def fake_import_module(name: str):
         if name == module_name:
@@ -96,8 +99,12 @@ def _install_dummy_suite(
             return dummy_module
         return real_import_module(name)
 
-    monkeypatch.setattr(adapters, "_env_module_map", {suite: (module_name, class_name)})
-    monkeypatch.setattr(importlib, "import_module", fake_import_module)
+    monkeypatch.setattr(
+        registry,
+        "_builtin_factories",
+        {suite: f"{module_name}:{class_name}.from_name"},
+    )
+    monkeypatch.setattr(importlib.metadata, "import_module", fake_import_module)
 
     return import_calls, from_name_calls
 
@@ -129,7 +136,9 @@ def test_create_unknown_suite_mentions_available_suites(
 ):
     # Keep the map deterministic so we can assert it appears in the message.
     monkeypatch.setattr(
-        adapters, "_env_module_map", {"dummy": ("dummy_mod", "DummyWrapper")}
+        registry,
+        "_builtin_factories",
+        {"dummy": "dummy_mod:DummyWrapper.from_name"},
     )
 
     with pytest.raises(ValueError) as excinfo:
@@ -143,20 +152,22 @@ def test_create_unknown_suite_mentions_available_suites(
 
 def test_create_wraps_import_error_and_chains_cause(monkeypatch):
     monkeypatch.setattr(
-        adapters, "_env_module_map", {"dummy": ("dummy_mod", "DummyWrapper")}
+        registry,
+        "_builtin_factories",
+        {"dummy": "dummy_mod:DummyWrapper.from_name"},
     )
 
     def fake_import_module(name: str):
         raise ImportError("boom")
 
-    monkeypatch.setattr(importlib, "import_module", fake_import_module)
+    monkeypatch.setattr(importlib.metadata, "import_module", fake_import_module)
 
     with pytest.raises(ImportError) as excinfo:
         create("dummy::Env")
 
     msg = str(excinfo.value)
-    assert "Failed to import dummy wrapper" in msg
-    assert "Make sure the 'dummy' library is installed" in msg
+    assert "Failed to load environment provider for suite 'dummy'" in msg
+    assert "boom" in msg
     assert excinfo.value.__cause__ is not None
     assert isinstance(excinfo.value.__cause__, ImportError)
 
@@ -215,7 +226,7 @@ def test_create_wraps_import_error_and_chains_cause(monkeypatch):
         ),
     ],
 )
-def test_create_import_error_includes_exact_install_command(
+def test_create_import_error_identifies_suite_and_chains_cause(
     monkeypatch,
     suite,
     module_name,
@@ -224,9 +235,9 @@ def test_create_import_error_includes_exact_install_command(
     dependency,
 ):
     monkeypatch.setattr(
-        adapters,
-        "_env_module_map",
-        {suite: (module_name, class_name)},
+        registry,
+        "_builtin_factories",
+        {suite: f"{module_name}:{class_name}.from_name"},
     )
 
     missing = ModuleNotFoundError(f"No module named '{dependency}'", name=dependency)
@@ -235,28 +246,29 @@ def test_create_import_error_includes_exact_install_command(
         assert name == module_name
         raise missing
 
-    monkeypatch.setattr(importlib, "import_module", fake_import_module)
+    monkeypatch.setattr(importlib.metadata, "import_module", fake_import_module)
 
     with pytest.raises(ImportError) as excinfo:
         create(f"{suite}::{env_name}")
 
     msg = str(excinfo.value)
-    assert f"Make sure the '{suite}' library is installed" in msg
+    assert f"Failed to load environment provider for suite '{suite}'" in msg
+    assert f"No module named '{dependency}'" in msg
     assert "pip install" not in msg
     assert "git+" not in msg
     assert excinfo.value.__cause__ is missing
 
 
 def test_create_forwards_env_name_env_kwargs_and_kwargs(monkeypatch):
-    sentinel = object()
+    adapter = _FakeAdapter()
     import_calls, from_name_calls = _install_dummy_suite(
-        monkeypatch, return_value=sentinel
+        monkeypatch, return_value=adapter
     )
 
     env_kwargs = {"a": 1}
     out = create("dummy::MyEnv", env_kwargs=env_kwargs, max_episode_steps=None, foo=2)
 
-    assert out is sentinel
+    assert out is adapter
     assert import_calls == ["dummy_mod"]
     assert from_name_calls == [
         {"env_name": "MyEnv", "env_kwargs": env_kwargs, "kwargs": {"foo": 2}}
@@ -265,7 +277,7 @@ def test_create_forwards_env_name_env_kwargs_and_kwargs(monkeypatch):
 
 def test_create_preserves_env_kwargs_none_vs_empty_dict(monkeypatch):
     _import_calls, from_name_calls = _install_dummy_suite(
-        monkeypatch, return_value=None
+        monkeypatch, return_value=_FakeAdapter()
     )
 
     create("dummy::A", max_episode_steps=None)
@@ -277,37 +289,37 @@ def test_create_preserves_env_kwargs_none_vs_empty_dict(monkeypatch):
 
 
 def test_create_passes_caller_env_kwargs_directly(monkeypatch):
-    sentinel = object()
+    adapter = _FakeAdapter()
     received: list[dict[str, object]] = []
 
-    class MutatingWrapper:
+    class MutatingWrapper(_FakeAdapter):
         @classmethod
         def from_name(cls, env_name: str, env_kwargs=None, **kwargs):
             del env_name, kwargs
             assert env_kwargs is not None
             received.append(env_kwargs)
             env_kwargs["adapter_internal"] = True
-            return sentinel
+            return adapter
 
     module = types.SimpleNamespace(MutatingWrapper=MutatingWrapper)
     monkeypatch.setattr(
-        adapters,
-        "_env_module_map",
-        {"dummy": ("dummy_mod", "MutatingWrapper")},
+        registry,
+        "_builtin_factories",
+        {"dummy": "dummy_mod:MutatingWrapper.from_name"},
     )
-    monkeypatch.setattr(importlib, "import_module", lambda _: module)
+    monkeypatch.setattr(importlib.metadata, "import_module", lambda _: module)
 
     env_kwargs: dict[str, object] = {"user_value": 3}
     out = create("dummy::Env", env_kwargs=env_kwargs, max_episode_steps=None)
 
-    assert out is sentinel
+    assert out is adapter
     assert received[0] is env_kwargs
     assert received[0] == {"user_value": 3, "adapter_internal": True}
 
 
 def test_create_splits_only_on_first_separator(monkeypatch):
     _import_calls, from_name_calls = _install_dummy_suite(
-        monkeypatch, return_value=None
+        monkeypatch, return_value=_FakeAdapter()
     )
 
     create("dummy::::ant", max_episode_steps=None)
@@ -316,24 +328,29 @@ def test_create_splits_only_on_first_separator(monkeypatch):
 
 def test_create_imports_only_the_requested_suite(monkeypatch):
     import_calls: list[str] = []
+    adapter_a = _FakeAdapter()
+    adapter_b = _FakeAdapter()
 
-    class WrapperA:
+    class WrapperA(_FakeAdapter):
         @classmethod
         def from_name(cls, env_name: str, env_kwargs=None, **kwargs):
-            return "A"
+            return adapter_a
 
-    class WrapperB:
+    class WrapperB(_FakeAdapter):
         @classmethod
         def from_name(cls, env_name: str, env_kwargs=None, **kwargs):
-            return "B"
+            return adapter_b
 
     module_a = types.SimpleNamespace(WrapperA=WrapperA)
     module_b = types.SimpleNamespace(WrapperB=WrapperB)
 
     monkeypatch.setattr(
-        adapters,
-        "_env_module_map",
-        {"a": ("a_mod", "WrapperA"), "b": ("b_mod", "WrapperB")},
+        registry,
+        "_builtin_factories",
+        {
+            "a": "a_mod:WrapperA.from_name",
+            "b": "b_mod:WrapperB.from_name",
+        },
     )
 
     def fake_import_module(name: str):
@@ -344,10 +361,20 @@ def test_create_imports_only_the_requested_suite(monkeypatch):
             return module_b
         raise AssertionError(f"Unexpected import: {name}")
 
-    monkeypatch.setattr(importlib, "import_module", fake_import_module)
+    monkeypatch.setattr(importlib.metadata, "import_module", fake_import_module)
 
-    assert create("a::Env", max_episode_steps=None) == "A"
+    assert create("a::Env", max_episode_steps=None) is adapter_a
     assert import_calls == ["a_mod"]
+
+
+def test_create_rejects_non_environment_factory_result(monkeypatch):
+    _install_dummy_suite(monkeypatch, return_value=object())
+
+    with pytest.raises(
+        TypeError,
+        match="Environment provider for suite 'dummy' returned object, not an Environment",
+    ):
+        create("dummy::Env", max_episode_steps=None)
 
 
 def test_create_wraps_with_truncation_when_default_max_steps_set(monkeypatch):

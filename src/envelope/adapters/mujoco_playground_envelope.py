@@ -48,6 +48,10 @@ class MujocoPlaygroundEnvelope(Environment):
     _default_max_steps: int | None = static_field(default=None)
 
     @classmethod
+    def registered_names(cls) -> tuple[str, ...]:
+        return tuple(registry.ALL_ENVS)
+
+    @classmethod
     def from_name(
         cls,
         env_name: str,

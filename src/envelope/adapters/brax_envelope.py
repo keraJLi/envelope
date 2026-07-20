@@ -3,6 +3,7 @@ from copy import copy
 from functools import cached_property
 from typing import Any, cast, override
 
+import brax.envs as brax_envs
 from brax.envs import Env as BraxEnv
 from brax.envs import create as brax_create
 from jax import numpy as jnp
@@ -48,6 +49,10 @@ class BraxEnvelope(Environment):
 
     brax_env: BraxEnv = static_field(unsafe=True)
     _max_steps: int | None = static_field(default=_BRAX_DEFAULT_EPISODE_LENGTH)
+
+    @classmethod
+    def registered_names(cls) -> tuple[str, ...]:
+        return tuple(brax_envs._envs)
 
     @classmethod
     def from_name(
