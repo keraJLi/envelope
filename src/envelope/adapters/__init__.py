@@ -25,7 +25,7 @@ class HasFromNameInit(Protocol):
         cls,
         env_name: str,
         env_kwargs: dict[str, Any] | None = None,
-        **kwargs: dict[str, Any],
+        **kwargs: Any,
     ) -> Environment:
         """Creates an environment from a name and keyword arguments. Unless otherwise
         noted, the created environment will have its default parameters, with
@@ -43,7 +43,7 @@ def create(
     env_kwargs: dict[str, Any] | None = None,
     *,
     max_episode_steps: Literal["default"] | int | None = "default",
-    **kwargs: dict[str, Any],
+    **kwargs: Any,
 ) -> Environment:
     """Create an environment from a prefixed environment ID.
 
