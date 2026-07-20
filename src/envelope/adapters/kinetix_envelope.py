@@ -18,6 +18,7 @@ from typing import Any, Callable, Literal, cast, override
 import jax
 import jax.numpy as jnp
 from kinetix.environment import ActionType, ObservationType, make_kinetix_env
+from kinetix.environment import spaces as kinetix_spaces
 from kinetix.environment.env import EnvParams as KinetixEnvEnvParams
 from kinetix.environment.env import KinetixEnv
 from kinetix.environment.env import StaticEnvParams as KinetixStaticEnvParams
@@ -296,11 +297,20 @@ class KinetixEnvelope(Environment):
     @cached_property
     @override
     def action_space(self) -> envelope_spaces.Space:
-        return _convert_gymnax_space(self.kinetix_env.action_space(self.env_params))
+        return _convert_space(self.kinetix_env.action_space(self.env_params))
 
     @cached_property
     @override
     def observation_space(self) -> envelope_spaces.Space:
-        return _convert_gymnax_space(
-            self.kinetix_env.observation_space(self.env_params)
-        )
+        return _convert_space(self.kinetix_env.observation_space(self.env_params))
+
+
+def _convert_space(kinetix_space: Any) -> envelope_spaces.Space:
+    """Convert a Kinetix space, including its custom multi-discrete space."""
+    if isinstance(kinetix_space, kinetix_spaces.MultiDiscrete):
+        # Preserve the cardinality vector's concrete dtype. Kinetix declares
+        # ``dtype = jnp.int_``, which is nominally int64 even when JAX x64 is disabled,
+        # while its cardinalities and samples are int32 in that configuration.
+        n = jnp.asarray(kinetix_space.number_of_dims_per_distribution)
+        return envelope_spaces.Discrete(n=n)
+    return _convert_gymnax_space(kinetix_space)

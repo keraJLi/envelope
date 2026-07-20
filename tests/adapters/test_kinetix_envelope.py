@@ -17,10 +17,15 @@ pytest.importorskip("kinetix")
 
 import kinetix
 from kinetix.environment import EnvParams, StaticEnvParams
+from kinetix.environment import spaces as kinetix_spaces
 
-from envelope.adapters.kinetix_envelope import KinetixEnvelope, _normalize_level_id
+from envelope.adapters.kinetix_envelope import (
+    KinetixEnvelope,
+    _convert_space,
+    _normalize_level_id,
+)
 from envelope.environment import Info
-from envelope.spaces import Continuous
+from envelope.spaces import Continuous, Discrete
 from envelope.struct import Container
 from tests.contract import (
     assert_jitted_rollout_contract,
@@ -125,6 +130,22 @@ def test_kinetix_contract_scan(prng_key, kinetix_random_env, scan_num_steps):
 def test_action_space_is_continuous_by_default(kinetix_random_env):
     env = kinetix_random_env
     assert isinstance(env.action_space, Continuous)
+
+
+def test_multidiscrete_space_conversion(prng_key):
+    cardinalities = jnp.asarray([3, 2, 4], dtype=jnp.int32)
+    kinetix_space = kinetix_spaces.MultiDiscrete(
+        n=int(cardinalities.sum()),
+        number_of_dims_per_distribution=cardinalities,
+    )
+
+    space = _convert_space(kinetix_space)
+
+    assert isinstance(space, Discrete)
+    assert space.shape == cardinalities.shape
+    assert space.dtype == cardinalities.dtype
+    assert jnp.array_equal(space.n, cardinalities)
+    assert space.contains(space.sample(prng_key))
 
 
 def test_from_name_premade_level_smoke(prng_key):
