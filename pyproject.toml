@@ -128,6 +128,7 @@ testpaths = ["tests"]
 markers = [
   "adapters: tests requiring optional adapters dependencies",
   "packaging: tests that build and inspect distribution artifacts",
+  "ppo: tests requiring optional PPO dependencies",
 ]
 
 [tool.ty.environment]

@@ -2,18 +2,22 @@ from types import SimpleNamespace
 
 import jax.numpy as jnp
 import pytest
-from flax import nnx
 
 import envelope
-from examples.ppo.networks import GaussianPolicy
-from examples.ppo.ppo import (
-    WEIGHT_DECAY,
-    Args,
-    bootstrap_observation,
-    get_num_updates,
-    make_lr_schedule,
-    summarize_block,
-)
+
+nnx = pytest.importorskip("flax.nnx")
+networks = pytest.importorskip("examples.ppo.networks")
+ppo = pytest.importorskip("examples.ppo.ppo")
+
+GaussianPolicy = networks.GaussianPolicy
+WEIGHT_DECAY = ppo.WEIGHT_DECAY
+Args = ppo.Args
+bootstrap_observation = ppo.bootstrap_observation
+get_num_updates = ppo.get_num_updates
+make_lr_schedule = ppo.make_lr_schedule
+summarize_block = ppo.summarize_block
+
+pytestmark = pytest.mark.ppo
 
 
 def test_gaussian_policy_clips_log_standard_deviation():
