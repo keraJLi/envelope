@@ -141,19 +141,19 @@ def test_array_spec_conversion_float_is_unbounded_box():
 
 
 @pytest.mark.parametrize("dtype", [np.int8, np.int32, np.uint8])
-def test_array_spec_conversion_integer_uses_dtype_bounds(dtype):
-    """Integer Array converts to Continuous with the dtype's full range."""
+def test_array_spec_conversion_integer_is_unbounded_float(dtype, prng_key):
+    """Integer Array converts to an unbounded floating Continuous space."""
     spec = specs.Array(shape=(2,), dtype=dtype, name="ai")
 
     space = convert_jumanji_spec_to_envelope_space(spec)
 
-    dtype_info = np.iinfo(dtype)
     assert isinstance(space, Continuous)
     assert space.shape == (2,)
-    assert space.dtype == jnp.dtype(dtype)
-    assert jnp.all(space.low == dtype_info.min)
-    assert jnp.all(space.high == dtype_info.max)
+    assert space.dtype == jnp.float32
+    assert jnp.all(jnp.isneginf(space.low))
+    assert jnp.all(jnp.isposinf(space.high))
     assert space.contains(jnp.zeros(spec.shape, dtype=dtype))
+    assert space.contains(space.sample(prng_key))
 
 
 def test_array_spec_conversion_non_numeric_not_supported():

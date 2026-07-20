@@ -154,9 +154,9 @@ def _spec_to_tree(spec: Spec | PyTree):
             low = jnp.full(spec.shape, -jnp.inf, dtype=dtype)
             high = jnp.full(spec.shape, jnp.inf, dtype=dtype)
         elif jnp.issubdtype(dtype, jnp.integer):
-            dtype_info = jnp.iinfo(dtype)
-            low = jnp.full(spec.shape, dtype_info.min, dtype=dtype)
-            high = jnp.full(spec.shape, dtype_info.max, dtype=dtype)
+            # This is only for observation spaces, so fine for now.
+            low = jnp.full(spec.shape, -jnp.inf, dtype=jnp.float32)
+            high = jnp.full(spec.shape, jnp.inf, dtype=jnp.float32)
         else:
             raise NotImplementedError(
                 "Unbounded jumanji Array specs are only supported for integer or "
