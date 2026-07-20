@@ -83,6 +83,15 @@ class CraftaxEnvelope(Environment):
     _empty_backend_info: Container = field()
 
     @classmethod
+    def registered_names(cls) -> tuple[str, ...]:
+        return (
+            "Craftax-Symbolic-v1",
+            "Craftax-Pixels-v1",
+            "Craftax-Classic-Symbolic-v1",
+            "Craftax-Classic-Pixels-v1",
+        )
+
+    @classmethod
     def from_name(
         cls,
         env_name: str,

@@ -34,6 +34,10 @@ class NavixEnvelope(Environment):
     _max_steps: int | None = static_field(default=None)
 
     @classmethod
+    def registered_names(cls) -> tuple[str, ...]:
+        return tuple(navix.registry())
+
+    @classmethod
     def from_name(
         cls, env_name: str, env_kwargs: dict[str, Any] | None = None
     ) -> "NavixEnvelope":

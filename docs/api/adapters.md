@@ -29,7 +29,7 @@ Most adapters expose extra suite data under `info.backend`, for example as
 placeholders and `info.backend.valid` is false. Navix retains its established top-level
 extra fields.
 
-## API Reference (`create`)
+## API Reference (`create`)
 
 ::: envelope.adapters.create
 

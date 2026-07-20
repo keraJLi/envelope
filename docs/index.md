@@ -43,4 +43,5 @@ print(info)  # InfoContainer(obs=Array(...), reward=0.0, terminated=False, ...)
 - **[Spaces](api/spaces.md)**: observation and action space definitions.
 - **[Wrappers](api/wrappers.md)**: composable wrappers and how to order them.
 - **[Adapters](api/adapters.md)**: creating environments from third-party suites.
+- **[Registry](api/registry.md)**: exposing environments from installed packages.
 - **[Struct](api/struct.md)**: JAX pytree datastructures used throughout envelope.

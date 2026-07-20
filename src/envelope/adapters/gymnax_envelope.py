@@ -4,6 +4,7 @@ from typing import Any, Callable, cast, override
 import jax
 import jax.numpy as jnp
 from gymnax import make as gymnax_create
+from gymnax import registered_envs
 from gymnax.environments import spaces as gymnax_spaces
 from gymnax.environments.environment import Environment as GymnaxEnv
 from gymnax.environments.environment import EnvParams as GymnaxEnvParams
@@ -54,6 +55,10 @@ class GymnaxEnvelope(Environment):
     env_params: PyTree = field()
     _max_steps: int | None = static_field()
     _empty_backend_info: Container = field()
+
+    @classmethod
+    def registered_names(cls) -> tuple[str, ...]:
+        return tuple(registered_envs)
 
     @classmethod
     def from_name(
