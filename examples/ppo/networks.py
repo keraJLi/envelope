@@ -1,3 +1,5 @@
+"""Policy and value networks for the PPO example."""
+
 import distrax
 import jax
 import jax.numpy as jnp
@@ -57,7 +59,7 @@ class GaussianPolicy(nnx.Module):
     def __call__(self, obs: jax.Array) -> distrax.Distribution:
         features = self.layers(obs)
         action_mean = self.action_mean(features)
-        action_log_std = self.action_log_std(features)
+        action_log_std = jnp.clip(self.action_log_std(features), -5.0, 2.0)
         dist = distrax.Independent(
             distrax.Clipped(
                 distrax.Normal(loc=action_mean, scale=jnp.exp(action_log_std)),

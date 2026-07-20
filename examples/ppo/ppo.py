@@ -5,37 +5,60 @@ import jax
 import jax.numpy as jnp
 import optax
 import tyro
+import wandb
 from flax import nnx
 
 import envelope
-import wandb
 from envelope.typing import PyTree
-from ppo.networks import DiscretePolicy, GaussianPolicy, ValueFunction
+from examples.ppo.networks import DiscretePolicy, GaussianPolicy, ValueFunction
+
+WEIGHT_DECAY = 1e-4
 
 
 @dataclasses.dataclass(frozen=True)
 class Args:
     env_name: str = "gymnax::CartPole-v1"
     total_timesteps: int = 1000000
-    policy_lr: float = 0.001
-    value_fn_lr: float = 0.001
+    policy_lr: float = 0.0003
+    value_fn_lr: float = 0.0001
     epsilon: float = 0.2
     entropy_coef: float = 0.01
-    num_envs: int = 10
+    num_envs: int = 1024
     pool_size: int = 10
-    num_minibatches: int = 5
+    num_minibatches: int = 8
     num_epochs: int = 4
-    num_steps: int = 100
+    num_steps: int = 128
+    updates_per_block: int = 1
     gamma: float = 0.99
     gae_lambda: float = 0.95
-    normalize_observations: bool = False
+    normalize_observations: bool = True
     seed: int = 0
 
     # wandb
     use_wandb: bool = False
-    wandb_entity: str | None = None
+    wandb_entity: str | None = "flair"
     wandb_project: str | None = "envelope-ppo"
     wandb_log_every: int = 1
+
+
+def get_num_updates(args: Args) -> int:
+    steps_per_update = args.num_steps * args.num_envs
+    if steps_per_update <= 0:
+        raise ValueError("num_steps and num_envs must be positive")
+    if args.num_epochs <= 0 or args.num_minibatches <= 0:
+        raise ValueError("num_epochs and num_minibatches must be positive")
+    if args.total_timesteps < steps_per_update:
+        raise ValueError("total_timesteps must cover at least one PPO update")
+    if steps_per_update % args.num_minibatches:
+        raise ValueError("rollout batch size must be divisible by num_minibatches")
+    if args.updates_per_block <= 0:
+        raise ValueError("updates_per_block must be positive")
+    return args.total_timesteps // steps_per_update
+
+
+def make_lr_schedule(learning_rate: float, args: Args):
+    optimizer_steps = get_num_updates(args) * args.num_epochs * args.num_minibatches
+    return optax.cosine_decay_schedule(learning_rate, optimizer_steps)
 
 
 def make_env(args: Args):
@@ -71,10 +94,18 @@ class TrainState(nnx.Pytree):
 
         # Initialize optimizers
         self.policy_optimizer = nnx.Optimizer(
-            self.policy, optax.adamw(args.policy_lr), wrt=nnx.Param
+            self.policy,
+            optax.adamw(
+                make_lr_schedule(args.policy_lr, args), weight_decay=WEIGHT_DECAY
+            ),
+            wrt=nnx.Param,
         )
         self.value_fn_optimizer = nnx.Optimizer(
-            self.value_fn, optax.adamw(args.value_fn_lr), wrt=nnx.Param
+            self.value_fn,
+            optax.adamw(
+                make_lr_schedule(args.value_fn_lr, args), weight_decay=WEIGHT_DECAY
+            ),
+            wrt=nnx.Param,
         )
 
         # Initialize environment state and info
@@ -142,6 +173,12 @@ def calculate_gae(ts: TrainState, info, last_value):
     return advantages
 
 
+def bootstrap_observation(info):
+    done = info.terminated | info.truncated
+    mask = done.reshape(done.shape + (1,) * (info.obs.ndim - done.ndim))
+    return jnp.where(mask, info.final.obs, info.obs)
+
+
 def update_policy(ts: TrainState, batch):
     def normalize(x: jax.Array) -> jax.Array:
         return (x - x.mean()) / (x.std() + 1e-8)
@@ -203,7 +240,7 @@ def train_step(ts: TrainState):
     info = collect_trajectories(ts)
 
     # Compute advantages
-    last_value = ts.value_fn(ts.env_info.final.obs)
+    last_value = ts.value_fn(bootstrap_observation(ts.env_info))
     advantages = calculate_gae(ts, info, last_value)
     info = info.update(advantages=advantages)
 
@@ -219,6 +256,34 @@ def train_step(ts: TrainState):
     return info.update(**loss_infos)
 
 
+def make_train_block(num_updates: int):
+    @nnx.jit
+    @nnx.scan(in_axes=nnx.Carry, length=num_updates)
+    def train_block(train_state: TrainState):
+        out_info = train_step(train_state)
+        return train_state, out_info
+
+    return train_block
+
+
+def summarize_block(out_info):
+    completed = out_info.terminated | out_info.truncated
+    num_episodes = completed.sum()
+
+    def completed_mean(values):
+        total = jnp.where(completed, values, 0).sum()
+        return jnp.where(num_episodes > 0, total / num_episodes, jnp.nan)
+
+    return {
+        "num_episodes": num_episodes,
+        "mean_return": completed_mean(out_info.final.stats.reward),
+        "mean_episode_length": completed_mean(out_info.final.stats.length),
+        "policy_loss": out_info.policy_loss.mean(),
+        "value_loss": out_info.value_loss.mean(),
+        "policy_entropy": out_info.policy_entropy.mean(),
+    }
+
+
 if __name__ == "__main__":
     args = tyro.cli(Args)
 
@@ -231,77 +296,40 @@ if __name__ == "__main__":
 
     train_state = TrainState(args)
 
-    steps_per_update = args.num_steps * args.num_envs
-    num_updates = args.total_timesteps // steps_per_update
+    num_updates = get_num_updates(args)
+    block_sizes = [args.updates_per_block] * (num_updates // args.updates_per_block)
+    if remainder := num_updates % args.updates_per_block:
+        block_sizes.append(remainder)
 
-    start = None
-    update_count = 0
+    compiled_blocks = {}
+    training_start = time.perf_counter()
+    for block_index, block_size in enumerate(block_sizes, start=1):
+        if block_size not in compiled_blocks:
+            compiled_blocks[block_size] = make_train_block(block_size)
 
-    def callback(
-        global_steps,
-        mean_return,
-        mean_episode_length,
-        policy_loss,
-        value_loss,
-        policy_entropy,
-    ):
-        global start, update_count
-        update_count += 1
+        block_start = time.perf_counter()
+        train_state, out_info = compiled_blocks[block_size](train_state)
+        stats = jax.device_get(summarize_block(out_info))
+        elapsed = time.perf_counter() - block_start
+        global_steps = int(jax.device_get(train_state.global_steps))
+        sps = block_size * args.num_steps * args.num_envs / elapsed
 
-        time_elapsed = time.time() - start
-        sps = global_steps / time_elapsed
         print(
-            f"global_steps: {global_steps}, mean_return: {mean_return:.4f}, "
-            f"sps: {sps:.0f}"
+            f"block {block_index}/{len(block_sizes)}: steps={global_steps}, "
+            f"episodes={int(stats['num_episodes'])}, "
+            f"return={float(stats['mean_return']):.4f}, "
+            f"length={float(stats['mean_episode_length']):.2f}, "
+            f"policy_loss={float(stats['policy_loss']):.4f}, "
+            f"value_loss={float(stats['value_loss']):.4f}, sps={sps:.0f}"
         )
 
-        if args.use_wandb and update_count % args.wandb_log_every == 0:
+        if args.use_wandb and block_index % args.wandb_log_every == 0:
             wandb.log(
-                {
-                    "time/sps": sps,
-                    "time/iteration": update_count,
-                    "mean_return": float(mean_return),
-                    "mean_episode_length": float(mean_episode_length),
-                    "policy_loss": float(policy_loss),
-                    "value_loss": float(value_loss),
-                    "policy_entropy": float(policy_entropy),
-                },
-                step=int(global_steps),
+                {**{key: float(value) for key, value in stats.items()}, "sps": sps},
+                step=global_steps,
             )
 
-    @nnx.jit
-    @nnx.scan(in_axes=nnx.Carry, length=num_updates)
-    def train_loop(train_state):
-        out_info = train_step(train_state)
-        mean_return = out_info.final.stats.reward.mean()
-        mean_episode_length = out_info.final.stats.length.mean()
-        jax.debug.callback(
-            callback,
-            train_state.global_steps,
-            mean_return,
-            mean_episode_length,
-            out_info.policy_loss,
-            out_info.value_loss,
-            out_info.policy_entropy,
-        )
-        return train_state, mean_return
-
-    start = time.time()
-    train_loop = train_loop.lower(train_state)
-    time_lower = time.time() - start
-    print(f"Time to lower: {time_lower:.2f} seconds")
-    start = time.time()
-    train_loop = train_loop.compile()
-    time_compile = time.time() - start
-    print(f"Time to compile: {time_compile:.2f} seconds")
-
-    if args.use_wandb:
-        wandb.log({"time/lower": time_lower, "time/compile": time_compile}, step=0)
-
-    start = time.time()
-    train_state, mean_returns = train_loop(train_state)
-    mean_returns = mean_returns.block_until_ready()
-    print(f"Total time: {(time.time() - start):.2f} seconds")
+    print(f"Total time: {(time.perf_counter() - training_start):.2f} seconds")
 
     if args.use_wandb:
         wandb.finish()
