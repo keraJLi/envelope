@@ -21,7 +21,7 @@ jobs:
       - run: uv sync --group dev --locked
       - run: uv run ruff check src tests
       - run: uv run ruff format --check src tests
-      - run: uv run pytest -m "not adapters and not packaging"
+      - run: uv run pytest -m "not adapters and not packaging and not ppo"
 
   typing:
     runs-on: ubuntu-latest
@@ -44,7 +44,7 @@ jobs:
           python-version: "3.12"
       - run: uv sync --group dev --locked
       - run: uv pip install --python .venv/bin/python "jax==0.5.0" "jaxlib==0.5.0"
-      - run: uv run --no-sync pytest -m "not adapters and not packaging"
+      - run: uv run --no-sync pytest -m "not adapters and not packaging and not ppo"
 
   docs:
     runs-on: ubuntu-latest

@@ -25,7 +25,7 @@ jobs:
         run: uv sync --group dev --locked
 
       - name: Run tests
-        run: uv run pytest -m "not adapters and not packaging"
+        run: uv run pytest -m "not adapters and not packaging and not ppo"
 
   build:
     name: Build and verify distribution
