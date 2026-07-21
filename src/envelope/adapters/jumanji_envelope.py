@@ -7,6 +7,7 @@ import jax
 import jax.numpy as jnp
 from jumanji.env import Environment as JumanjiEnv
 from jumanji.registration import make as jumanji_make
+from jumanji.registration import registered_environments
 from jumanji.specs import Array, BoundedArray, DiscreteArray, MultiDiscreteArray, Spec
 from jumanji.types import TimeStep as JumanjiTimeStep
 
@@ -37,6 +38,10 @@ class JumanjiEnvelope(Environment):
 
     jumanji_env: JumanjiEnv = static_field(unsafe=True)
     _default_time_limit: int | None = static_field(default=None)
+
+    @classmethod
+    def registered_names(cls) -> tuple[str, ...]:
+        return tuple(registered_environments())
 
     @classmethod
     def from_name(

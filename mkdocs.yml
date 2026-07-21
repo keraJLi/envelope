@@ -69,4 +69,5 @@ nav:
   - Spaces: api/spaces.md
   - Wrappers: api/wrappers.md
   - Adapters: api/adapters.md
+  - Registry: api/registry.md
   - Struct: api/struct.md

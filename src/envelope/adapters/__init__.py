@@ -3,20 +3,7 @@
 from typing import Any, Literal, Protocol
 
 from envelope.environment import Environment
-
-# Lazy imports to avoid requiring all dependencies at once
-_env_module_map = {
-    "gymnax": ("envelope.adapters.gymnax_envelope", "GymnaxEnvelope"),
-    "brax": ("envelope.adapters.brax_envelope", "BraxEnvelope"),
-    "navix": ("envelope.adapters.navix_envelope", "NavixEnvelope"),
-    "jumanji": ("envelope.adapters.jumanji_envelope", "JumanjiEnvelope"),
-    "kinetix": ("envelope.adapters.kinetix_envelope", "KinetixEnvelope"),
-    "craftax": ("envelope.adapters.craftax_envelope", "CraftaxEnvelope"),
-    "mujoco_playground": (
-        "envelope.adapters.mujoco_playground_envelope",
-        "MujocoPlaygroundEnvelope",
-    ),
-}
+from envelope.registry import _load_factory
 
 
 class HasFromNameInit(Protocol):
@@ -76,27 +63,13 @@ def create(
             f"Environment ID must be in format 'suite::env_name', got: {original_env_id}"
         )
 
-    if suite not in _env_module_map:
-        raise ValueError(
-            f"Unknown environment suite: {suite}. "
-            f"Available suites: {list(_env_module_map.keys())}"
+    factory = _load_factory(suite)
+    env = factory(env_name, env_kwargs=env_kwargs, **kwargs)
+    if not isinstance(env, Environment):
+        raise TypeError(
+            f"Environment provider for suite '{suite}' returned "
+            f"{type(env).__name__}, not an Environment"
         )
-
-    # Lazy import the wrapper class
-    module_name, class_name = _env_module_map[suite]
-    try:
-        import importlib
-
-        module = importlib.import_module(module_name)
-        env_class: HasFromNameInit = getattr(module, class_name)
-    except ImportError as e:
-        raise ImportError(
-            f"Failed to import {suite} wrapper. "
-            f"Make sure the '{suite}' library is installed. "
-            f"Original error: {e}"
-        ) from e
-
-    env = env_class.from_name(env_name, env_kwargs=env_kwargs, **kwargs)
 
     if max_episode_steps == "default":
         max_episode_steps = env.default_max_steps

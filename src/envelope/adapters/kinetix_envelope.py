@@ -105,6 +105,14 @@ class KinetixEnvelope(Environment):
     _max_steps: int | None = static_field()
     _empty_backend_info: Container = field()
 
+    @classmethod
+    def registered_names(cls) -> tuple[str, ...]:
+        levels = tuple(
+            path.relative_to(BASE_DIR).with_suffix("").as_posix()
+            for path in sorted(Path(BASE_DIR).glob("*/*.json"))
+        )
+        return ("s", "m", "l", "random", *levels)
+
     @property
     def default_max_steps(self) -> int | None:
         return self._max_steps
