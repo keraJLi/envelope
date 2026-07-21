@@ -140,10 +140,25 @@ def test_array_spec_conversion_float_is_unbounded_box():
     assert jnp.all(jnp.isposinf(space.high))
 
 
-def test_array_spec_conversion_non_float_not_supported():
-    """Non-float Array specs are intentionally not supported."""
-    spec = specs.Array(shape=(2,), dtype=np.int32, name="ai")
-    with pytest.raises(NotImplementedError):
+@pytest.mark.parametrize("dtype", [np.int8, np.int32, np.uint8])
+def test_array_spec_conversion_integer_is_unbounded_float(dtype, prng_key):
+    """Integer Array converts to an unbounded floating Continuous space."""
+    spec = specs.Array(shape=(2,), dtype=dtype, name="ai")
+
+    space = convert_jumanji_spec_to_envelope_space(spec)
+
+    assert isinstance(space, Continuous)
+    assert space.shape == (2,)
+    assert space.dtype == jnp.float32
+    assert jnp.all(jnp.isneginf(space.low))
+    assert jnp.all(jnp.isposinf(space.high))
+    assert space.contains(jnp.zeros(spec.shape, dtype=dtype))
+    assert space.contains(space.sample(prng_key))
+
+
+def test_array_spec_conversion_non_numeric_not_supported():
+    spec = specs.Array(shape=(2,), dtype=np.bool_, name="ab")
+    with pytest.raises(NotImplementedError, match="integer or floating"):
         convert_jumanji_spec_to_envelope_space(spec)
 
 

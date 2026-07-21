@@ -1,6 +1,6 @@
 [project]
 name = "jax-envelope"
-version = "0.6.0"
+version = "0.6.1"
 description = "A JAX-native environment interface with powerful wrappers and adapters for popular RL environment suites"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -51,6 +51,14 @@ jumanji = [
 ]
 mujoco-playground = ["playground>=0.1.0"]
 navix = ["navix>=0.7.0"]
+ppo = [
+    "distrax>=0.1.7",
+    "flax>=0.12.3",
+    "gymnax",
+    "optax>=0.2.6",
+    "tyro>=0.9.35",
+    "wandb>=0.24.1",
+]
 adapters = [
     "brax>=0.13.0",
     "craftax>=1.6.0",
@@ -120,6 +128,7 @@ testpaths = ["tests"]
 markers = [
   "adapters: tests requiring optional adapters dependencies",
   "packaging: tests that build and inspect distribution artifacts",
+  "ppo: tests requiring optional PPO dependencies",
 ]
 
 [tool.ty.environment]

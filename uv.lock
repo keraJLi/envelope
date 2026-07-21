@@ -1089,7 +1089,7 @@ wheels = [
 
 [[package]]
 name = "jax-envelope"
-version = "0.6.0"
+version = "0.6.1"
 source = { editable = "." }
 dependencies = [
     { name = "jax" },
@@ -1119,6 +1119,14 @@ mujoco-playground = [
 ]
 navix = [
     { name = "navix" },
+]
+ppo = [
+    { name = "distrax" },
+    { name = "flax" },
+    { name = "gymnax" },
+    { name = "optax" },
+    { name = "tyro" },
+    { name = "wandb" },
 ]
 
 [package.dev-dependencies]
@@ -1153,17 +1161,23 @@ requires-dist = [
     { name = "brax", marker = "extra == 'brax'", specifier = ">=0.13.0" },
     { name = "craftax", marker = "extra == 'adapters'", specifier = ">=1.6.0" },
     { name = "craftax", marker = "extra == 'craftax'", specifier = ">=1.6.0" },
+    { name = "distrax", marker = "extra == 'ppo'", specifier = ">=0.1.7" },
+    { name = "flax", marker = "extra == 'ppo'", specifier = ">=0.12.3" },
+    { name = "gymnax", marker = "extra == 'ppo'", git = "https://github.com/RobertTLange/gymnax.git?rev=18f2e7f3cffafc7042c76fdc538c83957418a9a9" },
     { name = "jax", specifier = ">=0.5.0" },
     { name = "jumanji", marker = "extra == 'adapters'", specifier = ">=1.0.1" },
     { name = "jumanji", marker = "extra == 'jumanji'", specifier = ">=1.0.1" },
     { name = "navix", marker = "extra == 'adapters'", specifier = ">=0.7.0" },
     { name = "navix", marker = "extra == 'navix'", specifier = ">=0.7.0" },
+    { name = "optax", marker = "extra == 'ppo'", specifier = ">=0.2.6" },
     { name = "playground", marker = "extra == 'adapters'", specifier = ">=0.1.0" },
     { name = "playground", marker = "extra == 'mujoco-playground'", specifier = ">=0.1.0" },
     { name = "requests", marker = "extra == 'adapters'" },
     { name = "requests", marker = "extra == 'jumanji'" },
+    { name = "tyro", marker = "extra == 'ppo'", specifier = ">=0.9.35" },
+    { name = "wandb", marker = "extra == 'ppo'", specifier = ">=0.24.1" },
 ]
-provides-extras = ["brax", "craftax", "jumanji", "mujoco-playground", "navix", "adapters"]
+provides-extras = ["brax", "craftax", "jumanji", "mujoco-playground", "navix", "ppo", "adapters"]
 
 [package.metadata.requires-dev]
 adapters = [

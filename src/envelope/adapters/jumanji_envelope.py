@@ -155,13 +155,19 @@ def _spec_to_tree(spec: Spec | PyTree):
 
     if isinstance(spec, Array):
         dtype = jnp.dtype(spec.dtype)
-        if not jnp.issubdtype(dtype, jnp.floating):
+        if jnp.issubdtype(dtype, jnp.floating):
+            low = jnp.full(spec.shape, -jnp.inf, dtype=dtype)
+            high = jnp.full(spec.shape, jnp.inf, dtype=dtype)
+        elif jnp.issubdtype(dtype, jnp.integer):
+            # This is only for observation spaces, so fine for now.
+            low = jnp.full(spec.shape, -jnp.inf, dtype=jnp.float32)
+            high = jnp.full(spec.shape, jnp.inf, dtype=jnp.float32)
+        else:
             raise NotImplementedError(
-                "Unbounded jumanji Array specs are only supported for floating dtypes. "
+                "Unbounded jumanji Array specs are only supported for integer or "
+                "floating dtypes. "
                 f"Got dtype={dtype} for spec={spec!r}."
             )
-        low = jnp.full(spec.shape, -jnp.inf, dtype=dtype)
-        high = jnp.full(spec.shape, jnp.inf, dtype=dtype)
         return envelope_spaces.Continuous(low=low, high=high)
 
     # Structured specs (most Jumanji envs): access private mapping when available.
