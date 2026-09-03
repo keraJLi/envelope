@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import field
 from functools import cached_property
-from typing import Any, ClassVar, Literal, NamedTuple
+from typing import Any, ClassVar, Literal, NamedTuple, Self
 
 from envelope import spaces
 from envelope.struct import Container, FrozenPyTreeNode
@@ -102,7 +102,7 @@ class Environment(ABC, FrozenPyTreeNode):
         ...
 
     @property
-    def unwrapped(self) -> "Environment":
+    def unwrapped(self) -> Self:
         return self
 
     @property
